@@ -1,0 +1,8 @@
+@import "./styles/fonts.css";
+@import "tailwindcss";
+@import "./styles/theme.css";
+
+#root {
+  min-height: 100svh;
+  width: 100%;
+}

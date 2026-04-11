@@ -1,0 +1,11 @@
+.env
+.env.local
+figma-import-result.json
+data/guidelines/
+data/guidelines-meta.json
+
+node_modules/
+dist/
+frontend/dist/
+
+.DS_Store

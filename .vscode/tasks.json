@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "프론트엔드: Simple Browser 열기 (5178)",
+      "type": "shell",
+      "command": "node",
+      "args": ["${workspaceFolder}/.vscode/open-frontend.mjs", "5178"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "프론트엔드: Cursor Simple Browser로 열기",
+      "type": "shell",
+      "command": "node",
+      "args": ["${workspaceFolder}/.vscode/open-frontend.mjs", "${input:frontendPort}"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "frontendPort",
+      "type": "promptString",
+      "description": "npm run dev 터미널에 표시된 포트(기본 5178). Local URL과 동일하게 맞추세요.",
+      "default": "5178"
+    }
+  ]
+}

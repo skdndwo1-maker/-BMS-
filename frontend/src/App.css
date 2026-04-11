@@ -1,0 +1,176 @@
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.header {
+  margin-bottom: 16px;
+}
+
+.sub {
+  opacity: 0.8;
+  margin-top: 6px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 1000px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.panel h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+/* ImportViewer 루트(.page) 안의 JSON/미리보기용만 — 전역 textarea에 두면 다른 화면의 h-* / 높이가 깨짐 */
+.page textarea {
+  width: 100%;
+  min-height: 360px;
+  resize: vertical;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.error {
+  margin-top: 8px;
+  color: #ffb4b4;
+  font-size: 12px;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 6px 10px;
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+
+.k {
+  opacity: 0.7;
+}
+
+.v {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+}
+
+.frames {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 540px;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.frameRow {
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.frameName {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge {
+  font-size: 11px;
+  opacity: 0.7;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.frameMeta {
+  margin-top: 6px;
+  font-size: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.muted {
+  opacity: 0.65;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tab {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.2);
+  color: inherit;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.tab:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.tab.active {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.tabPanel {
+  min-height: 60vh;
+}
+
+.tsxPreviewWrap {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: auto;
+}
+
+.previewError {
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 100, 100, 0.35);
+  background: rgba(80, 0, 0, 0.2);
+}
+
+.previewErrorTitle {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.previewErrorPre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  margin: 0 0 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
