@@ -3,6 +3,9 @@ import { normalizeNamingProposal, type BrandNamingRunResult } from "./guidelineA
 
 export type ExportFormat = "pdf" | "png" | "jpeg";
 
+/** 리포트 캔버스·jsPDF 텍스트 렌더링용 (브라우저 TTF 임베딩 없이 한글 표시) */
+const REPORT_FONT_CSS = `"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif`;
+
 function triggerBlobDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -10,6 +13,15 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+async function ensureKoreanReportFontsLoaded(fontSize: number): Promise<void> {
+  try {
+    await document.fonts.load(`400 ${fontSize}px "Noto Sans KR"`);
+  } catch {
+    /* ignore */
+  }
+  await document.fonts.ready;
 }
 
 /** 한 줄씩 글자 단위로 줄바꿈 (한글·영문 혼합) */
@@ -28,6 +40,80 @@ function wrapTextCanvas(ctx: CanvasRenderingContext2D, paragraph: string, maxWid
   }
   if (current) lines.push(current);
   return lines;
+}
+
+/**
+ * jsPDF 기본 폰트는 한글 미지원 → 리포트 본문은 캔버스에 한글 폰트로 그린 뒤 이미지로 페이지에 넣습니다.
+ */
+async function buildPlainTextReportCanvas(plain: string): Promise<HTMLCanvasElement> {
+  const fontSize = 13;
+  await ensureKoreanReportFontsLoaded(fontSize);
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas_2d_unavailable");
+
+  const padding = 40;
+  const maxTextW = 720;
+  const lineHeight = Math.round(fontSize * 1.45);
+  ctx.font = `${fontSize}px ${REPORT_FONT_CSS}`;
+
+  const allLines: string[] = [];
+  for (const para of plain.split("\n")) {
+    if (para === "") {
+      allLines.push("");
+      continue;
+    }
+    allLines.push(...wrapTextCanvas(ctx, para, maxTextW));
+  }
+  const textH = allLines.length * lineHeight + padding * 2;
+  canvas.width = maxTextW + padding * 2;
+  canvas.height = Math.max(400, textH);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#111827";
+  ctx.font = `${fontSize}px ${REPORT_FONT_CSS}`;
+  let y = padding + fontSize;
+  for (const line of allLines) {
+    ctx.fillText(line, padding, y);
+    y += lineHeight;
+  }
+  return canvas;
+}
+
+/** 긴 캔버스를 A4 높이에 맞춰 여러 페이지로 나눕니다. */
+function addCanvasToPdfPages(doc: jsPDF, canvas: HTMLCanvasElement, margin: number): void {
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const contentW = pageW - margin * 2;
+  const contentH = pageH - margin * 2;
+  const scale = contentW / canvas.width;
+  const totalHpt = canvas.height * scale;
+
+  if (totalHpt <= contentH + 0.5) {
+    const img = canvas.toDataURL("image/png");
+    doc.addImage(img, "PNG", margin, margin, contentW, totalHpt);
+    return;
+  }
+
+  let srcY = 0;
+  let first = true;
+  const slicePxTarget = contentH / scale;
+
+  while (srcY < canvas.height) {
+    const slicePx = Math.min(canvas.height - srcY, slicePxTarget);
+    const sub = document.createElement("canvas");
+    sub.width = canvas.width;
+    sub.height = Math.max(1, Math.ceil(slicePx));
+    const sx = sub.getContext("2d");
+    if (!sx) return;
+    sx.drawImage(canvas, 0, srcY, canvas.width, slicePx, 0, 0, canvas.width, slicePx);
+    const hPt = slicePx * scale;
+    if (!first) doc.addPage();
+    doc.addImage(sub.toDataURL("image/png"), "PNG", margin, margin, contentW, hPt);
+    srcY += slicePx;
+    first = false;
+  }
 }
 
 function buildReportPlainText(opts: {
@@ -56,66 +142,27 @@ function buildReportPlainText(opts: {
   return lines.join("\n");
 }
 
-export function downloadInspectionReport(
+export async function downloadInspectionReport(
   opts: {
     brandScore: number;
     overallSummary: string | null;
     violations: Array<{ category: string; issue: string; severity: string }>;
   },
   format: ExportFormat
-): void {
+): Promise<void> {
   const plain = buildReportPlainText(opts);
   const stamp = Date.now();
 
   if (format === "pdf") {
+    const canvas = await buildPlainTextReportCanvas(plain);
     const doc = new jsPDF({ unit: "pt", format: "a4" });
-    const pageW = doc.internal.pageSize.getWidth();
     const margin = 48;
-    const maxW = pageW - margin * 2;
-    const lines = plain.split("\n").flatMap((para) => doc.splitTextToSize(para, maxW));
-    let y = 56;
-    const lh = 14;
-    for (const line of lines) {
-      if (y > doc.internal.pageSize.getHeight() - 48) {
-        doc.addPage();
-        y = 56;
-      }
-      doc.text(line, margin, y);
-      y += lh;
-    }
+    addCanvasToPdfPages(doc, canvas, margin);
     doc.save(`uplus-brand-inspection-report-${stamp}.pdf`);
     return;
   }
 
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-  const padding = 40;
-  const maxTextW = 720;
-  const fontSize = 13;
-  const lineHeight = Math.round(fontSize * 1.45);
-  ctx.font = `${fontSize}px system-ui, sans-serif`;
-
-  const allLines: string[] = [];
-  for (const para of plain.split("\n")) {
-    if (para === "") {
-      allLines.push("");
-      continue;
-    }
-    allLines.push(...wrapTextCanvas(ctx, para, maxTextW));
-  }
-  const textH = allLines.length * lineHeight + padding * 2;
-  canvas.width = maxTextW + padding * 2;
-  canvas.height = Math.max(400, textH);
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#111827";
-  ctx.font = `${fontSize}px system-ui, sans-serif`;
-  let y = padding + fontSize;
-  for (const line of allLines) {
-    ctx.fillText(line, padding, y);
-    y += lineHeight;
-  }
+  const canvas = await buildPlainTextReportCanvas(plain);
 
   if (format === "jpeg") {
     canvas.toBlob(
@@ -290,7 +337,7 @@ function buildBrandNamingPlainText(opts: {
   return lines.join("\n");
 }
 
-export function downloadBrandNamingReport(
+export async function downloadBrandNamingReport(
   opts: {
     mode: "generate" | "audit";
     result: BrandNamingRunResult;
@@ -298,60 +345,21 @@ export function downloadBrandNamingReport(
     referenceText: string;
   },
   format: ExportFormat
-): void {
+): Promise<void> {
   const plain = buildBrandNamingPlainText(opts);
   const stamp = Date.now();
   const slug = opts.mode === "generate" ? "naming-generate" : "naming-audit";
 
   if (format === "pdf") {
+    const canvas = await buildPlainTextReportCanvas(plain);
     const doc = new jsPDF({ unit: "pt", format: "a4" });
-    const pageW = doc.internal.pageSize.getWidth();
     const margin = 48;
-    const maxW = pageW - margin * 2;
-    const textLines = plain.split("\n").flatMap((para) => doc.splitTextToSize(para, maxW));
-    let y = 56;
-    const lh = 14;
-    for (const line of textLines) {
-      if (y > doc.internal.pageSize.getHeight() - 48) {
-        doc.addPage();
-        y = 56;
-      }
-      doc.text(line, margin, y);
-      y += lh;
-    }
+    addCanvasToPdfPages(doc, canvas, margin);
     doc.save(`uplus-brand-${slug}-${stamp}.pdf`);
     return;
   }
 
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-  const padding = 40;
-  const maxTextW = 720;
-  const fontSize = 13;
-  const lineHeight = Math.round(fontSize * 1.45);
-  ctx.font = `${fontSize}px system-ui, sans-serif`;
-
-  const allLines: string[] = [];
-  for (const para of plain.split("\n")) {
-    if (para === "") {
-      allLines.push("");
-      continue;
-    }
-    allLines.push(...wrapTextCanvas(ctx, para, maxTextW));
-  }
-  const textH = allLines.length * lineHeight + padding * 2;
-  canvas.width = maxTextW + padding * 2;
-  canvas.height = Math.max(400, textH);
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#111827";
-  ctx.font = `${fontSize}px system-ui, sans-serif`;
-  let y = padding + fontSize;
-  for (const line of allLines) {
-    ctx.fillText(line, padding, y);
-    y += lineHeight;
-  }
+  const canvas = await buildPlainTextReportCanvas(plain);
 
   if (format === "jpeg") {
     canvas.toBlob(

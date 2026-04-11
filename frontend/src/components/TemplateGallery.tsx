@@ -1,12 +1,8 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search,
-  Monitor,
-  Printer,
   ArrowLeft,
-  ArrowRight,
-  Sparkles,
   FileImage,
   RectangleHorizontal,
   LayoutTemplate,
@@ -14,12 +10,13 @@ import {
   Bell,
   Signpost,
   Presentation,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { templates as designTemplates, templateCategories } from "@/design/templates";
 
-type MediaType = "online" | "offline" | null;
+type MediaType = "online" | "offline";
 
 const categoryIconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutTemplate,
@@ -31,18 +28,55 @@ const categoryIconMap: Record<string, React.ComponentType<{ className?: string }
   RectangleHorizontal,
 };
 
+const categoryTabBase =
+  "inline-flex items-center justify-center rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F43182]/40";
+const categoryTabIdle = "border-gray-200 bg-white text-gray-700 hover:border-gray-300";
+const categoryTabActive = "border-[#F43182] bg-[#F43182]/10 text-[#F43182]";
+
+function parseCategoryFromSearch(searchParams: URLSearchParams): string | "all" {
+  const c = searchParams.get("category");
+  if (c && templateCategories.some((x) => x.id === c)) return c;
+  return "all";
+}
+
 export function TemplateGallery() {
-  const [selectedCategory, setSelectedCategory] = useState<string | "all">("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [mediaType, setMediaType] = useState<MediaType>(null);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const mediaType: MediaType = searchParams.get("media") === "offline" ? "offline" : "online";
+
+  const [selectedCategory, setSelectedCategory] = useState<string | "all">(() => parseCategoryFromSearch(searchParams));
+  const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    setSelectedCategory(parseCategoryFromSearch(searchParams));
+  }, [searchParams]);
+
+  const setMediaType = (next: MediaType) => {
+    setSearchParams((prev) => {
+      const p = new URLSearchParams(prev);
+      p.set("media", next);
+      p.delete("category");
+      return p;
+    });
+    setSelectedCategory("all");
+  };
+
+  const setCategory = (id: string | "all") => {
+    setSelectedCategory(id);
+    setSearchParams((prev) => {
+      const p = new URLSearchParams(prev);
+      if (id === "all") p.delete("category");
+      else p.set("category", id);
+      return p;
+    });
+  };
 
   const filteredTemplates = designTemplates.filter((template) => {
     const matchesCategory = selectedCategory === "all" || template.category === selectedCategory;
     const matchesSearch =
       template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       template.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesMediaType = !mediaType || template.mediaType === mediaType;
+    const matchesMediaType = template.mediaType === mediaType;
     return matchesCategory && matchesSearch && matchesMediaType;
   });
 
@@ -57,170 +91,21 @@ export function TemplateGallery() {
     navigate(`/create/${templateId}`);
   };
 
-  if (mediaType === null) {
-    return (
-      <div className="min-h-screen bg-[#FAFAFA]">
-        <header className="border-b border-gray-200 bg-white">
-          <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                onClick={() => navigate("/options")}
-                className="flex items-center gap-2 text-gray-600 transition-colors hover:text-gray-900"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span className="text-sm">홈으로</span>
-              </button>
-              <div className="h-6 w-px bg-gray-200" />
-              <div className="flex items-center gap-3">
-                <div className="h-11 w-11 shrink-0">
-                  <img src="/uplus-main-logo.png" alt="U+ Layer" className="h-full w-full object-contain" />
-                </div>
-                <div className="flex h-10 flex-col justify-between py-px">
-                  <h1 className="text-xl font-semibold leading-none text-gray-900">U+ Layer</h1>
-                  <p className="mt-1 text-xs leading-none text-gray-500">브랜드 디자인 제작 Brand Design Create</p>
-                </div>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" type="button" onClick={() => navigate("/dashboard")}>
-              내 디자인
-            </Button>
-          </div>
-        </header>
-
-        <div className="mx-auto max-w-5xl px-6 py-16">
-          <div className="mb-12 text-center">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#F43182]/20 bg-[#F43182]/10 px-4 py-2">
-              <Sparkles className="h-4 w-4 text-[#F43182]" />
-              <span className="text-sm font-medium text-[#F43182]">디자인 제작 시작하기</span>
-            </div>
-            <h2 className="mb-3 text-3xl font-bold text-gray-900">어떤 제작물의 디자인을 제작하시나요?</h2>
-            <p className="text-lg text-gray-500">온라인과 오프라인 제작물에 최적화된 템플릿을 제공합니다</p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => setMediaType("online")}
-              className="group relative rounded-2xl border-2 border-gray-200 bg-gradient-to-br from-gray-100 via-gray-50 to-white p-8 text-left transition-all hover:border-[#F43182] hover:shadow-xl"
-            >
-              <div className="absolute inset-0 rounded-2xl bg-[#F43182]/0 transition-all group-hover:bg-[#F43182]/5" />
-              <div className="relative">
-                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50">
-                  <Monitor className="h-8 w-8 text-blue-600" />
-                </div>
-                <h3 className="mb-3 text-2xl font-bold text-gray-900">온라인 제작물</h3>
-                <p className="mb-6 leading-relaxed text-gray-600">
-                  SNS 포스트, 웹 배너, 디지털 광고 등 디지털 환경에서 사용되는 디자인을 제작합니다.
-                </p>
-                <div className="mb-6 space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <div className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-                    <span>
-                      <strong>단위</strong> 픽셀(px)
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <div className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-                    <span>
-                      <strong>해상도</strong> 72 PPI (화면 최적화)
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <div className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-                    <span>
-                      <strong>색상 모드</strong> RGB
-                    </span>
-                  </div>
-                </div>
-                <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                  <p className="mb-2 text-xs font-medium text-gray-700">포함 템플릿 예시</p>
-                  <div className="flex flex-wrap gap-2">
-                    {["Instagram", "Facebook", "YouTube", "웹 배너"].map((t) => (
-                      <span
-                        key={t}
-                        className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600"
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 font-semibold text-blue-600 transition-colors group-hover:text-[#F43182]">
-                  온라인 템플릿 보기
-                  <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-                </div>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setMediaType("offline")}
-              className="group relative rounded-2xl border-2 border-gray-200 bg-gradient-to-br from-gray-100 via-gray-50 to-white p-8 text-left transition-all hover:border-[#F43182] hover:shadow-xl"
-            >
-              <div className="absolute inset-0 rounded-2xl bg-[#F43182]/0 transition-all group-hover:bg-[#F43182]/5" />
-              <div className="relative">
-                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50">
-                  <Printer className="h-8 w-8 text-orange-600" />
-                </div>
-                <h3 className="mb-3 text-2xl font-bold text-gray-900">오프라인 제작물</h3>
-                <p className="mb-6 leading-relaxed text-gray-600">
-                  포스터, 현수막, 명함, 브로슈어 등 인쇄물로 출력되는 디자인을 제작합니다.
-                </p>
-                <div className="mb-6 space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <div className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-                    <span>
-                      <strong>단위</strong> 밀리미터(mm)
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <div className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-                    <span>
-                      <strong>해상도</strong> 300 DPI (인쇄 품질)
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <div className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-                    <span>
-                      <strong>색상 모드</strong> CMYK
-                    </span>
-                  </div>
-                </div>
-                <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                  <p className="mb-2 text-xs font-medium text-gray-700">포함 템플릿 예시</p>
-                  <div className="flex flex-wrap gap-2">
-                    {["A4 포스터", "명함", "현수막", "전단지"].map((t) => (
-                      <span
-                        key={t}
-                        className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600"
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 font-semibold text-orange-600 transition-colors group-hover:text-[#F43182]">
-                  오프라인 템플릿 보기
-                  <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-                </div>
-              </div>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" type="button" onClick={() => setMediaType(null)} className="text-gray-600 hover:text-gray-900">
-                <ArrowRight className="mr-2 h-4 w-4 rotate-180" />
-                뒤로가기
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                onClick={() => navigate("/options")}
+                className="text-gray-600 hover:text-gray-900"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                옵션으로
               </Button>
               <div className="h-6 w-px bg-gray-200" />
               <div className="flex items-center gap-3">
@@ -229,9 +114,7 @@ export function TemplateGallery() {
                 </div>
                 <div className="flex h-10 flex-col justify-between py-px">
                   <h1 className="text-xl font-semibold leading-none text-gray-900">U+ Layer</h1>
-                  <p className="text-xs leading-none text-gray-500">
-                    {mediaType === "online" ? "온라인 제작물 템플릿" : "오프라인 제작물 템플릿"}
-                  </p>
+                  <p className="text-xs leading-none text-gray-500">브랜드 그래픽 제작 · Brand Design Create</p>
                 </div>
               </div>
             </div>
@@ -243,6 +126,58 @@ export function TemplateGallery() {
       </header>
 
       <div className="mx-auto max-w-7xl px-6 py-8">
+        <div className="mb-8 rounded-[12px] border border-gray-200 bg-white px-[32px] pb-6 pt-[21px]">
+          <div className="mb-[16px] flex min-w-0 items-center gap-[8px]">
+            <Layers className="h-[26px] w-[26px] shrink-0 text-[#F43182]" />
+            <h2 className="text-[19.5px] font-semibold text-gray-900">카테고리 선택</h2>
+          </div>
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMediaType("online")}
+                className={`${categoryTabBase} ${mediaType === "online" ? categoryTabActive : categoryTabIdle}`}
+              >
+                온라인
+              </button>
+              <span className="select-none text-[13px] font-medium text-gray-300" aria-hidden>
+                -
+              </span>
+              <button
+                type="button"
+                onClick={() => setMediaType("offline")}
+                className={`${categoryTabBase} ${mediaType === "offline" ? categoryTabActive : categoryTabIdle}`}
+              >
+                오프라인
+              </button>
+            </div>
+            <div className="flex min-h-0 flex-wrap content-start gap-2">
+              <button
+                type="button"
+                onClick={() => setCategory("all")}
+                className={`${categoryTabBase} ${selectedCategory === "all" ? categoryTabActive : categoryTabIdle}`}
+              >
+                전체
+              </button>
+              {availableCategories.map((category) => {
+                const Icon = categoryIconMap[category.icon] ?? LayoutTemplate;
+                const active = selectedCategory === category.id;
+                return (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => setCategory(category.id)}
+                    className={`${categoryTabBase} ${active ? categoryTabActive : categoryTabIdle}`}
+                  >
+                    <Icon className="mr-1.5 h-4 w-4 shrink-0" />
+                    {category.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
         <div className="mb-8">
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -256,38 +191,7 @@ export function TemplateGallery() {
           </div>
         </div>
 
-        <div className="mb-8">
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            <Button
-              type="button"
-              variant={selectedCategory === "all" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedCategory("all")}
-              className={selectedCategory === "all" ? "bg-[#F43182] hover:bg-[#d41f6e] text-white" : ""}
-            >
-              전체
-            </Button>
-            {availableCategories.map((category) => {
-              const Icon = categoryIconMap[category.icon] ?? LayoutTemplate;
-              const active = selectedCategory === category.id;
-              return (
-                <Button
-                  key={category.id}
-                  type="button"
-                  variant={active ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setSelectedCategory(category.id)}
-                  className={`whitespace-nowrap ${active ? "bg-[#F43182] hover:bg-[#d41f6e] text-white" : ""}`}
-                >
-                  <Icon className="mr-2 h-4 w-4" />
-                  {category.label}
-                </Button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid min-w-0 grid-cols-1 gap-6 md:grid-cols-4">
           {filteredTemplates.map((template) => {
             const isPlacard = template.category === "placard";
             return (

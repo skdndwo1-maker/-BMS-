@@ -745,17 +745,17 @@ export function BrandInspection() {
                         variant="outline"
                         size="sm"
                         type="button"
-                        onClick={() =>
-                          brandScore !== null &&
-                          downloadInspectionReport(
+                        onClick={() => {
+                          if (brandScore === null) return;
+                          void downloadInspectionReport(
                             {
                               brandScore,
                               overallSummary: inspectionOverallSummary,
                               violations,
                             },
                             reportExportFormat
-                          )
-                        }
+                          );
+                        }}
                       >
                         <Download className="mr-2 h-4 w-4" />
                         리포트 다운로드

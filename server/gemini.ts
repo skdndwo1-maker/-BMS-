@@ -1924,11 +1924,11 @@ export async function runBrandNamingWithGemini(opts: {
 - **고정 응답 형식(반드시 준수)**: 루트에 **names** 배열과 **namingProposals** 배열을 **각각 정확히 4개**로 채웁니다. 두 배열의 4개 항목은 **동일한 네이밍·동일 순서**이며, 각 원소는 아래 키를 **모두** 채웁니다(빈 문자열·생략 금지):
   \`name\`, \`description\` (네이밍 설명·창작 근거, 한국어 3문장 이상),
   \`hierarchyScore\`, \`hierarchyDetail\` (브랜드 계층 평가 상세, **한국어 3줄 이상**),
-  \`uniquenessScore\`, \`uniquenessDetail\` (독창성 상세, **3줄 이상**),
+  \`uniquenessScore\`, \`uniquenessDetail\` (독창성 상세, **3줄 이상** — [참고 정보]에 **[상표 검색 근거 자료 — KIPRIS/KIPO]** 가 있으면 유사 상표·식별력 관점에서 **반드시 인용·요약**, 없으면 일반 추론으로 보완),
   \`pronunciationScore\`, \`pronunciationDetail\` (발음·언어 상세, **3줄 이상**),
   \`legalScore\`, \`legalDetail\` (적법성 상세, **3줄 이상**).
 - **namingProposals**의 각 원소에도 위와 동일한 값을 넣되, 스키마상 **description** 필드는 **반드시** 채우고, **rationale**이 있으면 **description과 동일 문자열**로 맞추어도 됩니다.
-- **적법성(legalScore·legalDetail)**: 상표법 위반 가능성, 일반명칭 해당 여부, 저작권 이슈를 기준으로 **반드시** 평가합니다. **0점은 정보가 없어 평가 자체가 불가능할 때만** 사용합니다. **평가가 가능하면 반드시 10점 이상** 부여하고, 그 근거를 **legalDetail**에 3줄 이상 서술합니다.
+- **적법성(legalScore·legalDetail)**: [참고 정보]에 **국가법령정보센터 법령 검색** 결과가 있으면 **반드시 인용·요약**하고, 상표법·표시광고법 위반 가능성·일반명칭·저작권 이슈를 기준으로 **반드시** 평가합니다. **0점은 정보가 없어 평가 자체가 불가능할 때만** 사용합니다. **평가가 가능하면 반드시 10점 이상** 부여하고, 그 근거를 **legalDetail**에 3줄 이상 서술합니다.
 - 네 점수의 가중 해석은 검수와 동일(계층 40%·독창 30%·발음·언어 20%·적법 10%)입니다. 루트 **pronunciationLanguageScore**는 **pronunciationScore와 동일 정수**로 맞출 것.
 - **발음·언어**: 4개 후보 각각에 대해 한국어·영어 호명 용이성·외국어 부정 연상 등을 반영해 후보별 점수·Detail을 채웁니다.
 - **suggestedNames**는 **names** 또는 **namingProposals**의 **name**과 같은 순서·같은 4개 문자열 배열.
@@ -1982,7 +1982,7 @@ ${req}
 규칙:
 1) 점수는 0~100 정수. 검수 시 **hierarchyScore, originalityDimensionScore, pronunciationScore, pronunciationLanguageScore(=pronunciationScore와 동일), legalityScore**를 채우고, trademarkScore·copyrightScore는 레거시 호환용으로 네 점수와 맞게 채웁니다.
 2) 상표법·저작권은 **참고 수준**이며 법률 자문이 아님.
-3) KIPRIS·국가법령정보 블록이 있으면 독창성·적법성 항목 서술에 **우선 반영**하고, 없으면 trademarkConflicts 등으로 분석을 보완합니다.
+3) KIPRIS·국가법령정보 블록이 있으면 **독창성(생성 모드: uniqueness·uniquenessDetail / 검수: originality·detailLogicOriginality)·적법성** 항목 서술에 **우선 반영**하고, 없으면 trademarkConflicts 등으로 분석을 보완합니다.
 4) 출력은 JSON 한 개만. 스키마 키 이름을 정확히 맞추세요.${generateExtraRule}${jsonOnlyFooter}`;
 
   let lastErr: unknown;

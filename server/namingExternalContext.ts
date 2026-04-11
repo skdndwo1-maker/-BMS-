@@ -2,10 +2,12 @@
  * 브랜드 네이밍 검수 시 Gemini 맥락 보강.
  * - 상표 검색: **공공데이터포털 KIPO API** `kipo-api.kipi.or.kr` (XML) 우선.
  *   (구 `plus.kipris.or.kr/openapi/rest` 일부 경로는 404 HTML → 비권장)
- * - 국가법령정보: https://open.law.go.kr/ — LAW_GO_OC
+ * - 국가법령정보: https://open.law.go.kr/ — `server/lawApi.ts` (`LAW_API_OC` / `LAW_GO_OC`)
  *
- * 검수(audit) 모드에서만 상표 API를 호출합니다.
+ * 생성·검수 모드에서 상표 API(KIPRIS)·국가법령정보 API(적법성)를 호출해 Gemini 맥락을 만듭니다.
  */
+
+import { fetchLawsForBrandNamingLegality } from "./lawApi.js";
 
 /**
  * KIPO 상표 단어검색 (공공데이터포털 명세)
@@ -345,49 +347,6 @@ export async function fetchKiprisTrademarkEvidence(searchWord: string): Promise<
   };
 }
 
-/** 국가법령정보센터 open API — 법령 검색(JSON). OC·신청 절차: https://open.law.go.kr/ */
-export async function fetchLawGoLawSnippet(query: string): Promise<string> {
-  const oc = process.env.LAW_GO_OC?.trim();
-  if (!oc || !query.trim()) return "";
-
-  const url = new URL("https://www.law.go.kr/DRF/lawSearch.do");
-  url.searchParams.set("OC", oc);
-  url.searchParams.set("target", "law");
-  url.searchParams.set("type", "JSON");
-  url.searchParams.set("nw", "1");
-  url.searchParams.set("query", query.slice(0, 200));
-
-  try {
-    const res = await fetch(url.toString(), {
-      headers: { Accept: "application/json, */*" },
-      signal: AbortSignal.timeout(20_000)
-    });
-    const raw = await res.text();
-    if (!res.ok) {
-      return `[국가법령정보 응답 ${res.status}] ${truncate(raw, 800)}`;
-    }
-    try {
-      const j = JSON.parse(raw) as Record<string, unknown>;
-      const lawSearch = j.LawSearch as Record<string, unknown> | undefined;
-      const items = (lawSearch?.law as unknown[]) ?? (j.items as unknown[]) ?? [];
-      if (Array.isArray(items) && items.length > 0) {
-        const lines = items.slice(0, 15).map((it, i) => {
-          const row = it as Record<string, unknown>;
-          const nm = String(row.법령명한글 ?? row.lawName ?? row.법령명 ?? row.name ?? "");
-          const id = String(row.법령ID ?? row.lawId ?? "");
-          return `${i + 1}. ${nm}${id ? ` (ID ${id})` : ""}`;
-        });
-        return truncate(lines.join("\n"), 5000);
-      }
-      return truncate(JSON.stringify(j).slice(0, 4000), 4000);
-    } catch {
-      return truncate(raw, 5000);
-    }
-  } catch (e) {
-    return `[국가법령정보 호출 실패] ${e instanceof Error ? e.message : String(e)}`;
-  }
-}
-
 export async function buildExternalNamingReferences(opts: {
   mode: "generate" | "audit";
   auditName: string;
@@ -401,28 +360,33 @@ export async function buildExternalNamingReferences(opts: {
       ? opts.auditName.trim() || opts.requestText.trim().slice(0, 120)
       : opts.requestText.trim().slice(0, 120);
 
-  const lawQuery =
+  const searchWord =
     opts.mode === "audit"
-      ? `${opts.auditName.trim() || "상표"} ${opts.namingIntent.trim()}`.trim().slice(0, 200) || "상표법"
-      : `${opts.requestText.trim().slice(0, 100)}` || "상표법";
+      ? opts.auditName.trim() || q.trim() || opts.namingIntent.trim().slice(0, 80)
+      : q.trim() || opts.requestText.trim().slice(0, 80);
 
-  let kiprisBlock = "";
-  if (opts.mode === "audit") {
-    const searchWord = q || opts.namingIntent.trim().slice(0, 80);
-    const k = await fetchKiprisTrademarkEvidence(searchWord);
-    if (k.ok) {
-      kiprisBlock = `[상표 검색 근거 자료 — KIPRIS/KIPO 상표 API]\n검색어: ${searchWord}\n\n${k.text}`;
-    } else if (resolveKiprisServiceKey()) {
-      kiprisBlock = `[KIPRIS/KIPO 상표 API]\n상표 XML/JSON을 받지 못했습니다. 공공데이터포털(data.go.kr)에서 발급한 serviceKey인지, KIPRIS_TRADEMARK_SEARCH_URL(또는 KIPRIS_OPENAPI_BASE)를 확인하세요. (${k.reason})`;
-    }
-  }
-
-  const law = await fetchLawGoLawSnippet(lawQuery);
+  const [kiprisBlock, lawBlock] = await Promise.all([
+    (async (): Promise<string> => {
+      if (!searchWord.trim()) return "";
+      const k = await fetchKiprisTrademarkEvidence(searchWord);
+      if (k.ok) {
+        return `[상표 검색 근거 자료 — KIPRIS/KIPO 지식재산정보(상표) API]\n검색어: ${searchWord}\n\n${k.text}`;
+      }
+      if (resolveKiprisServiceKey()) {
+        return `[KIPRIS/KIPO 상표 API]\n상표 XML/JSON을 받지 못했습니다. 공공데이터포털(data.go.kr)에서 발급한 serviceKey인지, KIPRIS_TRADEMARK_SEARCH_URL(또는 KIPRIS_OPENAPI_BASE)를 확인하세요. (${k.reason})`;
+      }
+      return "";
+    })(),
+    fetchLawsForBrandNamingLegality({
+      mode: opts.mode,
+      auditName: opts.auditName,
+      namingIntent: opts.namingIntent,
+      requestText: opts.requestText
+    })
+  ]);
 
   if (kiprisBlock) blocks.push(kiprisBlock);
-  if (law) {
-    blocks.push(`[국가법령정보센터(open.law.go.kr) 법령 검색 참고 — 질의: ${lawQuery}]\n${law}`);
-  }
+  if (lawBlock.trim()) blocks.push(lawBlock);
 
   return blocks.join("\n\n");
 }

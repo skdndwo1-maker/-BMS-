@@ -470,7 +470,7 @@ app.post(
       const referenceNotes = [
         referenceText ? `[참고 정보 직접 입력]\n${referenceText}` : "",
         supplement ? `[파일 직접 업로드 요약]\n${supplement}` : "",
-        externalBlock ? `[KIPRIS Plus·국가법령정보센터 연동 요약]\n${externalBlock}` : ""
+        externalBlock ? `[KIPRIS·국가법령정보센터 연동 요약]\n${externalBlock}` : ""
       ]
         .filter(Boolean)
         .join("\n\n");

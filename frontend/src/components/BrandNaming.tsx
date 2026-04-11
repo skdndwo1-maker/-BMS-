@@ -441,7 +441,7 @@ export function BrandNaming() {
 
   const handleNamingReportDownload = () => {
     if (!namingResult) return;
-    downloadBrandNamingReport(
+    void downloadBrandNamingReport(
       {
         mode: namingMode,
         result: namingResult,
