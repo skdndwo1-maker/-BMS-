@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from "react-router-dom";
 import { templates } from "@/design/templates";
 import type { DesignContent } from "@/design/types";
-import { DesignCanvas }           from './DesignCanvas';
+import { DesignCanvas, type DesignFocusTarget } from './DesignCanvas';
 import { PlacardWideCanvas }      from './PlacardWideCanvas';
 import { Placard1000x600Canvas }  from './Placard1000x600Canvas';
 import { Placard2000x1000Canvas } from './Placard2000x1000Canvas';
@@ -54,6 +54,37 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     logoOption:     'CI',
     logoPosition:   'top-left',  // ← 기본값 좌상단
   });
+  const [focusTarget, setFocusTarget] = useState<DesignFocusTarget>(null);
+
+  // Undo stack (Ctrl/Cmd+Z)
+  const undoRef = useRef<{ stack: DesignContent[]; idx: number }>({ stack: [], idx: -1 });
+
+  const setContentWithHistory = (next: DesignContent | ((prev: DesignContent) => DesignContent)) => {
+    setContent((prev) => {
+      const resolved = typeof next === "function" ? (next as (p: DesignContent) => DesignContent)(prev) : next;
+      // push prev into undo stack
+      const u = undoRef.current;
+      const trimmed = u.stack.slice(0, u.idx + 1);
+      trimmed.push(prev);
+      undoRef.current = { stack: trimmed, idx: trimmed.length - 1 };
+      return resolved;
+    });
+  };
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const isUndo = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z";
+      if (!isUndo) return;
+      e.preventDefault();
+      const u = undoRef.current;
+      if (u.idx < 0) return;
+      const prev = u.stack[u.idx];
+      undoRef.current = { stack: u.stack, idx: u.idx - 1 };
+      setContent(prev);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
   const [showQuickStartDialog, setShowQuickStartDialog] = useState(false);
   const [showExportDialog,     setShowExportDialog]     = useState(false);
   const [showPreview,          setShowPreview]           = useState(false);
@@ -98,7 +129,15 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     if (isPlacard1000x600)  return <Placard1000x600Canvas  content={content} canvasSize={template.size} zoom={zoom} />;
     if (isPlacard2000x1000) return <Placard2000x1000Canvas content={content} canvasSize={template.size} zoom={zoom} />;
     if (isPlacard600x1800)  return <Placard600x1800Canvas  content={content} canvasSize={template.size} zoom={zoom} />;
-    return <DesignCanvas content={content} canvasSize={template.size} zoom={zoom} onContentChange={setContent} />;
+    return (
+      <DesignCanvas
+        content={content}
+        canvasSize={template.size}
+        zoom={zoom}
+        onContentChange={setContentWithHistory}
+        onFocusChange={setFocusTarget}
+      />
+    );
   };
 
   // ── Status bar text ──────────────────────────────────────────────────
@@ -242,9 +281,10 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
               <div className="flex-1 overflow-y-auto">
                 <ContentPanel
                   content={content}
-                  onContentChange={setContent}
+                  onContentChange={setContentWithHistory}
                   onShowQuickStart={() => setShowQuickStartDialog(true)}
                   templateId={actualTemplateId}
+                  focusTarget={focusTarget}
                 />
               </div>
 

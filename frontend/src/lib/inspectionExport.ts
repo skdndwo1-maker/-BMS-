@@ -322,7 +322,7 @@ function buildBrandNamingPlainText(opts: {
     const p = r.pronunciationScore ?? r.pronunciationLanguageScore ?? 0;
     const l = r.legalityScore ?? r.copyrightScore;
     lines.push(
-      `세부(각 100점) — 계층(40%) ${r.hierarchyScore} · 독창(30%) ${o} · 발음·언어(20%) ${p} · 적법(10%) ${l}`,
+      `세부(각 100점) — 계층(가중합 제외) ${r.hierarchyScore} · 창의성(종합 50%) ${o} · 직관성(종합 50%) ${p} · 적법(가중합 제외) ${l}`,
       ""
     );
     appendBrandNamingAnalysisTail(lines, r);

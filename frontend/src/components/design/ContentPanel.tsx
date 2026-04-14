@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useDropzone } from "react-dropzone";
 import type { DesignContent, DesignStyle, LogoPosition, PosterCategory, AssetLayer, AssetType } from "@/design/types";
 import { Input } from "@/components/ui/input";
@@ -7,17 +7,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import {
   Upload, Image as ImageIcon, Sparkles, Calendar, MapPin, Type,
-  AlignLeft, AlignCenter, AlignJustify,
+  AlignLeft,
   CornerDownLeft, CornerDownRight, CornerUpLeft, CornerUpRight,
   ChevronDown, ChevronUp, Settings, Shapes, Palette, Trash2, Eye, EyeOff,
 } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { DEFAULT_POSTER_BG_RECT, DEFAULT_POSTER_BADGE_RECT } from "@/design/posterDefaults";
 
 interface ContentPanelProps {
   content: DesignContent;
   onContentChange: (content: DesignContent) => void;
   onShowQuickStart?: () => void;
   templateId?: string;
+  focusTarget?: import("./DesignCanvas").DesignFocusTarget;
 }
 
 const POSTER_IDS = [
@@ -29,6 +31,60 @@ const POSTER_IDS = [
 const PLACARD_IDS = [
   'placard-wide-landscape','placard-1000x600','placard-2000x1000','placard-600x1800',
 ];
+
+function PosterFontScaleSlider({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div className="space-y-1.5 pt-1">
+      <input
+        type="range"
+        min={50}
+        max={200}
+        step={5}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="h-2 w-full cursor-pointer accent-[#F43182]"
+      />
+      <p className="text-xs text-gray-500">
+        {label} · <span className="font-mono tabular-nums">{value}%</span>
+      </p>
+    </div>
+  );
+}
+
+function AlignSelector({
+  value,
+  onChange,
+}: {
+  value: "left" | "center" | "right";
+  onChange: (v: "left" | "center" | "right") => void;
+}) {
+  const btnBase =
+    "flex-1 rounded-md border px-2 py-1.5 text-[11px] font-semibold transition-all";
+  const active = "border-[#F43182] bg-[#F43182]/10 text-[#F43182]";
+  const idle = "border-gray-200 bg-white text-gray-600 hover:border-gray-300";
+  return (
+    <div className="mt-1 flex items-center gap-1.5">
+      {(["left", "center", "right"] as const).map((k) => (
+        <button
+          key={k}
+          type="button"
+          onClick={() => onChange(k)}
+          className={`${btnBase} ${value === k ? active : idle}`}
+        >
+          {k === "left" ? "좌" : k === "center" ? "중" : "우"}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const POSTER_CATEGORIES: {
   key: PosterCategory; label: string; emoji: string; color: string;
@@ -50,11 +106,264 @@ function createAssetLayer(src: string, type: AssetType, name: string): AssetLaye
   };
 }
 
-export function ContentPanel({ content, onContentChange, onShowQuickStart, templateId }: ContentPanelProps) {
+function svgToDataUri(svg: string): string {
+  const cleaned = svg.replace(/\n/g, "").trim();
+  return `data:image/svg+xml;utf8,${encodeURIComponent(cleaned)}`;
+}
+
+const TEMP_PICTOGRAMS: Array<{ name: string; src: string }> = [
+  {
+    name: "네트워크",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+        <rect x="2" y="2" width="60" height="60" rx="14" fill="none" stroke="#1A1A1A" stroke-width="4"/>
+        <path d="M18 40c6-8 22-8 28 0" fill="none" stroke="#F43182" stroke-width="4" stroke-linecap="round"/>
+        <path d="M24 32c4-5 12-5 16 0" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="32" cy="46" r="3.5" fill="#1A1A1A"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "보안",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+        <path d="M32 6l22 10v16c0 16-10 26-22 28C20 58 10 48 10 32V16L32 6z" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M22 32l7 7 14-16" fill="none" stroke="#F43182" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "클라우드",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+        <path d="M22 44h26a10 10 0 0 0 0-20 14 14 0 0 0-27-3A9 9 0 0 0 22 44z" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M22 44h26" fill="none" stroke="#F43182" stroke-width="4" stroke-linecap="round"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "AI",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+        <rect x="16" y="16" width="32" height="32" rx="8" fill="none" stroke="#1A1A1A" stroke-width="4"/>
+        <path d="M22 32h20" stroke="#F43182" stroke-width="4" stroke-linecap="round"/>
+        <path d="M32 22v20" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round"/>
+        <path d="M32 6v6M32 52v6M6 32h6M52 32h6" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "모바일",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+        <rect x="20" y="6" width="24" height="52" rx="6" fill="none" stroke="#1A1A1A" stroke-width="4"/>
+        <path d="M24 14h16" stroke="#F43182" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="32" cy="50" r="2.8" fill="#1A1A1A"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "결제",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+        <rect x="8" y="16" width="48" height="32" rx="8" fill="none" stroke="#1A1A1A" stroke-width="4"/>
+        <path d="M8 26h48" stroke="#F43182" stroke-width="4" stroke-linecap="round"/>
+        <path d="M18 38h10" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "배송",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+        <path d="M10 18h28v26H10z" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M38 26h10l6 6v12H38z" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linejoin="round"/>
+        <circle cx="20" cy="46" r="4" fill="#1A1A1A"/>
+        <circle cx="46" cy="46" r="4" fill="#1A1A1A"/>
+        <path d="M14 24h16" stroke="#F43182" stroke-width="4" stroke-linecap="round"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "고객",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+        <circle cx="26" cy="26" r="10" fill="none" stroke="#1A1A1A" stroke-width="4"/>
+        <path d="M10 54c3-10 29-10 32 0" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round"/>
+        <path d="M42 24h12" stroke="#F43182" stroke-width="4" stroke-linecap="round"/>
+        <path d="M42 32h10" stroke="#F43182" stroke-width="4" stroke-linecap="round"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "공지",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+        <path d="M14 20h30l6 6v18H14z" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M20 30h24" stroke="#F43182" stroke-width="4" stroke-linecap="round"/>
+        <path d="M20 38h18" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "리포트",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+        <rect x="14" y="10" width="36" height="44" rx="8" fill="none" stroke="#1A1A1A" stroke-width="4"/>
+        <path d="M22 40V30" stroke="#F43182" stroke-width="4" stroke-linecap="round"/>
+        <path d="M32 40V24" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round"/>
+        <path d="M42 40V34" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round"/>
+      </svg>`
+    ),
+  },
+];
+
+// 일러스트(기본 10개) — 간단한 벡터, LG U+ 컬러 톤
+const TEMP_ILLUSTRATIONS: Array<{ name: string; src: string }> = [
+  {
+    name: "추상 웨이브",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120">
+        <defs>
+          <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stop-color="#F43182" stop-opacity="0.9"/>
+            <stop offset="1" stop-color="#1A1A1A" stop-opacity="0.2"/>
+          </linearGradient>
+        </defs>
+        <path d="M0 80c30-30 60-10 90 5s60 25 110-15v50H0z" fill="url(#g)"/>
+        <path d="M0 55c28-22 55-8 82 5s58 22 118-12" fill="none" stroke="#F43182" stroke-width="6" stroke-linecap="round" opacity="0.55"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "네트워크 라인",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120">
+        <rect x="12" y="12" width="176" height="96" rx="18" fill="none" stroke="#1A1A1A" stroke-width="6" opacity="0.9"/>
+        <path d="M35 75c18-22 34-22 52 0s34 22 52 0 34-22 52 0" fill="none" stroke="#F43182" stroke-width="6" stroke-linecap="round"/>
+        <circle cx="35" cy="75" r="6" fill="#1A1A1A"/>
+        <circle cx="87" cy="75" r="6" fill="#1A1A1A"/>
+        <circle cx="139" cy="75" r="6" fill="#1A1A1A"/>
+        <circle cx="191" cy="75" r="6" fill="#1A1A1A"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "마젠타 블롭",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120">
+        <path d="M52 18c30-10 52 8 68 22s38 25 36 46-28 34-62 30-74-18-84-46S22 28 52 18z" fill="#F43182" opacity="0.85"/>
+        <path d="M70 44c18-10 40-6 52 4" fill="none" stroke="#1A1A1A" stroke-width="6" stroke-linecap="round" opacity="0.35"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "아이콘 콜라주",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120">
+        <rect x="18" y="18" width="72" height="72" rx="18" fill="#F43182" opacity="0.15"/>
+        <rect x="110" y="24" width="72" height="60" rx="18" fill="#1A1A1A" opacity="0.08"/>
+        <circle cx="54" cy="54" r="18" fill="none" stroke="#F43182" stroke-width="8"/>
+        <path d="M134 60h28" stroke="#F43182" stroke-width="8" stroke-linecap="round"/>
+        <path d="M134 44h20" stroke="#1A1A1A" stroke-width="8" stroke-linecap="round" opacity="0.6"/>
+        <path d="M134 76h14" stroke="#1A1A1A" stroke-width="8" stroke-linecap="round" opacity="0.35"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "라운드 프레임",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120">
+        <rect x="16" y="16" width="168" height="88" rx="26" fill="none" stroke="#F43182" stroke-width="8" opacity="0.75"/>
+        <rect x="34" y="34" width="132" height="52" rx="18" fill="none" stroke="#1A1A1A" stroke-width="6" opacity="0.35"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "다이아 패턴",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120">
+        <path d="M40 60l30-30 30 30-30 30z" fill="#F43182" opacity="0.22"/>
+        <path d="M100 60l30-30 30 30-30 30z" fill="#F43182" opacity="0.14"/>
+        <path d="M70 60l30-30 30 30-30 30z" fill="none" stroke="#1A1A1A" stroke-width="6" opacity="0.35"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "스파크",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120">
+        <path d="M100 18l10 24 24 10-24 10-10 24-10-24-24-10 24-10z" fill="#F43182" opacity="0.8"/>
+        <circle cx="150" cy="36" r="10" fill="#1A1A1A" opacity="0.18"/>
+        <circle cx="54" cy="84" r="14" fill="#1A1A1A" opacity="0.12"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "반원 그라데이션",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120">
+        <defs>
+          <linearGradient id="h" x1="0" x2="1">
+            <stop offset="0" stop-color="#F43182" stop-opacity="0.55"/>
+            <stop offset="1" stop-color="#F43182" stop-opacity="0.05"/>
+          </linearGradient>
+        </defs>
+        <path d="M20 100a80 80 0 0 1 160 0" fill="url(#h)"/>
+        <path d="M52 100a48 48 0 0 1 96 0" fill="none" stroke="#1A1A1A" stroke-width="6" opacity="0.22"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "카드 섀도",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120">
+        <rect x="22" y="22" width="156" height="76" rx="22" fill="#1A1A1A" opacity="0.08"/>
+        <rect x="16" y="16" width="156" height="76" rx="22" fill="#FFFFFF" stroke="#F43182" stroke-width="6" opacity="0.85"/>
+        <path d="M40 54h80" stroke="#1A1A1A" stroke-width="8" stroke-linecap="round" opacity="0.25"/>
+        <path d="M40 74h60" stroke="#F43182" stroke-width="8" stroke-linecap="round" opacity="0.55"/>
+      </svg>`
+    ),
+  },
+  {
+    name: "링",
+    src: svgToDataUri(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120">
+        <circle cx="72" cy="60" r="34" fill="none" stroke="#F43182" stroke-width="10" opacity="0.8"/>
+        <circle cx="128" cy="60" r="26" fill="none" stroke="#1A1A1A" stroke-width="8" opacity="0.25"/>
+      </svg>`
+    ),
+  },
+];
+
+export function ContentPanel({ content, onContentChange, onShowQuickStart, templateId, focusTarget }: ContentPanelProps) {
   const [imagePreview,        setImagePreview]        = useState<string|null>(null);
   const [logoPreview,         setLogoPreview]         = useState<string|null>(null);
   const [showCategoryPalette, setShowCategoryPalette] = useState(false);
   const [showTitleOptions,    setShowTitleOptions]    = useState(false);
+
+  const refBadge = useRef<HTMLDivElement>(null);
+  const refTitle = useRef<HTMLDivElement>(null);
+  const refBody = useRef<HTMLDivElement>(null);
+  const refFooter = useRef<HTMLDivElement>(null);
+  const refImage = useRef<HTMLDivElement>(null);
+  const refLogo = useRef<HTMLDivElement>(null);
+
+  const [pictoDialogOpen, setPictoDialogOpen] = useState(false);
+  const [pictoQuery, setPictoQuery] = useState("");
+  const [illuDialogOpen, setIlluDialogOpen] = useState(false);
+  const [illuQuery, setIlluQuery] = useState("");
+
+  useEffect(() => {
+    if (!focusTarget) return;
+    const scroll = (el: HTMLElement | null) => el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (focusTarget === "badge") scroll(refBadge.current);
+    else if (focusTarget === "title") scroll(refTitle.current);
+    else if (focusTarget === "body") scroll(refBody.current);
+    else if (focusTarget === "footer") scroll(refFooter.current);
+    else if (focusTarget === "image") scroll(refImage.current);
+    else if (focusTarget === "logo") scroll(refLogo.current);
+  }, [focusTarget]);
 
   const isPlacard     = PLACARD_IDS.includes(templateId ?? '');
   const isPoster      = POSTER_IDS.includes(templateId ?? '');
@@ -68,7 +377,15 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
 
   const { getRootProps:getPictoRP,  getInputProps:getPictoIP,  isDragActive:isPictoDrag  } = useDropzone({ onDrop:(f)=>onAssetDrop(f,'pictogram'),    accept:{"image/*":[".png",".svg",".jpg"]}, multiple:true });
   const { getRootProps:getIlluRP,   getInputProps:getIlluIP,   isDragActive:isIlluDrag   } = useDropzone({ onDrop:(f)=>onAssetDrop(f,'illustration'),  accept:{"image/*":[".png",".svg",".jpg"]}, multiple:true });
-  const { getRootProps:getImageRP,  getInputProps:getImageIP,  isDragActive:isImageDrag  } = useDropzone({ onDrop:(f)=>{ if(f[0]){ onContentChange({...content,image:f[0]}); setImagePreview(URL.createObjectURL(f[0])); }}, accept:{"image/*":[".png",".jpg",".jpeg",".webp"]}, multiple:false });
+  const { getRootProps:getImageRP,  getInputProps:getImageIP,  isDragActive:isImageDrag  } = useDropzone({ onDrop:(f)=>{ if(f[0]){
+    onContentChange({
+      ...content,
+      image:f[0],
+      posterBackgroundImageRect: content.posterBackgroundImageRect ?? DEFAULT_POSTER_BG_RECT,
+      posterImageOpacity: content.posterImageOpacity ?? 100,
+    });
+    setImagePreview(URL.createObjectURL(f[0]));
+  }}, accept:{"image/*":[".png",".jpg",".jpeg",".webp"]}, multiple:false });
   const { getRootProps:getLogoRP,   getInputProps:getLogoIP,   isDragActive:isLogoDrag   } = useDropzone({ onDrop:(f)=>{ if(f[0]){ onContentChange({...content,logo:f[0]});  setLogoPreview(URL.createObjectURL(f[0]));  }}, accept:{"image/*":[".png",".jpg",".jpeg",".svg"]},  multiple:false });
 
   const handleCategorySelect = (cat: typeof POSTER_CATEGORIES[number]) => {
@@ -88,13 +405,26 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         <p className="text-xs text-gray-400">CI / BI / SLOGAN 중 선택</p>
       </div>
       <div className="grid grid-cols-4 gap-2">
-        {[{key:null,label:"None",desc:"로고 없음"},{key:"CI",label:"CI",desc:"Corporate Identity"},{key:"BI",label:"BI",desc:"Brand Identity"},{key:"SLOGAN",label:"SLOGAN",desc:"슬로건 로고"}].map((opt)=>{
-          const active=(content.logoOption??null)===opt.key;
+        {(
+          [
+            { key: null, label: "None", desc: "로고 없음" },
+            { key: "CI", label: "CI", desc: "Corporate Identity" },
+            { key: "BI", label: "BI", desc: "Brand Identity" },
+            { key: "SLOGAN", label: "SLOGAN", desc: "슬로건 로고" },
+          ] as const
+        ).map((opt) => {
+          const active = (content.logoOption ?? null) === opt.key;
           return (
-            <button key={opt.key||"none"} onClick={()=>onContentChange({...content,logoOption:opt.key as any})}
-              className={`rounded-xl border-2 py-3 px-2 text-center transition-all ${active?"border-[#F43182] bg-[#F43182]/6":"border-gray-200 hover:border-gray-300 bg-white"}`}>
-              <p className={`text-sm font-bold mb-0.5 ${active?"text-[#F43182]":"text-gray-800"}`}>{opt.label}</p>
-              <p className="text-[10px] text-gray-400 leading-tight">{opt.desc}</p>
+            <button
+              key={opt.key ?? "none"}
+              type="button"
+              onClick={() => onContentChange({ ...content, logoOption: opt.key as DesignContent["logoOption"] })}
+              className={`rounded-xl border-2 px-2 py-3 text-center transition-all ${
+                active ? "border-[#F43182] bg-[#F43182]/6" : "border-gray-200 hover:border-gray-300 bg-white"
+              }`}
+            >
+              <p className={`text-sm font-bold leading-tight ${active ? "text-[#F43182]" : "text-gray-800"}`}>{opt.label}</p>
+              <p className="mt-1 text-[9px] text-gray-400 leading-tight">{opt.desc}</p>
             </button>
           );
         })}
@@ -111,15 +441,13 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const LogoPositionSelector = () => (
     <div className="space-y-3">
       <Label className="text-sm font-semibold text-gray-700">로고 배치 위치</Label>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
-          {key:"top-left"      as LogoPosition,label:"좌상단",  icon:CornerUpLeft},
-          {key:"center-top"    as LogoPosition,label:"중앙상단",icon:AlignCenter},
-          {key:"top-right"     as LogoPosition,label:"우상단",  icon:CornerUpRight},
-          {key:"bottom-left"   as LogoPosition,label:"좌하단",  icon:CornerDownLeft},
-          {key:"center-bottom" as LogoPosition,label:"중앙하단",icon:AlignJustify},
-          {key:"bottom-right"  as LogoPosition,label:"우하단",  icon:CornerDownRight},
-        ].map((pos)=>{
+          { key: "top-left" as LogoPosition, label: "좌상단", icon: CornerUpLeft },
+          { key: "top-right" as LogoPosition, label: "우상단", icon: CornerUpRight },
+          { key: "bottom-left" as LogoPosition, label: "좌하단", icon: CornerDownLeft },
+          { key: "bottom-right" as LogoPosition, label: "우하단", icon: CornerDownRight },
+        ].map((pos) => {
           const Icon=pos.icon; const active=content.logoPosition===pos.key;
           return (
             <button key={pos.key} onClick={()=>onContentChange({...content,logoPosition:pos.key})}
@@ -140,20 +468,24 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
 
       {/* 픽토그램 */}
       <div className="space-y-1.5">
-        <Label className="text-xs font-semibold text-gray-600 flex items-center gap-1.5"><Shapes className="w-3.5 h-3.5"/>픽토그램</Label>
-        <div {...getPictoRP()} className={`border-2 border-dashed rounded-lg p-3 text-center cursor-pointer transition-colors ${isPictoDrag?"border-[#F43182] bg-[#F43182]/5":"border-gray-300 hover:border-gray-400"}`}>
-          <input {...getPictoIP()}/>
-          <div className="flex items-center justify-center gap-2 text-gray-400"><Shapes className="w-4 h-4"/><p className="text-xs">픽토그램 업로드 (여러 개 가능)</p></div>
+        <div className="flex items-end justify-between gap-2">
+          <Label className="text-xs font-semibold text-gray-600 flex items-center gap-1.5"><Shapes className="w-3.5 h-3.5"/>픽토그램</Label>
+          <Button type="button" variant="outline" size="sm" className="h-8 text-[12px]" onClick={() => setPictoDialogOpen(true)}>
+            픽토그램 선택
+          </Button>
         </div>
+        <p className="text-xs text-gray-400">버튼을 눌러 팝업에서 검색·선택하세요</p>
       </div>
 
       {/* 일러스트 */}
       <div className="space-y-1.5">
-        <Label className="text-xs font-semibold text-gray-600 flex items-center gap-1.5"><Palette className="w-3.5 h-3.5"/>일러스트</Label>
-        <div {...getIlluRP()} className={`border-2 border-dashed rounded-lg p-3 text-center cursor-pointer transition-colors ${isIlluDrag?"border-[#F43182] bg-[#F43182]/5":"border-gray-300 hover:border-gray-400"}`}>
-          <input {...getIlluIP()}/>
-          <div className="flex items-center justify-center gap-2 text-gray-400"><Palette className="w-4 h-4"/><p className="text-xs">일러스트 업로드 (여러 개 가능)</p></div>
+        <div className="flex items-end justify-between gap-2">
+          <Label className="text-xs font-semibold text-gray-600 flex items-center gap-1.5"><Palette className="w-3.5 h-3.5"/>일러스트</Label>
+          <Button type="button" variant="outline" size="sm" className="h-8 text-[12px]" onClick={() => setIlluDialogOpen(true)}>
+            일러스트 선택
+          </Button>
         </div>
+        <p className="text-xs text-gray-400">버튼을 눌러 팝업에서 검색·선택하세요</p>
       </div>
 
       {/* 업로드된 에셋 목록 */}
@@ -189,6 +521,122 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     </div>
   );
 
+  const PictogramDialog = () => {
+    if (!pictoDialogOpen) return null;
+    const q = pictoQuery.trim().toLowerCase();
+    const filtered = TEMP_PICTOGRAMS.filter((p) => (q ? p.name.toLowerCase().includes(q) : true));
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+        <button
+          type="button"
+          className="absolute inset-0 bg-black/40"
+          aria-label="닫기"
+          onClick={() => setPictoDialogOpen(false)}
+        />
+        <div className="relative z-10 w-full max-w-2xl overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+            <h3 className="text-sm font-semibold text-gray-900">픽토그램 선택</h3>
+            <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => setPictoDialogOpen(false)}>
+              닫기
+            </Button>
+          </div>
+          <div className="p-4">
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Input value={pictoQuery} onChange={(e) => setPictoQuery(e.target.value)} placeholder="검색어 입력 (예: AI, 보안, 고객)" />
+              <div
+                {...getPictoRP()}
+                className={`shrink-0 cursor-pointer rounded-lg border-2 border-dashed px-4 py-2 text-center text-xs transition-colors ${
+                  isPictoDrag ? "border-[#F43182] bg-[#F43182]/5" : "border-gray-300 hover:border-gray-400"
+                }`}
+              >
+                <input {...getPictoIP()} />
+                업로드
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {filtered.map((p) => (
+                <button
+                  key={p.name}
+                  type="button"
+                  onClick={() => {
+                    const layer = createAssetLayer(p.src, "pictogram", p.name);
+                    onContentChange({ ...content, assetLayers: [...assetLayers, layer] });
+                    setPictoDialogOpen(false);
+                  }}
+                  className="group flex flex-col items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-2 hover:border-[#F43182] hover:bg-[#F43182]/5"
+                  title={p.name}
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-md bg-gray-50">
+                    <img src={p.src} alt={p.name} className="h-7 w-7 object-contain" />
+                  </span>
+                  <span className="w-full truncate text-[10px] font-medium text-gray-600 group-hover:text-[#F43182]">{p.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const IllustrationDialog = () => {
+    if (!illuDialogOpen) return null;
+    const q = illuQuery.trim().toLowerCase();
+    const filtered = TEMP_ILLUSTRATIONS.filter((p) => (q ? p.name.toLowerCase().includes(q) : true));
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+        <button
+          type="button"
+          className="absolute inset-0 bg-black/40"
+          aria-label="닫기"
+          onClick={() => setIlluDialogOpen(false)}
+        />
+        <div className="relative z-10 w-full max-w-2xl overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+            <h3 className="text-sm font-semibold text-gray-900">일러스트 선택</h3>
+            <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => setIlluDialogOpen(false)}>
+              닫기
+            </Button>
+          </div>
+          <div className="p-4">
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Input value={illuQuery} onChange={(e) => setIlluQuery(e.target.value)} placeholder="검색어 입력 (예: 웨이브, 링, 패턴)" />
+              <div
+                {...getIlluRP()}
+                className={`shrink-0 cursor-pointer rounded-lg border-2 border-dashed px-4 py-2 text-center text-xs transition-colors ${
+                  isIlluDrag ? "border-[#F43182] bg-[#F43182]/5" : "border-gray-300 hover:border-gray-400"
+                }`}
+              >
+                <input {...getIlluIP()} />
+                업로드
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {filtered.slice(0, 10).map((p) => (
+                <button
+                  key={p.name}
+                  type="button"
+                  onClick={() => {
+                    const layer = createAssetLayer(p.src, "illustration", p.name);
+                    onContentChange({ ...content, assetLayers: [...assetLayers, layer] });
+                    setIlluDialogOpen(false);
+                  }}
+                  className="group flex flex-col items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-2 hover:border-[#F43182] hover:bg-[#F43182]/5"
+                  title={p.name}
+                >
+                  <span className="flex h-16 w-full items-center justify-center rounded-md bg-gray-50">
+                    <img src={p.src} alt={p.name} className="h-12 w-full object-contain" />
+                  </span>
+                  <span className="w-full truncate text-[10px] font-medium text-gray-600 group-hover:text-[#F43182]">{p.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // ════════════════════════════════════════════════════════════════════
   // ── 현수막 패널
   // ════════════════════════════════════════════════════════════════════
@@ -212,13 +660,25 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
             <p className="text-xs text-gray-400">클릭 시 지정 위치에 자동 배치됩니다</p>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            {([{key:"CI",title:"CI",desc:"Corporate Identity"},{key:"BI",title:"BI",desc:"Brand Identity"},{key:"SLOGAN",title:"SLOGAN",desc:"슬로건 로고"}] as const).map((opt)=>{
-              const active=(content.logoOption??"CI")===opt.key;
+            {(
+              [
+                { key: "CI", title: "CI", desc: "Corporate Identity" },
+                { key: "BI", title: "BI", desc: "Brand Identity" },
+                { key: "SLOGAN", title: "SLOGAN", desc: "슬로건 로고" },
+              ] as const
+            ).map((opt) => {
+              const active = (content.logoOption ?? "CI") === opt.key;
               return (
-                <button key={opt.key} onClick={()=>onContentChange({...content,logoOption:opt.key})}
-                  className={`rounded-xl border-2 py-3 px-2 text-center transition-all ${active?"border-[#F43182] bg-[#F43182]/6":"border-gray-200 hover:border-gray-300 bg-white"}`}>
-                  <p className={`text-sm font-bold mb-0.5 ${active?"text-[#F43182]":"text-gray-800"}`}>{opt.title}</p>
-                  <p className="text-[10px] text-gray-400 leading-tight">{opt.desc}</p>
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => onContentChange({ ...content, logoOption: opt.key })}
+                  className={`rounded-xl border-2 px-2 py-3 text-center transition-all ${
+                    active ? "border-[#F43182] bg-[#F43182]/6" : "border-gray-200 hover:border-gray-300 bg-white"
+                  }`}
+                >
+                  <p className={`text-sm font-bold leading-tight ${active ? "text-[#F43182]" : "text-gray-800"}`}>{opt.title}</p>
+                  <p className="mt-1 text-[9px] text-gray-400 leading-tight">{opt.desc}</p>
                 </button>
               );
             })}
@@ -286,6 +746,8 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     const currentCat=POSTER_CATEGORIES.find(c=>c.key===(content.posterCategory??"basic"))??POSTER_CATEGORIES[0];
     return (
       <div className="h-full overflow-y-auto p-6 space-y-6">
+        <PictogramDialog />
+        <IllustrationDialog />
         <div>
           <h2 className="font-semibold text-gray-900 mb-1">포스터 콘텐츠</h2>
           <div className="flex flex-col gap-1 mt-1">
@@ -355,16 +817,29 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         </div>
 
         {/* 뱃지 */}
-        <div className="space-y-2 border-t border-gray-100 pt-4">
+        <div ref={refBadge} className="space-y-2 border-t border-gray-100 pt-4">
           <Label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-            <span className="inline-block bg-[#F43182] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">뱃지</span>상단 뱃지 텍스트
+            <span className="inline-block bg-[#F43182] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">뱃지</span>
+            뱃지 텍스트
           </Label>
-          <Input value={content.subtitle} onChange={(e)=>onContentChange({...content,subtitle:e.target.value})} placeholder="예) 2025 신제품 출시"/>
-          <p className="text-xs text-gray-400">마젠타 알약 형태로 타이틀 위에 표시됩니다</p>
+          <Input
+            value={content.subtitle}
+            onChange={(e) => {
+              const v = e.target.value;
+              onContentChange({
+                ...content,
+                subtitle: v,
+                posterBadgeRect:
+                  v.trim() && !content.posterBadgeRect ? DEFAULT_POSTER_BADGE_RECT : content.posterBadgeRect,
+              });
+            }}
+            placeholder="예) 2025 신제품 출시"
+          />
+          <p className="text-xs text-gray-400">캔버스 중앙에서 뱃지 크기·위치를 드래그해 조절할 수 있습니다</p>
         </div>
 
         {/* 메인 타이틀 */}
-        <div className="space-y-2">
+        <div ref={refTitle} className="space-y-2">
           <Label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5"><Type className="w-3.5 h-3.5 text-gray-500"/>메인 타이틀</Label>
           <Textarea value={content.title} onChange={(e)=>onContentChange({...content,title:e.target.value})} placeholder={"예) 새로운 시작.\n(마침표로 끝나면 마젠타 점으로 변환)"} rows={3} className="font-medium resize-none"/>
           <p className="text-xs text-gray-400">마침표(.)로 끝나면 마젠타 원형 포인트로 자동 변환됩니다</p>
@@ -378,34 +853,100 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               ))}
             </div>
           </div>
+          <PosterFontScaleSlider
+            label="텍스트 크기 조절 (메인 타이틀)"
+            value={content.posterTitleFontScale ?? 100}
+            onChange={(v) => onContentChange({ ...content, posterTitleFontScale: v })}
+          />
+          <p className="text-xs text-gray-400">정렬 및 위치는 캔버스에서 직접 조정합니다</p>
+          <AlignSelector
+            value={(content.posterTitleAlign ?? "left") as "left" | "center" | "right"}
+            onChange={(v) => onContentChange({ ...content, posterTitleAlign: v })}
+          />
         </div>
 
         {/* 본문 */}
-        <div className="space-y-2">
-          <Label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5"><AlignLeft className="w-3.5 h-3.5 text-gray-500"/>본문 (불릿 리스트)</Label>
-          <Textarea value={content.bodyText} onChange={(e)=>onContentChange({...content,bodyText:e.target.value})} placeholder={"줄바꿈(Enter)으로 항목 구분\n예)\n5G 초고속 네트워크\n스마트홈 연동"} rows={5} className="resize-none"/>
-          <p className="text-xs text-gray-400">각 줄이 마젠타 불릿(●)과 함께 표시됩니다</p>
+        <div ref={refBody} className="space-y-2">
+          <Label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5"><AlignLeft className="w-3.5 h-3.5 text-gray-500"/>본문</Label>
+          <Textarea value={content.bodyText} onChange={(e)=>onContentChange({...content,bodyText:e.target.value})} placeholder={"줄바꿈(Enter)으로 문단 구분\n예)\n5G 초고속 네트워크\n스마트홈 연동"} rows={5} className="resize-none"/>
+          <p className="text-xs text-gray-400">입력한 그대로 표시됩니다</p>
+          <PosterFontScaleSlider
+            label="텍스트 크기 조절 (본문)"
+            value={content.posterBodyFontScale ?? 100}
+            onChange={(v) => onContentChange({ ...content, posterBodyFontScale: v })}
+          />
+          <p className="text-xs text-gray-400">정렬 및 위치는 캔버스에서 직접 조정합니다</p>
+          <AlignSelector
+            value={(content.posterBodyAlign ?? "left") as "left" | "center" | "right"}
+            onChange={(v) => onContentChange({ ...content, posterBodyAlign: v })}
+          />
         </div>
 
         {/* 유의사항 */}
-        <div className="space-y-2">
+        <div ref={refFooter} className="space-y-2">
           <Label className="text-sm font-semibold text-gray-700">하단 유의사항</Label>
           <Textarea value={content.emphasizedTitle||""} onChange={(e)=>onContentChange({...content,emphasizedTitle:e.target.value})} placeholder="예) ※ 본 이미지는 연출된 것입니다." rows={2} className="resize-none text-sm"/>
           <p className="text-xs text-gray-400">하단 좌측에 작은 회색 글씨로 표시됩니다</p>
+          <PosterFontScaleSlider
+            label="텍스트 크기 조절 (유의사항)"
+            value={content.posterFooterFontScale ?? 100}
+            onChange={(v) => onContentChange({ ...content, posterFooterFontScale: v })}
+          />
+          <p className="text-xs text-gray-400">정렬 및 위치는 캔버스에서 직접 조정합니다</p>
+          <AlignSelector
+            value={(content.posterFooterAlign ?? "left") as "left" | "center" | "right"}
+            onChange={(v) => onContentChange({ ...content, posterFooterAlign: v })}
+          />
         </div>
 
         {/* 로고 */}
-        <div className="border-t border-gray-100 pt-4 space-y-4">
+        <div ref={refLogo} className="border-t border-gray-100 pt-4 space-y-4">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">브랜드 로고</p>
           <LogoSelector/><LogoPositionSelector/>
         </div>
 
-        {/* 배경이미지 */}
-        <div className="border-t border-gray-100 pt-4 space-y-2">
-          <Label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5"><ImageIcon className="w-3.5 h-3.5 text-gray-500"/>배경 이미지 (선택)</Label>
+        {/* 이미지 */}
+        <div ref={refImage} className="border-t border-gray-100 pt-4 space-y-2">
+          <Label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5"><ImageIcon className="w-3.5 h-3.5 text-gray-500"/>이미지</Label>
           <div {...getImageRP()} className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${isImageDrag?"border-[#F43182] bg-[#F43182]/5":"border-gray-300 hover:border-gray-400"}`}>
             <input {...getImageIP()}/>
-            {imagePreview?(<div className="space-y-2"><img src={imagePreview} alt="Preview" className="max-h-24 mx-auto rounded"/><p className="text-xs text-gray-500">클릭하여 교체</p></div>):(<div className="space-y-1"><ImageIcon className="w-8 h-8 mx-auto text-gray-400"/><p className="text-xs text-gray-600">이미지 드래그 또는 클릭하여 업로드</p><p className="text-xs text-gray-400">불투명도 15% 자동 적용</p></div>)}
+            {imagePreview?(<div className="space-y-2"><img src={imagePreview} alt="Preview" className="max-h-24 mx-auto rounded"/><p className="text-xs text-gray-500">클릭하여 교체 · 캔버스에서 위치·크기 조절</p></div>):(<div className="space-y-1"><ImageIcon className="w-8 h-8 mx-auto text-gray-400"/><p className="text-xs text-gray-600">이미지 드래그 또는 클릭하여 업로드</p><p className="text-xs text-gray-400">캔버스에서 위치·크기 조절 · 모서리 라운드 자동</p></div>)}
+          </div>
+          {imagePreview ? (
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-[12px]"
+                onClick={() => {
+                  onContentChange({
+                    ...content,
+                    image: undefined,
+                    posterBackgroundImageRect: undefined,
+                    posterImageOpacity: 0,
+                  });
+                  setImagePreview(null);
+                }}
+              >
+                제거
+              </Button>
+            </div>
+          ) : null}
+          <div className="pt-1">
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={content.posterImageOpacity ?? 0}
+              onChange={(e) => onContentChange({ ...content, posterImageOpacity: Number(e.target.value) })}
+              className="h-2 w-full cursor-pointer accent-[#F43182]"
+            />
+            <p className="text-xs text-gray-500">
+              투명도 · <span className="font-mono tabular-nums">{content.posterImageOpacity ?? 100}%</span> (기본 100%)
+            </p>
+            <p className="mt-1 text-xs text-gray-400">팁: 캔버스에서 <span className="font-semibold">Alt</span>를 누른 채 드래그하면 이미지 내부 위치를 조정할 수 있습니다</p>
           </div>
         </div>
 

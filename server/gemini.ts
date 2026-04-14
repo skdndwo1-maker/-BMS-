@@ -1068,9 +1068,19 @@ const brandNamingResponseSchema = {
   type: SchemaType.OBJECT,
   description: "브랜드 네이밍 생성 또는 검수 결과",
   properties: {
-    overallScore: { type: SchemaType.NUMBER, description: "0~100 종합. 검수 시 가중합과 일치시킬 것(아래 비중 참고)" },
-    hierarchyScore: { type: SchemaType.NUMBER, description: "브랜드 계층 정렬 0~100 (검수 가중 40%)" },
-    originalityDimensionScore: { type: SchemaType.NUMBER, description: "독창성 0~100 (검수 가중 30%). KIPRIS 요약이 있으면 반영" },
+    overallScore: {
+      type: SchemaType.NUMBER,
+      description:
+        "0~100 종합. 검수 시 서버에서 창의성·직관성 50%+50%로 재계산되므로, 모델은 네 항목 점수와 논리적으로 맞게 채점",
+    },
+    hierarchyScore: {
+      type: SchemaType.NUMBER,
+      description: "브랜드 계층 정렬 0~100 (검수: 종합 가중합에는 미포함, 70 미만이면 Pass/Fail상 Fail·NO-GO 요건)",
+    },
+    originalityDimensionScore: {
+      type: SchemaType.NUMBER,
+      description: "창의성 0~100 (검수: 종합 점수의 50% 가중). KIPRIS 요약이 있으면 반영",
+    },
     pronunciationScore: {
       type: SchemaType.INTEGER,
       description:
@@ -1079,9 +1089,12 @@ const brandNamingResponseSchema = {
     pronunciationLanguageScore: {
       type: SchemaType.NUMBER,
       description:
-        "발음·언어 0~100 (검수 가중 20%). **pronunciationScore와 동일한 정수 값**으로 맞출 것. 레거시 가중합 필드",
+        "직관성(발음·언어) 0~100 (검수: 종합 점수의 50% 가중). **pronunciationScore와 동일한 정수 값**으로 맞출 것",
     },
-    legalityScore: { type: SchemaType.NUMBER, description: "적법성 0~100 (검수 가중 10%). 국가법령정보 요약이 있으면 반영" },
+    legalityScore: {
+      type: SchemaType.NUMBER,
+      description: "적법성 0~100 (검수: 종합 가중합에는 미포함, 70 미만이면 Pass/Fail상 Fail·NO-GO 요건). 국가법령정보 요약이 있으면 반영",
+    },
     trademarkScore: { type: SchemaType.NUMBER, description: "레거시: 상표 관점. 검수에서는 originalityDimensionScore와 유사 목적으로 채울 수 있음" },
     copyrightScore: { type: SchemaType.NUMBER, description: "레거시: 저작권. 검수에서는 legalityScore 보조로 채울 수 있음" },
     hierarchyStatus: {
@@ -1143,12 +1156,12 @@ const brandNamingResponseSchema = {
     detailLogicOriginality: {
       type: SchemaType.STRING,
       description:
-        "검수: 독창성 항목 상세 논리. Gemini 추론 + KIPRIS API로 받은 상표 정보가 있으면 발췌·출처(KIPRIS Plus) 명시. 생성: 짧은 요약"
+        "검수: 창의성 항목 상세 논리. Gemini 추론 + KIPRIS API로 받은 상표 정보가 있으면 발췌·출처(KIPRIS Plus) 명시. 생성: 짧은 요약"
     },
     detailLogicPronunciation: {
       type: SchemaType.STRING,
       description:
-        "검수 전용(최소 120자 권장): 발음·언어 상세 논리(한국어). 검수 요청의 네이밍·슬로건을 **문자만으로** 분석. (1) 일반 사용자가 읽고 부를 때 **발음하기 쉽고 자연스러운지** (음절·모음·자음 배열, 길이, 외래어 혼용). (2) **언어적으로 긍정적이고 건강한지** — 부정·혐오·불쾌·유해한 연상, 과장·허위 느낌이 없는지. (3) 브랜드 톤과 맞는지. 실제 발음 녹음·발음기호 출력 요구 아님. **비우지 말 것.** 생성 모드: 짧은 요약",
+        "검수 전용(최소 120자 권장): 직관성(발음·언어) 상세 논리(한국어). 검수 요청의 네이밍·슬로건을 **문자만으로** 분석. (1) 일반 사용자가 읽고 부를 때 **발음하기 쉽고 자연스러운지** (음절·모음·자음 배열, 길이, 외래어 혼용). (2) **언어적으로 긍정적이고 건강한지** — 부정·혐오·불쾌·유해한 연상, 과장·허위 느낌이 없는지. (3) 브랜드 톤과 맞는지. 실제 발음 녹음·발음기호 출력 요구 아님. **비우지 말 것.** 생성 모드: 짧은 요약",
     },
     detailLogicLegality: {
       type: SchemaType.STRING,
@@ -1535,11 +1548,9 @@ function parseBrandNamingPayload(raw: string): BrandNamingGeminiResult | null {
   }
 }
 
-function weightedAuditOverall(h: number, o: number, pr: number, l: number): number {
-  return Math.min(
-    100,
-    Math.max(0, Math.round(h * 0.4 + o * 0.3 + pr * 0.2 + l * 0.1))
-  );
+function weightedAuditOverall(_h: number, o: number, pr: number, _l: number): number {
+  // 가중합: 창의성(=originalityDimensionScore) 50% + 직관성(=pronunciationScore) 50%
+  return Math.min(100, Math.max(0, Math.round(o * 0.5 + pr * 0.5)));
 }
 
 /** 검수: 발음·언어 상세가 너무 짧거나 비어 있으면 기본 안내 문구 보강 */
@@ -1575,7 +1586,13 @@ function normalizeBrandNamingResult(p: Record<string, unknown>): BrandNamingGemi
   const tr = ["low", "medium", "high"].includes(String(p.trademarkRisk))
     ? (String(p.trademarkRisk) as "low" | "medium" | "high")
     : "medium";
-  const gr = p.goRecommendation === "no-go" ? "no-go" : "go";
+  // Pass/Fail: 브랜드 계층 정렬, 적법성은 가중합에서 제외하고, fail이면 무조건 사용 불가
+  const passHierarchy = hsNum >= 70;
+  const passLegality = legNum >= 70;
+  const gr =
+    !passHierarchy || !passLegality || p.goRecommendation === "no-go"
+      ? "no-go"
+      : "go";
   const conflicts = Array.isArray(p.trademarkConflicts)
     ? (p.trademarkConflicts as Array<{ name?: string; class?: string; similarity?: number }>).map((c) => ({
         name: String(c?.name ?? ""),
@@ -1938,11 +1955,11 @@ export async function runBrandNamingWithGemini(opts: {
           ? "\n- **브랜드 계층 컨텍스트**: 아래 **[브랜드 계층 컨텍스트]** 블록이 있으면 4개 네이밍 제안을 만들 때 **반드시** 그 계층·접두·독립 작명 룰을 따를 것. 룰과 충돌하는 상위 브랜드 접두를 임의로 붙이지 말 것."
           : ""
       }`
-      : `작업 유형: **검수**. [요청 내용]의 네이밍·슬로건을 아래 **4개 항목**으로 채점합니다. 각 항목은 0~100점이며, **종합 overallScore는 서버에서 가중합으로 재계산**되므로, 네 항목 점수에 맞게 일관되게 채점하세요.
-- **가중치(반드시 이 의미로 채점)**: (1) hierarchyScore **브랜드 계층 정렬 40%** — 오직 [U+ 브랜드 가이드라인 및 참고 문맥] 안의 **가이드라인 PDF 요약** + [참고 정보]의 **업로드 파일 요약** + **참고 정보 직접 입력**만 근거로 분석·채점. KIPRIS·법령 블록은 이 항목에 **넣지 마세요**.
-- (2) originalityDimensionScore **독창성 30%** — Gemini 추론 + 참고 정보에 **[상표 검색 근거 자료 — KIPRIS Plus]** 또는 KIPRIS 연동 텍스트가 있으면 **반드시 인용·요약**하여 유사 상표·식별력 관점에서 채점. 없으면 일반 추론과 trademarkConflicts로 보완.
-- (3) **발음·언어 20%** — 검수 대상 네이밍·슬로건에 대해 (가) 한국어·영어로 읽을 때 **발음의 자연스러움·호명 용이성** (나) 주요 외국어에서 **부정·비하·불쾌·금기 의미** 연상 여부를 평가하세요. 그 결과를 **pronunciationScore**(0~100 정수)에 반영하고, **pronunciationLanguageScore**는 **동일한 값**으로 맞추세요. **detailLogicPronunciation**에는 위 근거·보완·유의사항을 최소 수백 자 한국어로 서술. 녹음·발음기호 출력 불요.
-- (4) legalityScore **적법성 10%** — 참고 정보에 **국가법령정보·법령 검색** 요약이 있으면 인용·출처를 밝히고 상표법·저작권법 관점 적법성·이슈 자유도를 채점. 없으면 일반론으로 보완.
+      : `작업 유형: **검수**. [요청 내용]의 네이밍·슬로건을 아래 **4개 항목**으로 채점합니다. 각 항목은 0~100점입니다. **종합 overallScore는 서버에서 창의성(originalityDimensionScore)·직관성(pronunciationScore)만 각 50%로 재계산**합니다. **브랜드 계층 정렬·적법성 점수는 종합 가중합에 들어가지 않으며**, 70점 미만이면 해당 항목은 Fail로 간주되어 NO-GO 조건에 쓰입니다.
+- **(1) hierarchyScore 브랜드 계층 정렬** — 오직 [U+ 브랜드 가이드라인 및 참고 문맥] 안의 **가이드라인 PDF 요약** + [참고 정보]의 **업로드 파일 요약** + **참고 정보 직접 입력**만 근거로 분석·채점. KIPRIS·법령 블록은 이 항목에 **넣지 마세요**. (종합 %에 미포함, Pass/Fail 판정용)
+- **(2) originalityDimensionScore 창의성** — Gemini 추론 + 참고 정보에 **[상표 검색 근거 자료 — KIPRIS Plus]** 또는 KIPRIS 연동 텍스트가 있으면 **반드시 인용·요약**하여 유사 상표·식별력 관점에서 채점. 없으면 일반 추론과 trademarkConflicts로 보완. (**종합의 50%**)
+- **(3) pronunciationScore / pronunciationLanguageScore 직관성(발음·언어)** — 검수 대상 네이밍·슬로건에 대해 (가) 한국어·영어로 읽을 때 **발음의 자연스러움·호명 용이성** (나) 주요 외국어에서 **부정·비하·불쾌·금기 의미** 연상 여부를 평가하세요. **pronunciationLanguageScore**는 **pronunciationScore와 동일한 정수**로 맞추세요. **detailLogicPronunciation**에는 위 근거·보완·유의사항을 최소 수백 자 한국어로 서술. 녹음·발음기호 출력 불요. (**종합의 50%**)
+- **(4) legalityScore 적법성** — 참고 정보에 **국가법령정보·법령 검색** 요약이 있으면 인용·출처를 밝히고 상표법·저작권법 관점 적법성·이슈 자유도를 채점. 없으면 일반론으로 보완. (종합 %에 미포함, Pass/Fail 판정용)
 - **names**·**namingProposals**·**suggestedNames**는 모두 빈 배열 [].
 - **additionalNamingSuggestions** (검수 필수): 위 평가 맥락(가이드·작명 의도·검토 결과)을 반영한 **대안 네이밍을 정확히 3개**, 배열로만 제시하세요. 검수명·슬로건과 **다른** 실제 후보명(한글·영문 등). 안내 문구·주석·※ 같은 비이름 문자열 금지. 빈 배열 금지.
 - **detailLogicHierarchy** ~ **detailLogicLegality**: 각 항목에 대해 **상세 논리**를 한국어로 길게 서술. **detailLogicHierarchy**에는 KIPRIS·상표 DB 출처를 **넣지 말 것**(가이드·업로드·직접입력만). 독창성·적법성에서 KIPRIS·법령 API 근거를 썼다면 **출처를 문장 안에 명시**. trademark·copyright 하위 필드는 요약·충돌 목록용으로 유지.${
@@ -1982,7 +1999,7 @@ ${req}
 규칙:
 1) 점수는 0~100 정수. 검수 시 **hierarchyScore, originalityDimensionScore, pronunciationScore, pronunciationLanguageScore(=pronunciationScore와 동일), legalityScore**를 채우고, trademarkScore·copyrightScore는 레거시 호환용으로 네 점수와 맞게 채웁니다.
 2) 상표법·저작권은 **참고 수준**이며 법률 자문이 아님.
-3) KIPRIS·국가법령정보 블록이 있으면 **독창성(생성 모드: uniqueness·uniquenessDetail / 검수: originality·detailLogicOriginality)·적법성** 항목 서술에 **우선 반영**하고, 없으면 trademarkConflicts 등으로 분석을 보완합니다.
+3) KIPRIS·국가법령정보 블록이 있으면 **창의성(생성 모드: uniqueness·uniquenessDetail / 검수: originality·detailLogicOriginality)·적법성** 항목 서술에 **우선 반영**하고, 없으면 trademarkConflicts 등으로 분석을 보완합니다.
 4) 출력은 JSON 한 개만. 스키마 키 이름을 정확히 맞추세요.${generateExtraRule}${jsonOnlyFooter}`;
 
   let lastErr: unknown;

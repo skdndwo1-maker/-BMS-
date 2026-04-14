@@ -15,7 +15,7 @@ interface Props {
   canvasW: number;   // 캔버스 실제 표시 너비 (px)
   canvasH: number;   // 캔버스 실제 표시 높이 (px)
   isSelected: boolean;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, opts?: { toggle?: boolean }) => void;
   onUpdate: (id: string, patch: Partial<AssetLayer>) => void;
   onDelete: (id: string) => void;
 }
@@ -44,15 +44,18 @@ export function DraggableAsset({
   const onMouseDownMove = useCallback((e: React.MouseEvent) => {
     if (asset.locked) return;
     e.stopPropagation();
-    onSelect(asset.id);
+    onSelect(asset.id, { toggle: e.shiftKey });
     dragStart.current = { mx: e.clientX, my: e.clientY, ox: px.x, oy: px.y };
 
     const onMove = (ev: MouseEvent) => {
       if (!dragStart.current) return;
       const dx = ev.clientX - dragStart.current.mx;
       const dy = ev.clientY - dragStart.current.my;
-      const newX = Math.max(0, Math.min(canvasW - px.width,  dragStart.current.ox + dx));
-      const newY = Math.max(0, Math.min(canvasH - px.height, dragStart.current.oy + dy));
+      const snap = ev.shiftKey ? 10 : 1;
+      const sx = Math.round((dragStart.current.ox + dx) / snap) * snap;
+      const sy = Math.round((dragStart.current.oy + dy) / snap) * snap;
+      const newX = Math.max(0, Math.min(canvasW - px.width, sx));
+      const newY = Math.max(0, Math.min(canvasH - px.height, sy));
       onUpdate(asset.id, { x: newX / canvasW, y: newY / canvasH });
     };
     const onUp = () => {
@@ -75,6 +78,7 @@ export function DraggableAsset({
     if (asset.locked) return;
     e.stopPropagation();
     e.preventDefault();
+    onSelect(asset.id, { toggle: e.shiftKey });
     resizeStart.current = {
       mx: e.clientX, my: e.clientY,
       ox: px.x, oy: px.y, ow: px.width, oh: px.height,
@@ -87,6 +91,7 @@ export function DraggableAsset({
       const dx = ev.clientX - mx;
       const dy = ev.clientY - my;
       const MIN = 20;
+      const snap = ev.shiftKey ? 10 : 1;
 
       let nx = ox, ny = oy, nw = ow, nh = oh;
 
@@ -94,6 +99,21 @@ export function DraggableAsset({
       if (handle.includes('s')) nh = Math.max(MIN, oh + dy);
       if (handle.includes('w')) { nw = Math.max(MIN, ow - dx); nx = ox + ow - nw; }
       if (handle.includes('n')) { nh = Math.max(MIN, oh - dy); ny = oy + oh - nh; }
+
+      // Shift: 코너 리사이즈는 비율 유지
+      if (ev.shiftKey && (handle === "nw" || handle === "ne" || handle === "se" || handle === "sw")) {
+        const ratio = ow / Math.max(1, oh);
+        if (nw / Math.max(1, nh) > ratio) nh = Math.max(MIN, nw / ratio);
+        else nw = Math.max(MIN, nh * ratio);
+        if (handle.includes("w")) nx = ox + ow - nw;
+        if (handle.includes("n")) ny = oy + oh - nh;
+      }
+
+      // 스냅
+      nw = Math.max(MIN, Math.round(nw / snap) * snap);
+      nh = Math.max(MIN, Math.round(nh / snap) * snap);
+      nx = Math.round(nx / snap) * snap;
+      ny = Math.round(ny / snap) * snap;
 
       onUpdate(asset.id, {
         x: nx / canvasW, y: ny / canvasH,
@@ -142,7 +162,7 @@ export function DraggableAsset({
         boxSizing: 'border-box',
       }}
       onMouseDown={onMouseDownMove}
-      onClick={(e) => { e.stopPropagation(); onSelect(asset.id); }}
+      onClick={(e) => { e.stopPropagation(); onSelect(asset.id, { toggle: e.shiftKey }); }}
     >
       {/* 에셋 이미지 */}
       <img

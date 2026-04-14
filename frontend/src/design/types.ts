@@ -15,9 +15,7 @@ export type LogoPosition =
   | 'top-left'
   | 'top-right'
   | 'bottom-left'
-  | 'bottom-right'
-  | 'center-top'
-  | 'center-bottom';
+  | 'bottom-right';
 
 // ── 포스터 카테고리 ──────────────────────────────────────────────────
 export type PosterCategory =
@@ -135,6 +133,30 @@ export interface DesignContent {
   bodySize?: number;
   bodyAlign?: 'left' | 'center' | 'right';
   bodyStyle?: 'normal' | 'italic';
+
+  /** 포스터 캔버스(DesignCanvas): 메인 타이틀·본문·하단 유의사항 폰트 크기 배율 % (기본 100 = 현재 비례 크기) */
+  posterTitleFontScale?: number;
+  posterBodyFontScale?: number;
+  posterFooterFontScale?: number;
+
+  /** 포스터: 배경 이미지 / 뱃지 영역 — 캔버스 대비 정규화 좌표 (0~1), 중앙 캔버스에서 드래그·리사이즈 */
+  posterBackgroundImageRect?: { x: number; y: number; width: number; height: number };
+  /** 포스터: 이미지 투명도(0~100). 기본 0 */
+  posterImageOpacity?: number;
+  /** 포스터: 이미지 내부 위치(0~100). 기본 50/50 */
+  posterImagePosX?: number;
+  posterImagePosY?: number;
+  posterBadgeRect?: { x: number; y: number; width: number; height: number };
+
+  /** 포스터: 메인 타이틀/본문/유의사항 박스 — 드래그·리사이즈 */
+  posterTitleRect?: { x: number; y: number; width: number; height: number };
+  posterBodyRect?: { x: number; y: number; width: number; height: number };
+  posterFooterRect?: { x: number; y: number; width: number; height: number };
+
+  /** 포스터: 메인 타이틀/본문/유의사항 정렬 */
+  posterTitleAlign?: "left" | "center" | "right";
+  posterBodyAlign?: "left" | "center" | "right";
+  posterFooterAlign?: "left" | "center" | "right";
 }
 
 export interface ComplianceIssue {

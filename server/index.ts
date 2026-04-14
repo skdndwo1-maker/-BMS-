@@ -415,7 +415,7 @@ app.post(
       let requestText = String(req.body?.requestText ?? "").trim();
       if (mode === "audit" && (auditName || namingIntent)) {
         const catBlock = auditCategory ? `${auditCategory}\n\n` : "";
-        requestText = `${catBlock}[검수명]\n${auditName}\n\n[작명의도]\n${namingIntent}`;
+        requestText = `${catBlock}[검수명]\n${auditName}\n\n${namingIntent}`;
       } else if (mode === "generate" && auditCategory) {
         requestText = `${auditCategory}\n\n[생성 요청]\n${requestText}`;
       }
