@@ -661,10 +661,10 @@ export function BrandNaming() {
               <div className="h-6 w-px bg-gray-200" />
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 shrink-0">
-                  <img src="/uplus-main-logo.png" alt="U+ Layer" className="h-full w-full object-contain" />
+                  <img src="/uplus-main-logo.png" alt="브랜드관리시스템" className="h-full w-full object-contain" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-semibold text-gray-900">U+ Layer</h1>
+                  <h1 className="text-xl font-semibold text-gray-900">브랜드관리시스템</h1>
                   <p className="text-xs text-gray-500">브랜드 네이밍 검토 Brand Naming Audit</p>
                 </div>
               </div>
