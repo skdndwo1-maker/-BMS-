@@ -480,7 +480,15 @@ export function DesignCanvas({ content, canvasSize, zoom, onContentChange, onFoc
             <img
               src={logoUrl || brandLogoSrc}
               alt="Brand Logo"
-              style={{ height: `${logoHeight}px`, width: "auto", objectFit: "contain", display: "block" }}
+              style={{
+                height: `${logoHeight}px`,
+                width: "auto",
+                objectFit: "contain",
+                display: "block",
+                // CI 에셋이 (알파가 없는) 블랙 배경으로 들어오는 경우가 있어,
+                // 밝은 캔버스 배경에서는 screen 블렌드로 블랙을 최대한 제거
+                mixBlendMode: !logoUrl && content.logoOption === "CI" ? ("screen" as const) : ("normal" as const),
+              }}
             />
           </div>
         )}
