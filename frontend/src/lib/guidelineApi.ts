@@ -461,10 +461,10 @@ export async function runBrandNaming(opts: {
   return (await r.json()) as BrandNamingRunResult;
 }
 
-export async function fetchHealth(): Promise<{ ok: boolean; gemini: boolean }> {
+export async function fetchHealth(): Promise<{ ok: boolean; gemini: boolean; law?: boolean }> {
   const r = await fetch(apiUrl("/api/health"));
   if (!r.ok) throw new Error("health");
-  return (await r.json()) as { ok: boolean; gemini: boolean };
+  return (await r.json()) as { ok: boolean; gemini: boolean; law?: boolean };
 }
 
 /** 서버에 저장된 가이드 파일로 AI 요약 재생성 (GEMINI_API_KEY 필요) */

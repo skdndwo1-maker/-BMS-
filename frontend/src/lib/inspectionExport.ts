@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import { normalizeNamingProposal, type BrandNamingRunResult } from "./guidelineApi";
+import { normalizeNamingProposal, type BrandNamingRunResult, type BrandNamingProposal } from "./guidelineApi";
 
 export type ExportFormat = "pdf" | "png" | "jpeg";
 
@@ -229,29 +229,41 @@ export function downloadRevisedImageInFormat(dataUrl: string, format: ExportForm
   img.src = dataUrl;
 }
 
+/** UI와 동일: 70점 이상 PASS */
+function passFailFromScore(score: number): "PASS" | "FAIL" {
+  const v = Number.isFinite(score) ? score : 0;
+  return v >= 70 ? "PASS" : "FAIL";
+}
+
+function weightedOverallFromProposal(p: BrandNamingProposal): number {
+  const o = Math.min(100, Math.max(0, Number(p.originalityDimensionScore) || 0));
+  const pr = Math.min(100, Math.max(0, Number(p.pronunciationScore) || 0));
+  return Math.min(100, Math.max(0, Math.round(o * 0.5 + pr * 0.5)));
+}
+
 function appendBrandNamingAnalysisTail(lines: string[], r: BrandNamingRunResult): void {
   lines.push("■ 브랜드 계층 정렬", `상태: ${r.hierarchy.status}`, r.hierarchy.message, r.hierarchy.details);
   r.hierarchy.checklist.forEach((t) => lines.push(`· ${t}`));
-  lines.push("", "■ 독창성·상표 관점", `위험도: ${r.trademark.risk}`, r.trademark.recommendation);
-  r.trademark.conflicts.forEach((c) => lines.push(`· ${c.name} (${c.class}) — 유사도 ${c.similarity}%`));
-  lines.push("", "■ 저작권·적법성 보조", `독창성(참고): ${r.copyright.originality}%`, r.copyright.verdict);
+  lines.push("", "■ 적법성·저작권 보조", `참고 점수: ${r.copyright.originality}%`, r.copyright.verdict);
   r.copyright.risks.forEach((x) => lines.push(`· [${x.severity}] ${x.type}: ${x.description}`));
+  lines.push("", "■ 창의성 (Gemini 추론)", `위험도: ${r.trademark.risk}`, r.trademark.recommendation);
+  r.trademark.conflicts.forEach((c) => lines.push(`· ${c.name} (${c.class}) — 유사도 ${c.similarity}%`));
   const dl = r.detailLogic;
   if (dl) {
     lines.push(
       "",
       "■ 상세 논리 (항목별)",
-      "[계층]",
+      "[브랜드 계층 정렬]",
       dl.hierarchy || "(없음)",
       "",
-      "[독창성]",
+      "[적법성]",
+      dl.legality || "(없음)",
+      "",
+      "[창의성]",
       dl.originality || "(없음)",
       "",
-      "[발음·언어]",
-      dl.pronunciationLanguage || "(없음)",
-      "",
-      "[적법성]",
-      dl.legality || "(없음)"
+      "[직관성]",
+      dl.pronunciationLanguage || "(없음)"
     );
   }
   lines.push("", "■ 최종 요약", r.finalSummary, "", `권고: ${r.goRecommendation === "go" ? "GO" : "NO-GO"}`);
@@ -280,26 +292,33 @@ function buildBrandNamingPlainText(opts: {
     if (props.length > 0) {
       props.forEach((raw, i) => {
         const p = normalizeNamingProposal(raw);
+        const overall = weightedOverallFromProposal(p);
+        const hPf = passFailFromScore(p.hierarchyScore);
+        const lPf = passFailFromScore(p.legalityScore);
         lines.push(`--- 대안 ${i + 1}: ${p.name} ---`);
         lines.push(p.rationale.trim() || "(근거 없음)");
         lines.push(
-          `점수(각 100점, 검수와 동일 축) — 계층 ${p.hierarchyScore} · 독창 ${p.originalityDimensionScore} · 발음·언어 ${p.pronunciationScore} · 적법 ${p.legalityScore}`,
+          `종합 점수: ${overall} / 100 (창의성 50% + 직관성 50% 가중합)`,
+          `① 브랜드 계층 정렬 — Pass/Fail: ${hPf} (참고 점수 ${p.hierarchyScore}/100, 종합 가중합 미반영)`,
+          `② 적법성 — Pass/Fail: ${lPf} (참고 점수 ${p.legalityScore}/100, 종합 가중합 미반영)`,
+          `③ 창의성 — ${p.originalityDimensionScore} / 100 (종합 50% 반영)`,
+          `④ 직관성 — ${p.pronunciationScore} / 100 (종합 50% 반영)`,
           ""
         );
         const pd = p.proposalDetailLogic;
         if (pd) {
           lines.push(
-            "[계층 근거]",
+            "[브랜드 계층 정렬 근거]",
             pd.hierarchy || "(없음)",
-            "",
-            "[독창성 근거]",
-            pd.originality || "(없음)",
-            "",
-            "[발음·언어 근거]",
-            pd.pronunciationLanguage || "(없음)",
             "",
             "[적법성 근거]",
             pd.legality || "(없음)",
+            "",
+            "[창의성 근거]",
+            pd.originality || "(없음)",
+            "",
+            "[직관성 근거]",
+            pd.pronunciationLanguage || "(없음)",
             ""
           );
         }
@@ -316,13 +335,18 @@ function buildBrandNamingPlainText(opts: {
 
   const r = opts.result;
   if (opts.mode === "audit") {
-    lines.push("■ 종합 적합성 점수 (가중합)");
-    lines.push(`종합: ${r.overallScore} / 100`);
     const o = r.originalityDimensionScore ?? r.trademarkScore;
-    const p = r.pronunciationScore ?? r.pronunciationLanguageScore ?? 0;
+    const pr = r.pronunciationScore ?? r.pronunciationLanguageScore ?? 0;
     const l = r.legalityScore ?? r.copyrightScore;
+    const hPf = passFailFromScore(r.hierarchyScore);
+    const lPf = passFailFromScore(l);
+    lines.push("■ 종합 적합성 점수");
+    lines.push(`종합: ${r.overallScore} / 100 (창의성 50% + 직관성 50% 가중합)`);
     lines.push(
-      `세부(각 100점) — 계층(가중합 제외) ${r.hierarchyScore} · 창의성(종합 50%) ${o} · 직관성(종합 50%) ${p} · 적법(가중합 제외) ${l}`,
+      `① 브랜드 계층 정렬 — Pass/Fail: ${hPf} (참고 점수 ${r.hierarchyScore}/100, 종합 가중합 미반영)`,
+      `② 적법성 — Pass/Fail: ${lPf} (참고 점수 ${l}/100, 종합 가중합 미반영)`,
+      `③ 창의성 — ${o} / 100 (종합 50% 반영)`,
+      `④ 직관성 — ${pr} / 100 (종합 50% 반영)`,
       ""
     );
     appendBrandNamingAnalysisTail(lines, r);

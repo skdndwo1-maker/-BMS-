@@ -1079,7 +1079,7 @@ const brandNamingResponseSchema = {
     },
     originalityDimensionScore: {
       type: SchemaType.NUMBER,
-      description: "창의성 0~100 (검수: 종합 점수의 50% 가중). KIPRIS 요약이 있으면 반영",
+      description: "창의성 0~100 (검수: 종합 점수의 50% 가중). 가이드·요청·참고 정보만으로 Gemini 추론",
     },
     pronunciationScore: {
       type: SchemaType.INTEGER,
@@ -1156,7 +1156,7 @@ const brandNamingResponseSchema = {
     detailLogicOriginality: {
       type: SchemaType.STRING,
       description:
-        "검수: 창의성 항목 상세 논리. Gemini 추론 + KIPRIS API로 받은 상표 정보가 있으면 발췌·출처(KIPRIS Plus) 명시. 생성: 짧은 요약"
+        "검수: 창의성 항목 상세 논리. 가이드·요청·참고 정보만으로 Gemini 추론(외부 상표 DB 연동·출처 언급 금지). 생성: 짧은 요약"
     },
     detailLogicPronunciation: {
       type: SchemaType.STRING,
@@ -1782,7 +1782,7 @@ function mockBrandNamingNoKey(mode: "generate" | "audit"): BrandNamingGeminiResu
     copyrightScore: 64,
     detailLogic: {
       hierarchy: "GEMINI_API_KEY가 없어 상세 논리는 자리 표시입니다.",
-      originality: "API 키 설정 후 KIPRIS·추론 근거가 채워집니다.",
+      originality: "API 키 설정 후 창의성 추론 근거가 채워집니다.",
       pronunciationLanguage: "API 키 설정 후 발음·언어 분석이 채워집니다.",
       legality: "API 키 설정 후 법령 연동 분석이 채워집니다."
     },
@@ -1941,7 +1941,7 @@ export async function runBrandNamingWithGemini(opts: {
 - **고정 응답 형식(반드시 준수)**: 루트에 **names** 배열과 **namingProposals** 배열을 **각각 정확히 4개**로 채웁니다. 두 배열의 4개 항목은 **동일한 네이밍·동일 순서**이며, 각 원소는 아래 키를 **모두** 채웁니다(빈 문자열·생략 금지):
   \`name\`, \`description\` (네이밍 설명·창작 근거, 한국어 3문장 이상),
   \`hierarchyScore\`, \`hierarchyDetail\` (브랜드 계층 평가 상세, **한국어 3줄 이상**),
-  \`uniquenessScore\`, \`uniquenessDetail\` (독창성 상세, **3줄 이상** — [참고 정보]에 **[상표 검색 근거 자료 — KIPRIS/KIPO]** 가 있으면 유사 상표·식별력 관점에서 **반드시 인용·요약**, 없으면 일반 추론으로 보완),
+  \`uniquenessScore\`, \`uniquenessDetail\` (창의성 상세, **3줄 이상** — 가이드·요청·참고 정보만으로 유사·식별력 관점을 **Gemini 추론**으로 서술. 외부 상표 DB·연동 여부는 **언급하지 말 것**),
   \`pronunciationScore\`, \`pronunciationDetail\` (발음·언어 상세, **3줄 이상**),
   \`legalScore\`, \`legalDetail\` (적법성 상세, **3줄 이상**).
 - **namingProposals**의 각 원소에도 위와 동일한 값을 넣되, 스키마상 **description** 필드는 **반드시** 채우고, **rationale**이 있으면 **description과 동일 문자열**로 맞추어도 됩니다.
@@ -1956,13 +1956,13 @@ export async function runBrandNamingWithGemini(opts: {
           : ""
       }`
       : `작업 유형: **검수**. [요청 내용]의 네이밍·슬로건을 아래 **4개 항목**으로 채점합니다. 각 항목은 0~100점입니다. **종합 overallScore는 서버에서 창의성(originalityDimensionScore)·직관성(pronunciationScore)만 각 50%로 재계산**합니다. **브랜드 계층 정렬·적법성 점수는 종합 가중합에 들어가지 않으며**, 70점 미만이면 해당 항목은 Fail로 간주되어 NO-GO 조건에 쓰입니다.
-- **(1) hierarchyScore 브랜드 계층 정렬** — 오직 [U+ 브랜드 가이드라인 및 참고 문맥] 안의 **가이드라인 PDF 요약** + [참고 정보]의 **업로드 파일 요약** + **참고 정보 직접 입력**만 근거로 분석·채점. KIPRIS·법령 블록은 이 항목에 **넣지 마세요**. (종합 %에 미포함, Pass/Fail 판정용)
-- **(2) originalityDimensionScore 창의성** — Gemini 추론 + 참고 정보에 **[상표 검색 근거 자료 — KIPRIS Plus]** 또는 KIPRIS 연동 텍스트가 있으면 **반드시 인용·요약**하여 유사 상표·식별력 관점에서 채점. 없으면 일반 추론과 trademarkConflicts로 보완. (**종합의 50%**)
+- **(1) hierarchyScore 브랜드 계층 정렬** — 오직 [U+ 브랜드 가이드라인 및 참고 문맥] 안의 **가이드라인 PDF 요약** + [참고 정보]의 **업로드 파일 요약** + **참고 정보 직접 입력**만 근거로 분석·채점. 법령 검색 블록은 이 항목에 **넣지 마세요**. (종합 %에 미포함, Pass/Fail 판정용)
+- **(2) originalityDimensionScore 창의성** — **오직 Gemini 추론**으로 가이드·요청·참고 정보를 바탕으로 유사·식별력 관점에서 채점. **외부 데이터베이스 연동·조회 여부는 결과에 절대 언급하지 말 것.** trademarkConflicts는 분석 보조용 추론 결과로만 채움. (**종합의 50%**)
 - **(3) pronunciationScore / pronunciationLanguageScore 직관성(발음·언어)** — 검수 대상 네이밍·슬로건에 대해 (가) 한국어·영어로 읽을 때 **발음의 자연스러움·호명 용이성** (나) 주요 외국어에서 **부정·비하·불쾌·금기 의미** 연상 여부를 평가하세요. **pronunciationLanguageScore**는 **pronunciationScore와 동일한 정수**로 맞추세요. **detailLogicPronunciation**에는 위 근거·보완·유의사항을 최소 수백 자 한국어로 서술. 녹음·발음기호 출력 불요. (**종합의 50%**)
 - **(4) legalityScore 적법성** — 참고 정보에 **국가법령정보·법령 검색** 요약이 있으면 인용·출처를 밝히고 상표법·저작권법 관점 적법성·이슈 자유도를 채점. 없으면 일반론으로 보완. (종합 %에 미포함, Pass/Fail 판정용)
 - **names**·**namingProposals**·**suggestedNames**는 모두 빈 배열 [].
 - **additionalNamingSuggestions** (검수 필수): 위 평가 맥락(가이드·작명 의도·검토 결과)을 반영한 **대안 네이밍을 정확히 3개**, 배열로만 제시하세요. 검수명·슬로건과 **다른** 실제 후보명(한글·영문 등). 안내 문구·주석·※ 같은 비이름 문자열 금지. 빈 배열 금지.
-- **detailLogicHierarchy** ~ **detailLogicLegality**: 각 항목에 대해 **상세 논리**를 한국어로 길게 서술. **detailLogicHierarchy**에는 KIPRIS·상표 DB 출처를 **넣지 말 것**(가이드·업로드·직접입력만). 독창성·적법성에서 KIPRIS·법령 API 근거를 썼다면 **출처를 문장 안에 명시**. trademark·copyright 하위 필드는 요약·충돌 목록용으로 유지.${
+- **detailLogicHierarchy** ~ **detailLogicLegality**: 각 항목에 대해 **상세 논리**를 한국어로 길게 서술. **detailLogicHierarchy**에는 외부 상표 DB·연동 출처를 **넣지 말 것**(가이드·업로드·직접입력만). **detailLogicOriginality**에는 외부 API 연동·조회 성공/실패를 **절대 넣지 말 것.** 적법성에서 국가법령정보 요약을 썼다면 **출처를 문장 안에 명시**할 수 있음. trademark·copyright 하위 필드는 요약·충돌 목록용으로 유지.${
         auditCategoryPromptSection
           ? "\n- **브랜드 계층 컨텍스트 우선**: 아래 **[브랜드 계층 컨텍스트]** 블록이 있으면 계층 정렬·마스터브랜드(U+) 해석에 그 룰을 가이드 PDF 요약과 함께 적용하고, 룰·마지막 불릿이 허용하는 독립 네이밍은 **U+ 미포함만으로** 위반·감점·NO-GO로 연결하지 말 것."
           : ""
@@ -1999,7 +1999,7 @@ ${req}
 규칙:
 1) 점수는 0~100 정수. 검수 시 **hierarchyScore, originalityDimensionScore, pronunciationScore, pronunciationLanguageScore(=pronunciationScore와 동일), legalityScore**를 채우고, trademarkScore·copyrightScore는 레거시 호환용으로 네 점수와 맞게 채웁니다.
 2) 상표법·저작권은 **참고 수준**이며 법률 자문이 아님.
-3) KIPRIS·국가법령정보 블록이 있으면 **창의성(생성 모드: uniqueness·uniquenessDetail / 검수: originality·detailLogicOriginality)·적법성** 항목 서술에 **우선 반영**하고, 없으면 trademarkConflicts 등으로 분석을 보완합니다.
+3) 국가법령정보 블록이 있으면 **적법성** 항목 서술에 반영할 수 있습니다. **창의성**은 국가법령정보와 무관하게 가이드·요청·Gemini 추론만으로 서술합니다. 창의성 보완은 trademarkConflicts 등 **추론 결과**로만 합니다.
 4) 출력은 JSON 한 개만. 스키마 키 이름을 정확히 맞추세요.${generateExtraRule}${jsonOnlyFooter}`;
 
   let lastErr: unknown;

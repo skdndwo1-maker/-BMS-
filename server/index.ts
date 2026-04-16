@@ -21,6 +21,7 @@ import {
 } from "./gemini.js";
 import { copyFixedGuidelineToSlot, FIXED_GUIDELINE_SOURCES } from "./fixedGuidelines.js";
 import { buildExternalNamingReferences } from "./namingExternalContext.js";
+import { resolveLawApiOc } from "./lawApi.js";
 import {
   ensureDataDirs,
   getGuideline,
@@ -119,7 +120,11 @@ async function supplementaryReferenceToSummary(f: Express.Multer.File): Promise<
 }
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, gemini: Boolean(process.env.GEMINI_API_KEY?.trim()) });
+  res.json({
+    ok: true,
+    gemini: Boolean(process.env.GEMINI_API_KEY?.trim()),
+    law: Boolean(resolveLawApiOc())
+  });
 });
 
 app.get("/api/guidelines", (_req, res) => {
@@ -470,7 +475,7 @@ app.post(
       const referenceNotes = [
         referenceText ? `[참고 정보 직접 입력]\n${referenceText}` : "",
         supplement ? `[파일 직접 업로드 요약]\n${supplement}` : "",
-        externalBlock ? `[KIPRIS·국가법령정보센터 연동 요약]\n${externalBlock}` : ""
+        externalBlock ? `[국가법령정보 연동 요약]\n${externalBlock}` : ""
       ]
         .filter(Boolean)
         .join("\n\n");
