@@ -37,3 +37,4 @@ FIGMA_TOKEN="YOUR_TOKEN" npm run start
 
 - `figma.com/make/...` 링크는 공식 API 식별자(`fileKey`)를 항상 안정적으로 제공하지 않을 수 있습니다.\n  이 경우 같은 디자인의 **원본 Figma file 링크**(예: `figma.com/file/{fileKey}/...`) 또는 `fileKey`가 필요합니다.
 
+# -BMS-
