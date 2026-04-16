@@ -19,6 +19,7 @@ import {
   Mic,
   Globe,
   Layers,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -251,24 +252,21 @@ function weightedProposalOverall(p: BrandNamingProposal): number {
   return Math.min(100, Math.max(0, Math.round(creativity * 0.5 + intuition * 0.5)));
 }
 
+/** 1~2: Pass/Fail · 3~4: 종합 가중합(창의·직관 각 50%) */
 const GENERATE_EVAL_BOXES: {
   dim: keyof BrandNamingProposal["proposalDetailLogic"];
   label: string;
   score: (p: BrandNamingProposal) => number;
 }[] = [
   { dim: "hierarchy", label: "브랜드 계층 정렬", score: (p) => p.hierarchyScore },
+  { dim: "legality", label: "적법성", score: (p) => p.legalityScore },
   { dim: "originality", label: "창의성", score: (p) => p.originalityDimensionScore },
   { dim: "pronunciationLanguage", label: "직관성", score: (p) => p.pronunciationScore },
-  { dim: "legality", label: "적법성", score: (p) => p.legalityScore },
 ];
 
 function passFail(score: number): "PASS" | "FAIL" {
   const v = Number.isFinite(score) ? score : 0;
   return v >= 70 ? "PASS" : "FAIL";
-}
-
-function isPassFailDim(dim: keyof BrandNamingProposal["proposalDetailLogic"]): boolean {
-  return dim === "hierarchy" || dim === "legality";
 }
 
 /** 생성 모드 평가 점수 바 — 대안 1~4 카드 공통: 고정 높이, 트랙·채움 색 통일 */
@@ -316,49 +314,80 @@ function ProposalDimensionBars({ proposal }: { proposal: BrandNamingProposal }) 
             (창의성50%·직관성50%)
           </span>
         </div>
-        <div className="grid min-w-0 flex-1 grid-cols-2 gap-3 [grid-template-columns:minmax(0,1fr)_minmax(0,1fr)]">
-          {GENERATE_EVAL_BOXES.map(({ dim, label, score }) => {
-            const raw = score(proposal);
-            const n = Number(raw);
-            const v = Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : 0;
-            const passfail = isPassFailDim(dim) ? passFail(v) : null;
-            return (
-              <div
-                key={dim}
-                className="relative flex min-h-[88px] min-w-0 flex-col justify-center rounded-lg border border-gray-100 bg-gray-50/80 px-3 pb-2 pt-2"
-              >
-                <div className="mb-1 flex items-center justify-between gap-1">
-                  <span className="text-[11px] font-medium text-gray-600">{label}</span>
-                  {!passfail ? <span className="text-[12px] font-bold tabular-nums text-[#E91E8C]">{v}</span> : null}
-                </div>
-                <NamingEvalProgressBar percent={passfail ? (passfail === "PASS" ? 100 : 0) : v} />
-                <div
-                  className={`mt-1.5 flex w-full min-w-0 items-center gap-2 ${passfail ? "justify-between" : "justify-end"}`}
-                >
-                  {passfail ? (
-                    <span
-                      className={`text-[13px] font-bold tabular-nums leading-none ${
-                        passfail === "PASS" ? "text-emerald-600" : "text-red-600"
-                      }`}
-                    >
-                      {passfail}
-                    </span>
-                  ) : (
-                    <span className="min-w-0 flex-1" aria-hidden />
-                  )}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 shrink-0 px-2 text-[13px] font-medium text-gray-500 hover:text-gray-800"
-                    onClick={() => setDetailOpen(dim)}
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <div>
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Pass / Fail</p>
+            <div className="grid grid-cols-2 gap-3 [grid-template-columns:minmax(0,1fr)_minmax(0,1fr)]">
+              {GENERATE_EVAL_BOXES.slice(0, 2).map(({ dim, label, score }) => {
+                const raw = score(proposal);
+                const n = Number(raw);
+                const v = Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : 0;
+                const passfail = passFail(v);
+                return (
+                  <div
+                    key={dim}
+                    className="relative flex min-h-[88px] min-w-0 flex-col justify-center rounded-lg border border-gray-100 bg-gray-50/80 px-3 pb-2 pt-2"
                   >
-                    상세보기
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
+                    <div className="mb-1 flex items-center justify-between gap-1">
+                      <span className="text-[11px] font-medium text-gray-600">{label}</span>
+                    </div>
+                    <NamingEvalProgressBar percent={passfail === "PASS" ? 100 : 0} />
+                    <div className="mt-1.5 flex w-full min-w-0 items-center justify-between gap-2">
+                      <span
+                        className={`text-[13px] font-bold tabular-nums leading-none ${
+                          passfail === "PASS" ? "text-emerald-600" : "text-red-600"
+                        }`}
+                      >
+                        {passfail}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 shrink-0 px-2 text-[13px] font-medium text-gray-500 hover:text-gray-800"
+                        onClick={() => setDetailOpen(dim)}
+                      >
+                        상세보기
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">종합 반영 (각 50%)</p>
+            <div className="grid grid-cols-2 gap-3 [grid-template-columns:minmax(0,1fr)_minmax(0,1fr)]">
+              {GENERATE_EVAL_BOXES.slice(2, 4).map(({ dim, label, score }) => {
+                const raw = score(proposal);
+                const n = Number(raw);
+                const v = Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : 0;
+                return (
+                  <div
+                    key={dim}
+                    className="relative flex min-h-[88px] min-w-0 flex-col justify-center rounded-lg border border-gray-100 bg-gray-50/80 px-3 pb-2 pt-2"
+                  >
+                    <div className="mb-1 flex items-center justify-between gap-1">
+                      <span className="text-[11px] font-medium text-gray-600">{label}</span>
+                      <span className="text-[12px] font-bold tabular-nums text-[#E91E8C]">{v}</span>
+                    </div>
+                    <NamingEvalProgressBar percent={v} />
+                    <div className="mt-1.5 flex w-full min-w-0 items-center justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 shrink-0 px-2 text-[13px] font-medium text-gray-500 hover:text-gray-800"
+                        onClick={() => setDetailOpen(dim)}
+                      >
+                        상세보기
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -661,10 +690,10 @@ export function BrandNaming() {
               <div className="h-6 w-px bg-gray-200" />
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 shrink-0">
-                  <img src="/uplus-main-logo.png" alt="U+ Layer" className="h-full w-full object-contain" />
+                  <img src="/uplus-main-logo.png" alt="브랜드관리시스템" className="h-full w-full object-contain" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-semibold text-gray-900">U+ Layer</h1>
+                  <h1 className="text-xl font-semibold text-gray-900">브랜드관리시스템</h1>
                   <p className="text-xs text-gray-500">브랜드 네이밍 검토 Brand Naming Audit</p>
                 </div>
               </div>
@@ -1068,16 +1097,37 @@ export function BrandNaming() {
                     </p>
                   )}
                 </div>
-                <Button
-                  type="button"
-                  className="mt-8 h-14 w-full bg-[#F43182] text-base font-semibold text-white shadow-lg hover:bg-[#d41f6e]"
-                  onClick={handleAuditResetToInput}
-                >
-                  <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/90 bg-white/15">
-                    <ArrowUp className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
-                  </span>
-                  처음으로
-                </Button>
+                <div className="mt-8 flex flex-col gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!namingCanSubmit || isRunning}
+                    className="h-14 w-full border-[#F43182]/40 text-[15px] font-semibold text-[#F43182] hover:bg-[#F43182]/10"
+                    onClick={handleVerify}
+                  >
+                    {isRunning ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 shrink-0 animate-spin" />
+                        생성 중…
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="mr-2 h-5 w-5 shrink-0" />
+                        다시 생성하기
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    className="h-14 w-full bg-[#F43182] text-base font-semibold text-white shadow-lg hover:bg-[#d41f6e]"
+                    onClick={handleAuditResetToInput}
+                  >
+                    <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/90 bg-white/15">
+                      <ArrowUp className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
+                    </span>
+                    처음으로
+                  </Button>
+                </div>
                 </>
               )}
 
@@ -1181,9 +1231,9 @@ export function BrandNaming() {
                       {(
                         [
                           { label: "계층", val: dim.hierarchy, pf: true },
+                          { label: "적법", val: dim.legality, pf: true },
                           { label: "창의", val: dim.originality, pf: false },
                           { label: "직관", val: dim.pronunciation, pf: false },
-                          { label: "적법", val: dim.legality, pf: true },
                         ] as const
                       ).map((row) => {
                         const pf = row.pf ? passFail(Number(row.val)) : null;
@@ -1235,7 +1285,10 @@ export function BrandNaming() {
                   </div>
                 </div>
 
-                <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="mt-8 flex flex-col gap-6">
+                  <div>
+                    <p className="mb-3 text-[12px] font-semibold text-gray-500">Pass / Fail 항목</p>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {[
                     {
                       id: "hierarchy" as const,
@@ -1256,6 +1309,81 @@ export function BrandNaming() {
                         </>
                       ),
                     },
+                    {
+                      id: "legality" as const,
+                      title: "적법성",
+                      weightInOverall: null,
+                      score: dim.legality,
+                      icon: Scale,
+                      iconCls: "text-orange-600",
+                      body: (
+                        <>
+                          <p className="mb-2 text-[14px] leading-relaxed text-gray-700">{namingResult.copyright.verdict}</p>
+                          {namingResult.copyright.risks.slice(0, 4).map((risk, i) => (
+                            <div key={i} className="mb-1 text-[14px] leading-relaxed text-gray-700">
+                              · {risk.type}: {risk.description}
+                            </div>
+                          ))}
+                          {dl.legality ? (
+                            <p className="mt-2 whitespace-pre-wrap border-t border-gray-100 pt-2 text-[14px] leading-relaxed text-gray-700">
+                              {dl.legality}
+                            </p>
+                          ) : null}
+                        </>
+                      ),
+                    },
+                  ].map((box) => {
+                    const BoxIcon = box.icon;
+                    const auditPassFail =
+                      box.id === "hierarchy" || box.id === "legality"
+                        ? passFail(typeof box.score === "number" ? box.score : Number(box.score))
+                        : null;
+                    return (
+                    <div
+                      key={box.id}
+                      className="flex h-[320px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                    >
+                      <div className="mb-2 flex items-start justify-between gap-2 border-b border-gray-100 pb-3">
+                        <div className="flex min-w-0 items-start gap-2">
+                          <BoxIcon className={`mt-0.5 h-[22px] w-[22px] shrink-0 ${box.iconCls}`} />
+                          <h4 className="line-clamp-3 text-[18px] font-semibold leading-tight text-gray-900">{box.title}</h4>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <span className="block pt-1 text-[11px] font-medium leading-snug text-gray-400">가중합 제외</span>
+                        </div>
+                      </div>
+                      <div className="min-h-0 flex-1 overflow-y-auto pr-1 leading-relaxed">{box.body}</div>
+                      <div
+                        className={`mt-2 flex w-full shrink-0 items-center gap-2 ${auditPassFail ? "justify-between" : "justify-end"}`}
+                      >
+                        {auditPassFail ? (
+                          <span
+                            className={`text-[13px] font-bold tabular-nums leading-none ${
+                              auditPassFail === "PASS" ? "text-emerald-600" : "text-red-600"
+                            }`}
+                          >
+                            {auditPassFail}
+                          </span>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 shrink-0 text-[13px] text-gray-600"
+                          onClick={() => setAuditZoomDimension(box.id)}
+                        >
+                          상세보기
+                        </Button>
+                      </div>
+                    </div>
+                    );
+                  })}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-3 text-[12px] font-semibold text-gray-500">종합 가중합 (창의성 50% · 직관성 50%)</p>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {[
                     {
                       id: "originality" as const,
                       title: "창의성",
@@ -1292,29 +1420,6 @@ export function BrandNaming() {
                             ? dl.pronunciationLanguage
                             : "직관성 항목이 아직 없습니다. 다시 검수하거나 잠시 후 재시도해 주세요."}
                         </p>
-                      ),
-                    },
-                    {
-                      id: "legality" as const,
-                      title: "적법성",
-                      weightInOverall: null,
-                      score: dim.legality,
-                      icon: Scale,
-                      iconCls: "text-orange-600",
-                      body: (
-                        <>
-                          <p className="mb-2 text-[14px] leading-relaxed text-gray-700">{namingResult.copyright.verdict}</p>
-                          {namingResult.copyright.risks.slice(0, 4).map((risk, i) => (
-                            <div key={i} className="mb-1 text-[14px] leading-relaxed text-gray-700">
-                              · {risk.type}: {risk.description}
-                            </div>
-                          ))}
-                          {dl.legality ? (
-                            <p className="mt-2 whitespace-pre-wrap border-t border-gray-100 pt-2 text-[14px] leading-relaxed text-gray-700">
-                              {dl.legality}
-                            </p>
-                          ) : null}
-                        </>
                       ),
                     },
                   ].map((box) => {
@@ -1370,6 +1475,8 @@ export function BrandNaming() {
                     </div>
                     );
                   })}
+                    </div>
+                  </div>
                 </div>
 
                 <Button
@@ -1528,31 +1635,18 @@ export function BrandNaming() {
                 };
                 const blocks = [
                   { t: "1. 브랜드 계층 정렬 (가중합 제외 · Pass/Fail)", c: dl.hierarchy },
-                  { t: "2. 창의성 (종합 50%) — KIPRIS 등 지식재산 정보 반영 시 출처 명시", c: dl.originality },
-                  { t: "3. 직관성 (종합 50%)", c: dl.pronunciationLanguage },
-                  { t: "4. 적법성 (가중합 제외 · Pass/Fail) — 국가법령정보 연동 시 출처 명시", c: dl.legality },
+                  { t: "2. 적법성 (가중합 제외 · Pass/Fail) — 국가법령정보 연동 시 출처 명시", c: dl.legality },
+                  { t: "3. 창의성 (종합 50%) — Gemini 추론만 사용", c: dl.originality },
+                  { t: "4. 직관성 (종합 50%)", c: dl.pronunciationLanguage },
                 ];
                 return (
                   <div className="flex flex-col gap-6">
-                    {blocks.map((b, i) => (
+                    {blocks.map((b) => (
                       <section key={b.t}>
                         <h4 className="mb-2 text-[14px] font-semibold text-[#F43182]">{b.t}</h4>
                         <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-gray-700">
                           {b.c.trim() || "(상세 문단 없음)"}
                         </p>
-                        {i === 1 && (
-                          <p className="mt-3 text-[12px] text-gray-600">
-                            <span className="font-medium text-gray-800">상표·창의성 참고: </span>
-                            <a
-                              href="https://plus.kipris.or.kr/portal/main.do"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline"
-                            >
-                              KIPRIS Plus
-                            </a>
-                          </p>
-                        )}
                       </section>
                     ))}
                     <div className="border-t border-gray-200 pt-4">
@@ -1624,39 +1718,25 @@ export function BrandNaming() {
                   return (typeof v === "string" && v.trim() ? v : "(내용 없음)") as string;
                 })()}
               </p>
-              {(auditZoomDimension === "originality" || auditZoomDimension === "legality") && (
+              {auditZoomDimension === "legality" && (
               <div className="mt-4 border-t border-gray-100 pt-3 text-[13px]">
                 <p className="mb-2 font-semibold text-gray-800">관련 공식 링크</p>
-                {auditZoomDimension === "originality" && (
-                  <a
-                    href="https://plus.kipris.or.kr/portal/main.do"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
-                  >
-                    KIPRIS Plus →
-                  </a>
-                )}
-                {auditZoomDimension === "legality" && (
-                  <>
-                    <a
-                      href="https://www.law.go.kr/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mr-3 text-blue-600 hover:underline"
-                    >
-                      국가법령정보센터 →
-                    </a>
-                    <a
-                      href="https://open.law.go.kr/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline"
-                    >
-                      open.law.go.kr →
-                    </a>
-                  </>
-                )}
+                <a
+                  href="https://www.law.go.kr/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mr-3 text-blue-600 hover:underline"
+                >
+                  국가법령정보센터 →
+                </a>
+                <a
+                  href="https://open.law.go.kr/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  open.law.go.kr →
+                </a>
               </div>
               )}
             </div>

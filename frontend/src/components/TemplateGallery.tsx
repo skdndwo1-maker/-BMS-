@@ -110,10 +110,10 @@ export function TemplateGallery() {
               <div className="h-6 w-px bg-gray-200" />
               <div className="flex items-center gap-3">
                 <div className="h-11 w-11 shrink-0">
-                  <img src="/uplus-main-logo.png" alt="U+ Layer" className="h-full w-full object-contain" />
+                  <img src="/uplus-main-logo.png" alt="브랜드관리시스템" className="h-full w-full object-contain" />
                 </div>
                 <div className="flex h-10 flex-col justify-between py-px">
-                  <h1 className="text-xl font-semibold leading-none text-gray-900">U+ Layer</h1>
+                  <h1 className="text-xl font-semibold leading-none text-gray-900">브랜드관리시스템</h1>
                   <p className="text-xs leading-none text-gray-500">브랜드 그래픽 제작 · Brand Design Create</p>
                 </div>
               </div>

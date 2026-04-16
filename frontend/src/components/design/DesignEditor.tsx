@@ -203,7 +203,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
               </Button>
               <Separator orientation="vertical" className="h-6" />
               <div>
-                <h1 className="font-semibold text-gray-900 text-sm">U+ Layer - {template.name}</h1>
+                <h1 className="font-semibold text-gray-900 text-sm">브랜드관리시스템 - {template.name}</h1>
                 <p className="text-xs text-gray-500">
                   {template.size.width} × {template.size.height} {template.size.unit}
                 </p>
