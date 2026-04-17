@@ -21,6 +21,14 @@ export function resolveLawApiOc(): string {
 
 const LAW_SEARCH_JSON_URL = "https://www.law.go.kr/DRF/lawSearch.do";
 
+/** 일부 환경에서 기본 fetch UA가 거절되는 경우가 있어 브라우저에 가깝게 지정 */
+const LAW_API_FETCH_HEADERS: Record<string, string> = {
+  Accept: "application/json, text/plain, */*",
+  "User-Agent":
+    "Mozilla/5.0 (compatible; U-Layer1-BrandNaming/1.0; +https://github.com/) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  Referer: "https://www.law.go.kr/"
+};
+
 /** 로그용: URL의 OC 파라미터만 마스킹 */
 function redactLawSearchUrl(urlStr: string): string {
   return urlStr.replace(/([?&]OC=)[^&]*/i, "$1(redacted)");
@@ -30,18 +38,53 @@ export type LawSearchSingleResult =
   | { ok: true; query: string; text: string }
   | { ok: false; query: string; error: string };
 
+/** API가 오류일 때 JSON에 `msg`만 있고 `LawSearch`가 없는 경우가 많음 */
+function lawSearchApiErrorMessage(j: Record<string, unknown>): string | null {
+  if (j.LawSearch != null && typeof j.LawSearch === "object") return null;
+  const msg = j.msg;
+  if (typeof msg === "string" && msg.trim()) return msg.trim();
+  const result = j.result;
+  if (typeof result === "string" && /실패|오류|검증/i.test(result)) return result.trim();
+  return null;
+}
+
+function enrichLawApiErrorHint(err: string): string {
+  if (/IP|도메인|등록|검증/i.test(err)) {
+    return `${err}\n→ open.law.go.kr 에서 OC 발급 계정으로 서버 공인 IP(또는 도메인)를 등록한 뒤, 백엔드를 재시작하세요. 로컬 PC에서는 해당 PC의 공인 IP가 등록된 경우에만 성공합니다.`;
+  }
+  return err;
+}
+
+function normalizeLawRows(lawField: unknown): unknown[] {
+  if (Array.isArray(lawField)) return lawField;
+  if (lawField && typeof lawField === "object") return [lawField];
+  return [];
+}
+
 function parseLawSearchJson(raw: string): string[] {
   const lines: string[] = [];
   const seen = new Set<string>();
   try {
     const j = JSON.parse(raw) as Record<string, unknown>;
+    const err = lawSearchApiErrorMessage(j);
+    if (err) return [];
+
     const lawSearch = j.LawSearch as Record<string, unknown> | undefined;
-    const items = (lawSearch?.law as unknown[]) ?? (j.items as unknown[]) ?? [];
+    let items = normalizeLawRows(lawSearch?.law);
+    if (items.length === 0) items = normalizeLawRows(j.items);
+    if (items.length === 0) items = normalizeLawRows(j.law);
     if (Array.isArray(items)) {
       for (const it of items) {
         const row = it as Record<string, unknown>;
-        const nm = String(row.법령명한글 ?? row.lawName ?? row.법령명 ?? row.name ?? "").trim();
-        const id = String(row.법령ID ?? row.lawId ?? "").trim();
+        const nm = String(
+          row.법령명한글 ??
+            row["법령명_한글"] ??
+            row.lawName ??
+            row.법령명 ??
+            row.name ??
+            ""
+        ).trim();
+        const id = String(row.법령ID ?? row.법령일련번호 ?? row.lawId ?? "").trim();
         const key = id || nm;
         if (!key || seen.has(key)) continue;
         seen.add(key);
@@ -54,10 +97,21 @@ function parseLawSearchJson(raw: string): string[] {
   return lines;
 }
 
+export type SearchLawsJsonOptions = {
+  /** 1~100, 기본 20 (open.law.go.kr 명세) */
+  display?: number;
+  /** 1: 법령명, 2: 본문검색 */
+  search?: 1 | 2;
+};
+
 /**
  * 단일 질의로 법령 검색(JSON). OC 미설정·HTTP 오류·파싱 실패 시 ok: false.
+ * @see https://open.law.go.kr/ — OC 발급 후 서버 IP/도메인 등록 필요
  */
-export async function searchLawsJson(query: string): Promise<LawSearchSingleResult> {
+export async function searchLawsJson(
+  query: string,
+  opts?: SearchLawsJsonOptions
+): Promise<LawSearchSingleResult> {
   const q = query.trim().slice(0, 200);
   const oc = resolveLawApiOc();
   if (!oc) {
@@ -75,13 +129,22 @@ export async function searchLawsJson(query: string): Promise<LawSearchSingleResu
   url.searchParams.set("type", "JSON");
   url.searchParams.set("nw", "1");
   url.searchParams.set("query", q);
+  const display =
+    opts?.display != null && Number.isFinite(opts.display)
+      ? Math.min(100, Math.max(1, Math.floor(Number(opts.display))))
+      : 20;
+  url.searchParams.set("display", String(display));
+  url.searchParams.set("page", "1");
+  /** 명세: 1=법령명, 2=본문 — 브랜드 네이밍 보조 검색은 기본 법령명 검색 */
+  const searchMode = opts?.search === 2 ? 2 : 1;
+  url.searchParams.set("search", String(searchMode));
 
   const urlSafe = redactLawSearchUrl(url.toString());
   console.log("[LAW] request:", urlSafe);
 
   try {
     const res = await fetch(url.toString(), {
-      headers: { Accept: "application/json, */*" },
+      headers: LAW_API_FETCH_HEADERS,
       signal: AbortSignal.timeout(20_000)
     });
     const raw = await res.text();
@@ -90,9 +153,25 @@ export async function searchLawsJson(query: string): Promise<LawSearchSingleResu
       return {
         ok: false,
         query: q,
-        error: `HTTP ${res.status}: ${truncate(raw, 400)}`
+        error: enrichLawApiErrorHint(`HTTP ${res.status}: ${truncate(raw, 400)}`)
       };
     }
+
+    let envelope: Record<string, unknown> | null = null;
+    try {
+      envelope = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      envelope = null;
+    }
+    if (envelope) {
+      const apiErr = lawSearchApiErrorMessage(envelope);
+      if (apiErr) {
+        const hint = enrichLawApiErrorHint(apiErr);
+        console.warn("[LAW] API 응답 오류:", { query: q, apiErr: hint });
+        return { ok: false, query: q, error: hint };
+      }
+    }
+
     const lines = parseLawSearchJson(raw);
     console.log("[LAW] response:", {
       query: q,
@@ -119,7 +198,7 @@ export async function searchLawsJson(query: string): Promise<LawSearchSingleResu
     return {
       ok: false,
       query: q,
-      error: msg
+      error: enrichLawApiErrorHint(msg)
     };
   }
 }
@@ -168,7 +247,8 @@ export async function fetchLawsForBrandNamingLegality(opts: {
   ];
 
   for (const query of uniqueQueries) {
-    const r = await searchLawsJson(query);
+    const useBodySearch = query.length > 14 || /\s/.test(query);
+    const r = await searchLawsJson(query, { search: useBodySearch ? 2 : 1, display: 15 });
     parts.push(`【검색어: ${query}】`);
     if (r.ok) {
       parts.push(r.text.trim() || "(본문 없음)");

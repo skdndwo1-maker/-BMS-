@@ -12,10 +12,15 @@ export const PROJECT_ROOT_ENV = join(serverDir, "..");
 
 const envPath = join(PROJECT_ROOT_ENV, ".env");
 const localPath = join(PROJECT_ROOT_ENV, ".env.local");
+/** `npm run server` 실행 위치와 무관하게, 서버 폴더 전용 키(예: LAW_API_OC)도 읽음 — 기존 변수는 덮어쓰지 않음 */
+const serverEnvPath = join(serverDir, ".env");
 
 if (existsSync(envPath)) {
   config({ path: envPath });
 }
 if (existsSync(localPath)) {
   config({ path: localPath, override: true });
+}
+if (existsSync(serverEnvPath)) {
+  config({ path: serverEnvPath, override: false });
 }

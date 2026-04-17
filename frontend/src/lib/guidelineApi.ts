@@ -354,6 +354,28 @@ export function normalizeNamingProposal(raw: unknown): BrandNamingProposal {
   };
 }
 
+/** 단계별 생성: N개 네이밍을 하나의 패키지로 본 4대 평가(통합) */
+export type TierPackageEvaluation = {
+  hierarchyScore: number;
+  legalityScore: number;
+  originalityDimensionScore: number;
+  pronunciationScore: number;
+  proposalDetailLogic: BrandNamingProposal["proposalDetailLogic"];
+};
+
+export type TierStepRow = {
+  tierLabel: string;
+  name: string;
+  rationale: string;
+};
+
+/** 단계별 생성: 대안 1개 = N단계 전체 + 세계관 + 패키지 4축 평가 */
+export type TierNamingAlternative = {
+  storyline: string;
+  tierSteps: TierStepRow[];
+  tierPackageEvaluation: TierPackageEvaluation;
+};
+
 export type BrandNamingRunResult = {
   ok: boolean;
   mode: BrandNamingMode;
@@ -401,8 +423,18 @@ export type BrandNamingRunResult = {
   additionalNamingSuggestions?: string[];
   /** 하위 호환: 생성 후보 이름만 */
   suggestedNames: string[];
-  /** 생성 모드: 정확히 4건(서버 보장). 검수 모드는 빈 배열 */
+  /** 생성 모드: 일반 4건 또는 단계별 1~6건(서버 보장). 검수 모드는 빈 배열 */
   namingProposals?: BrandNamingProposal[];
+  /** 생성 모드만: 일반 vs 단계별(요금제 티어) 메타 */
+  generateMeta?: {
+    style: "general" | "tiered";
+    tierStepCount?: number;
+    tierLabels?: string[];
+  };
+  /** 레거시: 단일 패키지 통합 평가(구 응답). 신규 단계별는 tierNamingAlternatives 사용 */
+  tierPackageEvaluation?: TierPackageEvaluation;
+  /** 단계별 생성: 대안 4개 × (스토리라인 + N단계 + 패키지 평가) */
+  tierNamingAlternatives?: TierNamingAlternative[];
 };
 
 /** 고정 PDF 슬롯 + 참고 입력·업로드를 반영해 네이밍 생성 또는 검수 */
@@ -421,6 +453,12 @@ export async function runBrandNaming(opts: {
   useGuidelineLibrary?: boolean;
   /** useGuidelineLibrary가 true일 때 필수 — `FIXED_GUIDELINE_SOURCES` 키 */
   guidelineId?: string;
+  /** 생성 모드: 일반(4안) vs 단계별(1~6단계, 요금제 라인업) */
+  generateStyle?: "general" | "tiered";
+  /** 단계별 생성 시 단계 수 1~6 */
+  tierStepCount?: number;
+  /** 단계별 라벨(길이는 tierStepCount와 동일 권장) */
+  tierLabels?: string[];
 }): Promise<BrandNamingRunResult> {
   const fd = new FormData();
   fd.append("mode", opts.mode);
@@ -430,6 +468,17 @@ export async function runBrandNaming(opts: {
     fd.append("requestText", opts.requestText.trim());
   } else {
     fd.append("requestText", opts.requestText.trim());
+    const gs = opts.generateStyle === "tiered" ? "tiered" : "general";
+    fd.append("generateStyle", gs);
+    if (gs === "tiered") {
+      const n = Math.min(6, Math.max(1, Number(opts.tierStepCount) || 3));
+      fd.append("tierStepCount", String(n));
+      const labels = Array.isArray(opts.tierLabels) ? opts.tierLabels.slice(0, n) : [];
+      while (labels.length < n) {
+        labels.push(`단계 ${labels.length + 1}`);
+      }
+      fd.append("tierLabelsJson", JSON.stringify(labels));
+    }
   }
   const auditCategory = (opts.auditCategory ?? "").trim();
   if (auditCategory) {

@@ -1181,7 +1181,8 @@ const brandNamingResponseSchema = {
     suggestedNames: {
       type: SchemaType.ARRAY,
       items: { type: SchemaType.STRING },
-      description: "생성: namingProposals 또는 names의 name과 동일 순서 4개. 검수: 빈 배열"
+      description:
+        "생성: names·namingProposals의 name과 동일 순서·개수(일반 4 또는 단계별 **대안 4**). 검수: []"
     },
     /**
      * 생성 모드 권장: 고정 응답 형식. namingProposals와 동일 구조이나 설명 키는 `description`.
@@ -1190,7 +1191,7 @@ const brandNamingResponseSchema = {
     names: {
       type: SchemaType.ARRAY,
       description:
-        "생성 모드: **정확히 4개** 권장. 각 원소는 아래 키를 모두 채움. 검수 모드: 빈 배열 []",
+        "생성 모드: **일반 4개** 또는 **단계별(요금제) 시 대안 패키지 요약 4개**(상세 N단계는 tierNamingAlternatives). 검수: []",
       items: {
         type: SchemaType.OBJECT,
         properties: {
@@ -1237,7 +1238,7 @@ const brandNamingResponseSchema = {
     namingProposals: {
       type: SchemaType.ARRAY,
       description:
-        "생성 모드: 반드시 정확히 4개. names와 동일 내용(설명은 description 또는 rationale). 검수 모드: 빈 배열 []",
+        "생성 모드: names와 동일 개수·동일 내용. 단계별(요금제)일 때는 **4개=대안 패키지 요약** tierNamingAlternatives와 1:1. 검수: []",
       items: {
         type: SchemaType.OBJECT,
         properties: {
@@ -1283,6 +1284,80 @@ const brandNamingResponseSchema = {
           "legalScore",
           "legalDetail"
         ]
+      }
+    },
+    tierNamingAlternatives: {
+      type: SchemaType.ARRAY,
+      description:
+        "**단계별 생성 시 필수: 정확히 4개**. 각 원소 = **대안 1개** = 한 패키지(요청한 N단계 전부 + 세계관 + 패키지 단위 4대 평가). 일반 생성(단일 네이밍 4안)에서는 빈 배열 []",
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          storyline: {
+            type: SchemaType.STRING,
+            description:
+              "이 대안 패키지 전체가 공유하는 세계관·스토리라인(한국어 3~6문장). N개 단계 네이밍이 **하나의 서사**에서 파생되도록 서술"
+          },
+          tierSteps: {
+            type: SchemaType.ARRAY,
+            description: "단계 수 = 요청한 N. 순서는 요청 단계 라벨과 동일",
+            items: {
+              type: SchemaType.OBJECT,
+              properties: {
+                tierLabel: { type: SchemaType.STRING, description: "예: 최고가, 고가…" },
+                name: { type: SchemaType.STRING, description: "해당 단계 상품·요금제 네이밍" },
+                rationale: { type: SchemaType.STRING, description: "해당 단계 이름의 짧은 창작 근거" }
+              },
+              required: ["tierLabel", "name", "rationale"]
+            }
+          },
+          tierPackageEvaluation: {
+            type: SchemaType.OBJECT,
+            description: "이 패키지(N단계 전체)에 대한 통합 4대 평가. 창의성 근거에는 storyline 반영 필수",
+            properties: {
+              hierarchyScore: { type: SchemaType.INTEGER },
+              legalityScore: { type: SchemaType.INTEGER },
+              originalityDimensionScore: { type: SchemaType.INTEGER },
+              pronunciationScore: { type: SchemaType.INTEGER },
+              hierarchyDetail: { type: SchemaType.STRING },
+              legalityDetail: { type: SchemaType.STRING },
+              originalityDetail: {
+                type: SchemaType.STRING,
+                description: "창의성: 반드시 storyline과 각 단계 네이밍의 연결을 구체적으로 서술"
+              },
+              pronunciationDetail: { type: SchemaType.STRING }
+            },
+            required: [
+              "hierarchyScore",
+              "legalityScore",
+              "originalityDimensionScore",
+              "pronunciationScore",
+              "hierarchyDetail",
+              "legalityDetail",
+              "originalityDetail",
+              "pronunciationDetail"
+            ]
+          }
+        },
+        required: ["storyline", "tierSteps", "tierPackageEvaluation"]
+      }
+    },
+    tierPackageEvaluation: {
+      type: SchemaType.OBJECT,
+      description:
+        "**레거시·단일 패키지용**. 단계별 4대안 모드에서는 **tierNamingAlternatives**만 사용하고 여기는 생략. 일반 생성(4안)에서는 생략",
+      properties: {
+        hierarchyScore: { type: SchemaType.INTEGER, description: "패키지 기준 브랜드 계층 정렬 0~100" },
+        legalityScore: { type: SchemaType.INTEGER, description: "패키지 기준 적법성 0~100" },
+        originalityDimensionScore: { type: SchemaType.INTEGER, description: "패키지 기준 창의성 0~100" },
+        pronunciationScore: { type: SchemaType.INTEGER, description: "패키지 기준 직관성(발음·언어) 0~100" },
+        hierarchyDetail: {
+          type: SchemaType.STRING,
+          description: "패키지 전체에 대한 브랜드 계층 정렬 근거 한국어 3줄 이상"
+        },
+        legalityDetail: { type: SchemaType.STRING, description: "패키지 기준 적법성 근거 3줄 이상" },
+        originalityDetail: { type: SchemaType.STRING, description: "패키지 기준 창의성 근거 3줄 이상" },
+        pronunciationDetail: { type: SchemaType.STRING, description: "패키지 기준 직관성 근거 3줄 이상" }
       }
     },
     additionalNamingSuggestions: {
@@ -1530,7 +1605,198 @@ export type BrandNamingGeminiResult = {
   namingProposals: BrandNamingProposalGemini[];
   /** 검수: 입력 외 추가 제안 네이밍 */
   additionalNamingSuggestions: string[];
+  /** 단계별 생성(구): 단일 패키지 — tierNamingAlternatives 사용 시 무시 */
+  tierPackageEvaluation?: TierPackageEvaluationGemini;
+  /** 단계별 생성: 대안 4개 × (N단계 패키지 + 세계관 + 통합 평가) */
+  tierNamingAlternatives?: TierNamingAlternativeGemini[];
 };
+
+export type TierPackageEvaluationGemini = {
+  hierarchyScore: number;
+  legalityScore: number;
+  originalityDimensionScore: number;
+  pronunciationScore: number;
+  proposalDetailLogic: ProposalDetailLogicGemini;
+};
+
+export type TierNamingAlternativeGemini = {
+  storyline: string;
+  tierSteps: Array<{ tierLabel: string; name: string; rationale: string }>;
+  tierPackageEvaluation: TierPackageEvaluationGemini;
+};
+
+function parseTierPackageEvaluationObj(raw: unknown): TierPackageEvaluationGemini | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  return parseTierPackageEvaluation({ tierPackageEvaluation: raw });
+}
+
+function parseTierNamingAlternatives(p: Record<string, unknown>): TierNamingAlternativeGemini[] | undefined {
+  const raw = p.tierNamingAlternatives;
+  if (!Array.isArray(raw)) return undefined;
+  const out: TierNamingAlternativeGemini[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const row = item as Record<string, unknown>;
+    const stepsRaw = Array.isArray(row.tierSteps) ? row.tierSteps : [];
+    const tierSteps = stepsRaw
+      .map((s) => {
+        if (!s || typeof s !== "object" || Array.isArray(s)) return null;
+        const t = s as Record<string, unknown>;
+        return {
+          tierLabel: String(t.tierLabel ?? "").trim(),
+          name: String(t.name ?? "").trim(),
+          rationale: String(t.rationale ?? "").trim()
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+    const pkg = parseTierPackageEvaluationObj(row.tierPackageEvaluation);
+    if (!pkg) continue;
+    const storyline = String(row.storyline ?? "").trim() || "(스토리라인 없음)";
+    out.push({ storyline, tierSteps, tierPackageEvaluation: pkg });
+  }
+  return out.length ? out : undefined;
+}
+
+function parseTierPackageEvaluation(p: Record<string, unknown>): TierPackageEvaluationGemini | undefined {
+  const raw = p.tierPackageEvaluation;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const t = raw as Record<string, unknown>;
+  const clamp = (v: unknown) => Math.min(100, Math.max(0, Math.round(Number(v) || 0)));
+  const firstStr = (...args: unknown[]) => {
+    for (const x of args) {
+      const s = String(x ?? "").trim();
+      if (s) return s;
+    }
+    return "";
+  };
+  const hs = clamp(t.hierarchyScore ?? 0);
+  const ls = clamp(t.legalityScore ?? t.legalScore ?? 0);
+  const os = clamp(t.originalityDimensionScore ?? t.uniquenessScore ?? 0);
+  const ps = clamp(t.pronunciationScore ?? 0);
+  if (hs + ls + os + ps === 0) return undefined;
+  const detail: ProposalDetailLogicGemini = {
+    hierarchy:
+      firstStr(t.hierarchyDetail, t.detailHierarchy, (t as { proposalDetailLogic?: { hierarchy?: string } }).proposalDetailLogic?.hierarchy) ||
+      "(상세 근거 문단 없음)",
+    originality:
+      firstStr(
+        t.originalityDetail,
+        t.uniquenessDetail,
+        (t as { proposalDetailLogic?: { originality?: string } }).proposalDetailLogic?.originality
+      ) || "(상세 근거 문단 없음)",
+    pronunciationLanguage:
+      firstStr(
+        t.pronunciationDetail,
+        (t as { proposalDetailLogic?: { pronunciationLanguage?: string } }).proposalDetailLogic?.pronunciationLanguage
+      ) || "(상세 근거 문단 없음)",
+    legality:
+      firstStr(t.legalityDetail, t.legalDetail, (t as { proposalDetailLogic?: { legality?: string } }).proposalDetailLogic?.legality) ||
+      "(상세 근거 문단 없음)"
+  };
+  return {
+    hierarchyScore: hs,
+    legalityScore: ls,
+    originalityDimensionScore: os,
+    pronunciationScore: ps,
+    proposalDetailLogic: detail
+  };
+}
+
+function weightedTierPackageOverall(tp: TierPackageEvaluationGemini): number {
+  return Math.min(
+    100,
+    Math.max(0, Math.round(tp.originalityDimensionScore * 0.5 + tp.pronunciationScore * 0.5))
+  );
+}
+
+function synthesizeTierAlternativePlaceholder(
+  altIdx: number,
+  nSteps: number,
+  labels: string[]
+): TierNamingAlternativeGemini {
+  const L = labels.slice(0, nSteps);
+  const tierSteps = L.map((lb, i) => ({
+    tierLabel: lb,
+    name: `보완 ${altIdx}-${i + 1}`,
+    rationale: "응답이 불완전하여 자동 보완했습니다. 동일 요청으로 재생성해 주세요."
+  }));
+  return {
+    storyline: `【자동 보완】대안 ${altIdx}번 패키지(스토리라인·평가)가 비었습니다. tierNamingAlternatives를 정확히 4개 채워 재시도해 주세요.`,
+    tierSteps,
+    tierPackageEvaluation: {
+      hierarchyScore: 50,
+      legalityScore: 50,
+      originalityDimensionScore: 50,
+      pronunciationScore: 50,
+      proposalDetailLogic: {
+        hierarchy: "자동 보완입니다.",
+        originality: "자동 보완입니다. 세계관·스토리라인과 단계 네이밍의 연계는 재생성 시 모델 응답에 포함됩니다.",
+        pronunciationLanguage: "자동 보완입니다.",
+        legality: "자동 보완입니다."
+      }
+    }
+  };
+}
+
+function normalizeTierAlternativeShape(
+  alt: TierNamingAlternativeGemini,
+  nSteps: number,
+  labels: string[],
+  altIdx: number
+): TierNamingAlternativeGemini {
+  const L = labels.slice(0, nSteps);
+  const cur = [...alt.tierSteps];
+  while (cur.length < nSteps) {
+    const i = cur.length;
+    cur.push({ tierLabel: L[i] ?? `단계 ${i + 1}`, name: "", rationale: "" });
+  }
+  const tierSteps = cur.slice(0, nSteps).map((s, i) => ({
+    tierLabel: (s.tierLabel || L[i] || `단계 ${i + 1}`).trim(),
+    name: (s.name || `보완 ${altIdx}-${i + 1}`).trim(),
+    rationale: (s.rationale || "").trim() || "—"
+  }));
+  let tierPackageEvaluation = alt.tierPackageEvaluation;
+  const sumScores =
+    (tierPackageEvaluation?.hierarchyScore ?? 0) +
+    (tierPackageEvaluation?.legalityScore ?? 0) +
+    (tierPackageEvaluation?.originalityDimensionScore ?? 0) +
+    (tierPackageEvaluation?.pronunciationScore ?? 0);
+  if (!tierPackageEvaluation || sumScores === 0) {
+    tierPackageEvaluation = {
+      hierarchyScore: 50,
+      legalityScore: 50,
+      originalityDimensionScore: 50,
+      pronunciationScore: 50,
+      proposalDetailLogic: {
+        hierarchy: "(자동 보완)",
+        originality: "(자동 보완) 스토리라인·단계 네이밍 연계 평가가 비었습니다.",
+        pronunciationLanguage: "(자동 보완)",
+        legality: "(자동 보완)"
+      }
+    };
+  }
+  const storyline = (alt.storyline || "").trim() || `【자동 보완】대안 ${altIdx} 스토리라인 없음`;
+  return { storyline, tierSteps, tierPackageEvaluation };
+}
+
+function synthesizeTierPackageFromProposals(proposals: BrandNamingProposalGemini[]): TierPackageEvaluationGemini {
+  const n = Math.max(1, proposals.length);
+  const avg = (get: (p: BrandNamingProposalGemini) => number) =>
+    Math.round(proposals.reduce((s, p) => s + get(p), 0) / n);
+  return {
+    hierarchyScore: avg((p) => p.hierarchyScore),
+    legalityScore: avg((p) => p.legalityScore),
+    originalityDimensionScore: avg((p) => p.originalityDimensionScore),
+    pronunciationScore: avg((p) => p.pronunciationScore),
+    proposalDetailLogic: {
+      hierarchy:
+        "모델이 패키지 통합 평가 객체를 내보내지 않아, 단계별 후보 점수의 산술 평균으로 대체했습니다. 동일 요청으로 재생성하면 통합 근거 문단이 채워질 수 있습니다.",
+      originality: "—",
+      pronunciationLanguage: "—",
+      legality: "—"
+    }
+  };
+}
 
 function parseBrandNamingPayload(raw: string): BrandNamingGeminiResult | null {
   try {
@@ -1751,11 +2017,16 @@ function normalizeBrandNamingResult(p: Record<string, unknown>): BrandNamingGemi
     goRecommendation: gr,
     suggestedNames: suggested,
     namingProposals: namingProposalsRaw,
-    additionalNamingSuggestions
+    additionalNamingSuggestions,
+    tierPackageEvaluation: parseTierPackageEvaluation(p),
+    tierNamingAlternatives: parseTierNamingAlternatives(p)
   };
 }
 
-function mockBrandNamingNoKey(mode: "generate" | "audit"): BrandNamingGeminiResult {
+function mockBrandNamingNoKey(
+  mode: "generate" | "audit",
+  tierPlan?: { stepCount: number; labels: string[] } | null
+): BrandNamingGeminiResult {
   const genProposal = (i: number): BrandNamingProposalGemini => ({
     name: `예시 네이밍 ${i}`,
     rationale:
@@ -1771,6 +2042,88 @@ function mockBrandNamingNoKey(mode: "generate" | "audit"): BrandNamingGeminiResu
       legality: "API 키 미설정 자리 표시입니다."
     }
   });
+
+  if (mode === "generate" && tierPlan) {
+    const n = Math.min(6, Math.max(1, tierPlan.stepCount || 3));
+    const labels: string[] = [];
+    for (let i = 0; i < n; i++) {
+      labels.push((tierPlan.labels[i] ?? "").trim() || `단계 ${i + 1}`);
+    }
+    const tierNamingAlternatives: TierNamingAlternativeGemini[] = [1, 2, 3, 4].map((alt) => {
+      const tierSteps = labels.map((lb, ti) => ({
+        tierLabel: lb,
+        name: `예시${alt}·${ti + 1}단계`,
+        rationale: "GEMINI_API_KEY 미설정 자리 표시입니다."
+      }));
+      return {
+        storyline: `예시 세계관·스토리라인 ${alt}(API 키 없음). ${n}단계 네이밍은 이 서사에서 파생된다고 가정합니다.`,
+        tierSteps,
+        tierPackageEvaluation: {
+          hierarchyScore: 65,
+          legalityScore: 64,
+          originalityDimensionScore: 60,
+          pronunciationScore: 70,
+          proposalDetailLogic: {
+            hierarchy: "API 키 미설정 자리 표시입니다.",
+            originality:
+              "창의성(예시): 위 스토리라인과 각 단계 네이밍의 연결을 설명하는 자리입니다. 실제 생성 시 본문에 반영됩니다.",
+            pronunciationLanguage: "API 키 미설정 자리 표시입니다.",
+            legality: "API 키 미설정 자리 표시입니다."
+          }
+        }
+      };
+    });
+    const namingProposals = tierNamingAlternatives.map((a, i) => ({
+      name: `[대안 ${i + 1}] ${a.tierSteps.map((t) => t.name).join(" → ")}`,
+      rationale: a.storyline,
+      hierarchyScore: a.tierPackageEvaluation.hierarchyScore,
+      legalityScore: a.tierPackageEvaluation.legalityScore,
+      originalityDimensionScore: a.tierPackageEvaluation.originalityDimensionScore,
+      pronunciationScore: a.tierPackageEvaluation.pronunciationScore,
+      proposalDetailLogic: { ...a.tierPackageEvaluation.proposalDetailLogic }
+    }));
+    return {
+      overallScore: 62,
+      hierarchyScore: 65,
+      originalityDimensionScore: 58,
+      pronunciationScore: 72,
+      pronunciationLanguageScore: 72,
+      legalityScore: 64,
+      trademarkScore: 58,
+      copyrightScore: 64,
+      detailLogic: {
+        hierarchy: "GEMINI_API_KEY가 없어 상세 논리는 자리 표시입니다.",
+        originality: "API 키 설정 후 창의성 추론 근거가 채워집니다.",
+        pronunciationLanguage: "API 키 설정 후 발음·언어 분석이 채워집니다.",
+        legality: "API 키 설정 후 법령 연동 분석이 채워집니다."
+      },
+      hierarchy: {
+        status: "warning",
+        message: "GEMINI_API_KEY 없음",
+        details:
+          "루트 .env에 GEMINI_API_KEY를 설정하고 서버를 재시작하면 U+ 브랜드 가이드라인 PDF와 업로드·입력 자료를 반영한 분석이 실행됩니다.",
+        checklist: ["API 키 설정 필요", "가이드 PDF: data/guidelines/U+ 브랜드 가이드라인"]
+      },
+      trademark: {
+        risk: "medium",
+        conflicts: [],
+        recommendation: "API 키 설정 후 상표 유사도 분석이 가능합니다."
+      },
+      copyright: {
+        originality: 60,
+        risks: [{ type: "설정", severity: "low", description: "API 키 미설정으로 모의 결과입니다." }],
+        verdict: "실제 분석을 위해 GEMINI_API_KEY가 필요합니다."
+      },
+      finalSummary:
+        "API 키가 없어 네이밍 후보를 생성하지 못했습니다. 키를 설정한 뒤 다시 시도하세요.",
+      goRecommendation: "no-go",
+      suggestedNames: namingProposals.map((p) => p.name),
+      namingProposals,
+      tierNamingAlternatives,
+      additionalNamingSuggestions: []
+    };
+  }
+
   return {
     overallScore: 62,
     hierarchyScore: 65,
@@ -1819,7 +2172,13 @@ function mockBrandNamingNoKey(mode: "generate" | "audit"): BrandNamingGeminiResu
 function finalizeNamingResult(
   mode: "generate" | "audit",
   r: BrandNamingGeminiResult,
-  opts?: { requestText?: string }
+  opts?: {
+    requestText?: string;
+    generateProposalCount?: number;
+    tieredPackage?: boolean;
+    tierStepCount?: number;
+    tierLabels?: string[];
+  }
 ): BrandNamingGeminiResult {
   const reqCtx = (opts?.requestText ?? "").trim();
   if (mode === "audit") {
@@ -1845,6 +2204,98 @@ function finalizeNamingResult(
       }
     };
   }
+
+  /** 생성 전용: 상위 응답에 포함된 검수형 필드는 UI·워크스페이스 혼동을 막기 위해 비움(후보별 proposal만 유효) */
+  const emptyHierarchy = {
+    status: "aligned" as const,
+    message: "",
+    details: "",
+    checklist: [] as string[]
+  };
+
+  /** 단계별(요금제): 대안 4개 × (N단계 + 세계관 + 패키지 4축) */
+  if (opts?.tieredPackage) {
+    const nSteps = Math.min(6, Math.max(1, opts.tierStepCount ?? 3));
+    const labels: string[] = [];
+    const fromOpt = opts.tierLabels ?? [];
+    for (let i = 0; i < nSteps; i++) {
+      labels.push((fromOpt[i] ?? "").trim() || `단계 ${i + 1}`);
+    }
+
+    let alts: TierNamingAlternativeGemini[] = Array.isArray(r.tierNamingAlternatives)
+      ? [...r.tierNamingAlternatives]
+      : [];
+
+    const rawProps = (r.namingProposals ?? []).filter((p) => p.name.trim().length > 0);
+    if (alts.length === 0 && r.tierPackageEvaluation && rawProps.length === nSteps) {
+      alts = [
+        {
+          storyline:
+            "(이전 단일 패키지 응답 형식이었습니다. 네 가지 서로 다른 세계관·대안을 얻으려면 재생성해 주세요.)",
+          tierSteps: rawProps.map((p, i) => ({
+            tierLabel: labels[i] ?? `단계 ${i + 1}`,
+            name: p.name,
+            rationale: p.rationale || ""
+          })),
+          tierPackageEvaluation: r.tierPackageEvaluation
+        }
+      ];
+    }
+
+    while (alts.length < 4) {
+      alts.push(synthesizeTierAlternativePlaceholder(alts.length + 1, nSteps, labels));
+    }
+    alts = alts
+      .slice(0, 4)
+      .map((alt, i) => normalizeTierAlternativeShape(alt, nSteps, labels, i + 1));
+
+    const proposals = alts.map((alt, i) => ({
+      name: `[대안 ${i + 1}] ${alt.tierSteps.map((t) => t.name).join(" → ")}`,
+      rationale: alt.storyline,
+      hierarchyScore: alt.tierPackageEvaluation.hierarchyScore,
+      legalityScore: alt.tierPackageEvaluation.legalityScore,
+      originalityDimensionScore: alt.tierPackageEvaluation.originalityDimensionScore,
+      pronunciationScore: alt.tierPackageEvaluation.pronunciationScore,
+      proposalDetailLogic: { ...alt.tierPackageEvaluation.proposalDetailLogic }
+    }));
+
+    const overallScore = Math.round(
+      alts.reduce((s, a) => s + weightedTierPackageOverall(a.tierPackageEvaluation), 0) / 4
+    );
+
+    return {
+      ...r,
+      overallScore,
+      hierarchyScore: 0,
+      originalityDimensionScore: 0,
+      pronunciationScore: 0,
+      pronunciationLanguageScore: 0,
+      legalityScore: 0,
+      trademarkScore: 0,
+      copyrightScore: 0,
+      detailLogic: {
+        hierarchy: "",
+        originality: "",
+        pronunciationLanguage: "",
+        legality: ""
+      },
+      hierarchy: emptyHierarchy,
+      trademark: { risk: "low" as const, conflicts: [], recommendation: "" },
+      copyright: { originality: 0, risks: [], verdict: "" },
+      finalSummary: "",
+      goRecommendation: "go",
+      namingProposals: proposals,
+      suggestedNames: proposals.map((p) => p.name),
+      additionalNamingSuggestions: [],
+      tierNamingAlternatives: alts,
+      tierPackageEvaluation: undefined
+    };
+  }
+
+  const expected =
+    typeof opts?.generateProposalCount === "number" && opts.generateProposalCount >= 1
+      ? Math.min(6, Math.max(1, Math.floor(opts.generateProposalCount)))
+      : 4;
   let proposals = (r.namingProposals ?? []).filter((p) => p.name.trim().length > 0);
   const filler = (idx: number): BrandNamingProposalGemini => ({
     name: `보완 후보 ${idx}`,
@@ -1861,18 +2312,12 @@ function finalizeNamingResult(
       legality: "자동 보완 항목입니다."
     }
   });
-  while (proposals.length < 4) {
+  while (proposals.length < expected) {
     proposals.push(filler(proposals.length + 1));
   }
-  proposals = proposals.slice(0, 4);
+  proposals = proposals.slice(0, expected);
   const names = proposals.map((p) => p.name);
-  /** 생성 전용: 상위 응답에 포함된 검수형 필드는 UI·워크스페이스 혼동을 막기 위해 비움(후보별 proposal만 유효) */
-  const emptyHierarchy = {
-    status: "aligned" as const,
-    message: "",
-    details: "",
-    checklist: [] as string[]
-  };
+
   return {
     ...r,
     overallScore: 0,
@@ -1896,7 +2341,9 @@ function finalizeNamingResult(
     goRecommendation: "go",
     namingProposals: proposals,
     suggestedNames: names,
-    additionalNamingSuggestions: []
+    additionalNamingSuggestions: [],
+    tierPackageEvaluation: undefined,
+    tierNamingAlternatives: undefined
   };
 }
 
@@ -1907,11 +2354,26 @@ export async function runBrandNamingWithGemini(opts: {
   guidelineBlock: string;
   /** 검수: 클라이언트가 보낸 auditCategory 전문 — Gemini 전용 지시(`namingCategoryGeminiDirectives`)와 결합 */
   auditCategoryRaw?: string;
+  /** 생성: 일반(4안) vs 단계별 요금제 N안(1~6) */
+  generatePlan?: { kind: "general" } | { kind: "tiered"; stepCount: number; labels: string[] };
 }): Promise<BrandNamingGeminiResult> {
   const req = opts.requestText.trim();
+  const tierPlan = opts.generatePlan?.kind === "tiered" ? opts.generatePlan : null;
+  const stepCountForTier = tierPlan ? Math.min(6, Math.max(1, tierPlan.stepCount || 3)) : 0;
+  /** 생성: names/namingProposals 길이 — 일반 4안 / 단계별은 대안 패키지 요약 4개 */
+  const genCount = opts.mode === "generate" ? 4 : 4;
+  const genProposalFinalizeCount = opts.mode === "generate" ? 4 : undefined;
+  const finalizeOpts = {
+    requestText: req,
+    generateProposalCount: genProposalFinalizeCount,
+    tieredPackage: Boolean(tierPlan),
+    tierStepCount: tierPlan?.stepCount,
+    tierLabels: tierPlan?.labels
+  };
+
   const key = getKey();
   if (!key) {
-    return finalizeNamingResult(opts.mode, mockBrandNamingNoKey(opts.mode), { requestText: req });
+    return finalizeNamingResult(opts.mode, mockBrandNamingNoKey(opts.mode, tierPlan), finalizeOpts);
   }
 
   const genAI = new GoogleGenerativeAI(key);
@@ -1923,7 +2385,7 @@ export async function runBrandNamingWithGemini(opts: {
     : "";
 
   const finishWithAuditNoGoFill = async (base: BrandNamingGeminiResult): Promise<BrandNamingGeminiResult> => {
-    const r = finalizeNamingResult(opts.mode, base, { requestText: req });
+    const r = finalizeNamingResult(opts.mode, base, finalizeOpts);
     if (opts.mode === "audit") {
       return ensureAuditNoGoHasAdditionalSuggestions(r, genAI, {
         requestText: opts.requestText,
@@ -1937,24 +2399,40 @@ export async function runBrandNamingWithGemini(opts: {
 
   const modeIntro =
     opts.mode === "generate"
-      ? `작업 유형: **생성**.
-- **고정 응답 형식(반드시 준수)**: 루트에 **names** 배열과 **namingProposals** 배열을 **각각 정확히 4개**로 채웁니다. 두 배열의 4개 항목은 **동일한 네이밍·동일 순서**이며, 각 원소는 아래 키를 **모두** 채웁니다(빈 문자열·생략 금지):
+      ? tierPlan
+        ? `작업 유형: **생성 (단계별·요금제 라인업)**.
+- **필수 — tierNamingAlternatives**: 배열 길이 **정확히 4**. 각 원소 = **서로 다른 대안 패키지 1개**(서로 다른 세계관·스토리라인).
+  - **storyline**: 이 대안에서 ${stepCountForTier}개 단계 네이밍이 **공유하는 하나의 세계관·스토리라인**(한국어 3~6문장). 모든 단계 이름이 이 서사에서 **일관되게 파생**되도록 서술(기본 전제).
+  - **tierSteps**: 길이 **정확히 ${stepCountForTier}**, 순서는 [요청 내용] **[단계별 생성]** 단계 라벨과 동일. 각 원소: tierLabel, name, rationale.
+  - **tierPackageEvaluation**: 이 대안 패키지 전체에 대한 통합 4축(0~100) 및 hierarchyDetail·legalityDetail·originalityDetail·pronunciationDetail(각 한국어 3줄 이상). **창의성(originalityDetail)**에는 반드시 **storyline과 각 단계 name의 연결**을 구체적으로 서술.
+- **names**·**namingProposals**·**suggestedNames**: 각각 **정확히 4**. i번째 항목은 **tierNamingAlternatives[i]의 요약 행**(name은 대안 식별 제목, description/rationale은 storyline 요약 또는 동일 복제). 후보별 점수·Detail은 **tierNamingAlternatives[i].tierPackageEvaluation**과 **일치**시킬 것.
+- 루트 **tierPackageEvaluation**은 **쓰지 말 것**(레거시 단일 패키지용). 일반 생성과 혼동 금지.
+- **additionalNamingSuggestions**: [].
+- **적법성·발음** 등은 각 대안의 **tierPackageEvaluation**에 반영. [참고 정보]에 국가법령정보가 있으면 적법성 근거에 인용.
+- 아래 [종합 검토 필드]는 생성 맥락 요약으로 채웁니다.${
+            auditCategoryPromptSection
+              ? `\n- **브랜드 계층 컨텍스트**: 아래 **[브랜드 계층 컨텍스트]** 블록이 있으면 4개 대안 패키지를 만들 때 **반드시** 그 계층·접두·독립 작명 룰을 따를 것.`
+              : ""
+          }`
+        : `작업 유형: **생성 (일반 4안)**.
+- **고정 응답 형식(반드시 준수)**: 루트에 **names** 배열과 **namingProposals** 배열을 **각각 정확히 ${genCount}개**로 채웁니다. 두 배열의 ${genCount}개 항목은 **동일한 네이밍·동일 순서**이며, 각 원소는 아래 키를 **모두** 채웁니다(빈 문자열·생략 금지):
   \`name\`, \`description\` (네이밍 설명·창작 근거, 한국어 3문장 이상),
   \`hierarchyScore\`, \`hierarchyDetail\` (브랜드 계층 평가 상세, **한국어 3줄 이상**),
   \`uniquenessScore\`, \`uniquenessDetail\` (창의성 상세, **3줄 이상** — 가이드·요청·참고 정보만으로 유사·식별력 관점을 **Gemini 추론**으로 서술. 외부 상표 DB·연동 여부는 **언급하지 말 것**),
   \`pronunciationScore\`, \`pronunciationDetail\` (발음·언어 상세, **3줄 이상**),
   \`legalScore\`, \`legalDetail\` (적법성 상세, **3줄 이상**).
 - **namingProposals**의 각 원소에도 위와 동일한 값을 넣되, 스키마상 **description** 필드는 **반드시** 채우고, **rationale**이 있으면 **description과 동일 문자열**로 맞추어도 됩니다.
+- **tierNamingAlternatives**는 일반 생성에서 **빈 배열 []**.
 - **적법성(legalScore·legalDetail)**: [참고 정보]에 **국가법령정보센터 법령 검색** 결과가 있으면 **반드시 인용·요약**하고, 상표법·표시광고법 위반 가능성·일반명칭·저작권 이슈를 기준으로 **반드시** 평가합니다. **0점은 정보가 없어 평가 자체가 불가능할 때만** 사용합니다. **평가가 가능하면 반드시 10점 이상** 부여하고, 그 근거를 **legalDetail**에 3줄 이상 서술합니다.
 - 네 점수의 가중 해석은 검수와 동일(계층 40%·독창 30%·발음·언어 20%·적법 10%)입니다. 루트 **pronunciationLanguageScore**는 **pronunciationScore와 동일 정수**로 맞출 것.
-- **발음·언어**: 4개 후보 각각에 대해 한국어·영어 호명 용이성·외국어 부정 연상 등을 반영해 후보별 점수·Detail을 채웁니다.
-- **suggestedNames**는 **names** 또는 **namingProposals**의 **name**과 같은 순서·같은 4개 문자열 배열.
+- **발음·언어**: ${genCount}개 후보 각각에 대해 한국어·영어 호명 용이성·외국어 부정 연상 등을 반영해 후보별 점수·Detail을 채웁니다.
+- **suggestedNames**는 **names** 또는 **namingProposals**의 **name**과 같은 순서·같은 ${genCount}개 문자열 배열.
 - **additionalNamingSuggestions**는 생성 모드에서 **반드시 빈 배열 []**.
 - 아래 [종합 검토 필드](overallScore, hierarchy, trademark, copyright 등)는 생성 맥락 요약으로 채웁니다.${
-        auditCategoryPromptSection
-          ? "\n- **브랜드 계층 컨텍스트**: 아래 **[브랜드 계층 컨텍스트]** 블록이 있으면 4개 네이밍 제안을 만들 때 **반드시** 그 계층·접두·독립 작명 룰을 따를 것. 룰과 충돌하는 상위 브랜드 접두를 임의로 붙이지 말 것."
-          : ""
-      }`
+            auditCategoryPromptSection
+              ? `\n- **브랜드 계층 컨텍스트**: 아래 **[브랜드 계층 컨텍스트]** 블록이 있으면 ${genCount}개 네이밍 제안을 만들 때 **반드시** 그 계층·접두·독립 작명 룰을 따를 것. 룰과 충돌하는 상위 브랜드 접두를 임의로 붙이지 말 것.`
+              : ""
+          }`
       : `작업 유형: **검수**. [요청 내용]의 네이밍·슬로건을 아래 **4개 항목**으로 채점합니다. 각 항목은 0~100점입니다. **종합 overallScore는 서버에서 창의성(originalityDimensionScore)·직관성(pronunciationScore)만 각 50%로 재계산**합니다. **브랜드 계층 정렬·적법성 점수는 종합 가중합에 들어가지 않으며**, 70점 미만이면 해당 항목은 Fail로 간주되어 NO-GO 조건에 쓰입니다.
 - **(1) hierarchyScore 브랜드 계층 정렬** — 오직 [U+ 브랜드 가이드라인 및 참고 문맥] 안의 **가이드라인 PDF 요약** + [참고 정보]의 **업로드 파일 요약** + **참고 정보 직접 입력**만 근거로 분석·채점. 법령 검색 블록은 이 항목에 **넣지 마세요**. (종합 %에 미포함, Pass/Fail 판정용)
 - **(2) originalityDimensionScore 창의성** — **오직 Gemini 추론**으로 가이드·요청·참고 정보를 바탕으로 유사·식별력 관점에서 채점. **외부 데이터베이스 연동·조회 여부는 결과에 절대 언급하지 말 것.** trademarkConflicts는 분석 보조용 추론 결과로만 채움. (**종합의 50%**)
@@ -1970,7 +2448,9 @@ export async function runBrandNamingWithGemini(opts: {
 
   const generateExtraRule =
     opts.mode === "generate"
-      ? "\n5) **names**·**namingProposals** 길이는 각각 반드시 4입니다.\n6) 각 후보의 hierarchyDetail·uniquenessDetail·pronunciationDetail·legalDetail은 **한국어 3줄 이상**으로 반드시 채웁니다.\n7) **additionalNamingSuggestions**는 반드시 빈 배열 []."
+      ? tierPlan
+        ? `\n5) **tierNamingAlternatives** 길이는 반드시 **4**입니다.\n6) 각 대안의 **tierSteps** 길이는 **${stepCountForTier}**입니다.\n7) 각 **tierPackageEvaluation**의 네 Detail은 **한국어 3줄 이상**.\n8) **names·namingProposals·suggestedNames** 길이는 각각 **4**(대안 패키지 요약).\n9) **additionalNamingSuggestions**는 [].\n10) 루트 **tierPackageEvaluation**은 출력하지 마세요.`
+        : `\n5) **names**·**namingProposals** 길이는 각각 반드시 ${genCount}입니다.\n6) 각 후보의 hierarchyDetail·uniquenessDetail·pronunciationDetail·legalDetail은 **한국어 3줄 이상**으로 반드시 채웁니다.\n7) **additionalNamingSuggestions**는 반드시 빈 배열 [].\n8) **tierNamingAlternatives**는 빈 배열 [].`
       : "";
 
   const jsonOnlyFooter = "\n\n반드시 JSON 형식으로만 응답하고 다른 텍스트는 포함하지 마세요.";
@@ -2044,11 +2524,12 @@ ${req}
   }
 
   const errMsg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+  const failBase = mockBrandNamingNoKey(opts.mode, tierPlan);
   return finishWithAuditNoGoFill({
-    ...mockBrandNamingNoKey(opts.mode),
+    ...failBase,
     overallScore: 55,
     hierarchy: {
-      ...mockBrandNamingNoKey(opts.mode).hierarchy,
+      ...failBase.hierarchy,
       message: "분석 실패",
       details: errMsg.slice(0, 800)
     },

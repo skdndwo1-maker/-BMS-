@@ -287,49 +287,165 @@ function buildBrandNamingPlainText(opts: {
   }
 
   if (opts.mode === "generate") {
-    lines.push("■ AI 네이밍 제안 (4안)");
-    const props = opts.result.namingProposals ?? [];
-    if (props.length > 0) {
-      props.forEach((raw, i) => {
-        const p = normalizeNamingProposal(raw);
-        const overall = weightedOverallFromProposal(p);
-        const hPf = passFailFromScore(p.hierarchyScore);
-        const lPf = passFailFromScore(p.legalityScore);
-        lines.push(`--- 대안 ${i + 1}: ${p.name} ---`);
-        lines.push(p.rationale.trim() || "(근거 없음)");
+    const gm = opts.result.generateMeta;
+    const propN = (opts.result.namingProposals ?? []).length;
+    const tierAlts = opts.result.tierNamingAlternatives;
+    const stepCount =
+      gm?.tierStepCount ?? (tierAlts?.[0]?.tierSteps?.length ? tierAlts[0].tierSteps.length : propN);
+
+    if (gm?.style === "tiered" && tierAlts && tierAlts.length > 0) {
+      lines.push(
+        `■ AI 네이밍 제안 (단계별 ${stepCount}단계 × 대안 4패키지)`,
+        "한 번의 생성마다 서로 다른 세계관·스토리라인을 가진 패키지 대안이 네 가지 제시됩니다. 각 대안마다 아래에 스토리라인, 단계별 네이밍, 패키지 통합 평가가 포함됩니다. 창의성 근거에는 스토리라인과 각 단계 네이밍의 연결이 서술됩니다.",
+        ""
+      );
+      tierAlts.forEach((alt, i) => {
+        const tp = alt.tierPackageEvaluation;
+        const tpd = tp.proposalDetailLogic;
+        const pkgAsProposal = normalizeNamingProposal({
+          name: `대안 ${i + 1}`,
+          rationale: alt.storyline,
+          hierarchyScore: tp.hierarchyScore,
+          originalityDimensionScore: tp.originalityDimensionScore,
+          pronunciationScore: tp.pronunciationScore,
+          legalityScore: tp.legalityScore,
+          proposalDetailLogic: tpd
+        });
+        const pkgOverall = weightedOverallFromProposal(pkgAsProposal);
         lines.push(
-          `종합 점수: ${overall} / 100 (창의성 50% + 직관성 50% 가중합)`,
-          `① 브랜드 계층 정렬 — Pass/Fail: ${hPf} (참고 점수 ${p.hierarchyScore}/100, 종합 가중합 미반영)`,
-          `② 적법성 — Pass/Fail: ${lPf} (참고 점수 ${p.legalityScore}/100, 종합 가중합 미반영)`,
-          `③ 창의성 — ${p.originalityDimensionScore} / 100 (종합 50% 반영)`,
-          `④ 직관성 — ${p.pronunciationScore} / 100 (종합 50% 반영)`,
+          `═══ 대안 패키지 ${i + 1} / 4 ═══`,
+          "[세계관·스토리라인]",
+          alt.storyline || "(없음)",
+          "",
+          "[단계별 네이밍]"
+        );
+        alt.tierSteps.forEach((row, j) => {
+          const userLb = gm?.tierLabels?.[j]?.trim();
+          const labelPart = userLb || row.tierLabel || `단계 ${j + 1}`;
+          lines.push(`· ${labelPart}: ${row.name}`, `  근거: ${row.rationale.trim() || "(없음)"}`, "");
+        });
+        lines.push(
+          "【패키지 통합 평가】",
+          `종합 점수: ${pkgOverall} / 100 (창의성 50% + 직관성 50% 가중합)`,
+          `① 브랜드 계층 정렬 — Pass/Fail: ${passFailFromScore(tp.hierarchyScore)} (참고 점수 ${tp.hierarchyScore}/100, 종합 가중합 미반영)`,
+          `② 적법성 — Pass/Fail: ${passFailFromScore(tp.legalityScore)} (참고 점수 ${tp.legalityScore}/100, 종합 가중합 미반영)`,
+          `③ 창의성 — ${tp.originalityDimensionScore} / 100 (종합 50% 반영 · 스토리라인·단계명 연계는 아래 창의성 근거에 반영)`,
+          `④ 직관성 — ${tp.pronunciationScore} / 100 (종합 50% 반영)`,
+          "",
+          "[브랜드 계층 정렬 근거 — 패키지]",
+          tpd.hierarchy || "(없음)",
+          "",
+          "[적법성 근거 — 패키지]",
+          tpd.legality || "(없음)",
+          "",
+          "[창의성 근거 — 패키지 · 스토리라인·단계 네이밍 연계]",
+          tpd.originality || "(없음)",
+          "",
+          "[직관성 근거 — 패키지]",
+          tpd.pronunciationLanguage || "(없음)",
           ""
         );
-        const pd = p.proposalDetailLogic;
-        if (pd) {
+      });
+    } else {
+      const genHead =
+        gm?.style === "tiered"
+          ? `■ AI 네이밍 제안 (단계별 ${gm.tierStepCount ?? propN}단계 라인업)`
+          : "■ AI 네이밍 제안 (4안)";
+      lines.push(genHead);
+      const props = opts.result.namingProposals ?? [];
+      const tp = opts.result.tierPackageEvaluation;
+      const tieredPack = gm?.style === "tiered" && tp;
+
+      if (props.length > 0 && tieredPack) {
+        const pkg = normalizeNamingProposal({
+          name: "(단계별 패키지)",
+          rationale: "",
+          hierarchyScore: tp.hierarchyScore,
+          originalityDimensionScore: tp.originalityDimensionScore,
+          pronunciationScore: tp.pronunciationScore,
+          legalityScore: tp.legalityScore,
+          proposalDetailLogic: tp.proposalDetailLogic
+        });
+        const pkgOverall = weightedOverallFromProposal(pkg);
+        lines.push(
+          "【패키지 통합 평가 — 전 단계 네이밍을 한 세트로 평가】",
+          `종합 점수: ${pkgOverall} / 100 (창의성 50% + 직관성 50% 가중합)`,
+          `① 브랜드 계층 정렬 — Pass/Fail: ${passFailFromScore(tp.hierarchyScore)} (참고 점수 ${tp.hierarchyScore}/100, 종합 가중합 미반영)`,
+          `② 적법성 — Pass/Fail: ${passFailFromScore(tp.legalityScore)} (참고 점수 ${tp.legalityScore}/100, 종합 가중합 미반영)`,
+          `③ 창의성 — ${tp.originalityDimensionScore} / 100 (종합 50% 반영)`,
+          `④ 직관성 — ${tp.pronunciationScore} / 100 (종합 50% 반영)`,
+          ""
+        );
+        const tpd = tp.proposalDetailLogic;
+        lines.push(
+          "[브랜드 계층 정렬 근거 — 패키지]",
+          tpd.hierarchy || "(없음)",
+          "",
+          "[적법성 근거 — 패키지]",
+          tpd.legality || "(없음)",
+          "",
+          "[창의성 근거 — 패키지]",
+          tpd.originality || "(없음)",
+          "",
+          "[직관성 근거 — 패키지]",
+          tpd.pronunciationLanguage || "(없음)",
+          ""
+        );
+      }
+
+      if (props.length > 0) {
+        props.forEach((raw, i) => {
+          const p = normalizeNamingProposal(raw);
+          const tierLb =
+            gm?.style === "tiered" && gm.tierLabels?.[i]?.trim()
+              ? `[${gm.tierLabels[i]!.trim()}] `
+              : "";
+
+          if (tieredPack) {
+            lines.push(`--- ${tierLb}단계 ${i + 1}: ${p.name} ---`);
+            lines.push(p.rationale.trim() || "(근거 없음)", "");
+            return;
+          }
+
+          const overall = weightedOverallFromProposal(p);
+          const hPf = passFailFromScore(p.hierarchyScore);
+          const lPf = passFailFromScore(p.legalityScore);
+          lines.push(`--- ${tierLb}대안 ${i + 1}: ${p.name} ---`);
+          lines.push(p.rationale.trim() || "(근거 없음)");
           lines.push(
-            "[브랜드 계층 정렬 근거]",
-            pd.hierarchy || "(없음)",
-            "",
-            "[적법성 근거]",
-            pd.legality || "(없음)",
-            "",
-            "[창의성 근거]",
-            pd.originality || "(없음)",
-            "",
-            "[직관성 근거]",
-            pd.pronunciationLanguage || "(없음)",
+            `종합 점수: ${overall} / 100 (창의성 50% + 직관성 50% 가중합)`,
+            `① 브랜드 계층 정렬 — Pass/Fail: ${hPf} (참고 점수 ${p.hierarchyScore}/100, 종합 가중합 미반영)`,
+            `② 적법성 — Pass/Fail: ${lPf} (참고 점수 ${p.legalityScore}/100, 종합 가중합 미반영)`,
+            `③ 창의성 — ${p.originalityDimensionScore} / 100 (종합 50% 반영)`,
+            `④ 직관성 — ${p.pronunciationScore} / 100 (종합 50% 반영)`,
             ""
           );
-        }
-      });
-    } else if (opts.result.suggestedNames.length > 0) {
-      opts.result.suggestedNames.forEach((n, i) => {
-        lines.push(`대안 ${i + 1}: ${n}`);
-      });
-      lines.push("");
-    } else {
-      lines.push("(제안 없음)", "");
+          const pd = p.proposalDetailLogic;
+          if (pd) {
+            lines.push(
+              "[브랜드 계층 정렬 근거]",
+              pd.hierarchy || "(없음)",
+              "",
+              "[적법성 근거]",
+              pd.legality || "(없음)",
+              "",
+              "[창의성 근거]",
+              pd.originality || "(없음)",
+              "",
+              "[직관성 근거]",
+              pd.pronunciationLanguage || "(없음)",
+              ""
+            );
+          }
+        });
+      } else if (opts.result.suggestedNames.length > 0) {
+        opts.result.suggestedNames.forEach((n, i) => {
+          lines.push(`대안 ${i + 1}: ${n}`);
+        });
+        lines.push("");
+      } else {
+        lines.push("(제안 없음)", "");
+      }
     }
   }
 

@@ -21,7 +21,7 @@ import {
 } from "./gemini.js";
 import { copyFixedGuidelineToSlot, FIXED_GUIDELINE_SOURCES } from "./fixedGuidelines.js";
 import { buildExternalNamingReferences } from "./namingExternalContext.js";
-import { resolveLawApiOc } from "./lawApi.js";
+import { resolveLawApiOc, searchLawsJson } from "./lawApi.js";
 import {
   ensureDataDirs,
   getGuideline,
@@ -125,6 +125,67 @@ app.get("/api/health", (_req, res) => {
     gemini: Boolean(process.env.GEMINI_API_KEY?.trim()),
     law: Boolean(resolveLawApiOc())
   });
+});
+
+/** 국가법령정보센터 Open API 연동 상태. `?probe=1`이면 상표법 검색 1회로 실제 호출 성공 여부 확인(OC·IP 등록 필요) */
+app.get("/api/law/status", async (req, res) => {
+  const configured = Boolean(resolveLawApiOc());
+  const base = {
+    configured,
+    guideUrl: "https://open.law.go.kr/",
+    drfLawSearch: "https://www.law.go.kr/DRF/lawSearch.do (target=law&type=JSON)",
+    envHints: [
+      "프로젝트 루트 .env 또는 .env.local, 또는 server/.env 에 LAW_API_OC(또는 LAW_GO_OC) 설정",
+      "open.law.go.kr 에서 이 서버의 공인 IP(또는 도메인) 등록 후에만 API가 성공합니다"
+    ]
+  };
+  if (req.query.probe !== "1") {
+    res.json(base);
+    return;
+  }
+  if (!configured) {
+    res.json({ ...base, probe: { ok: false, skipped: true as const, reason: "OC 미설정" } });
+    return;
+  }
+  const r = await searchLawsJson("상표법", { display: 3, search: 1 });
+  if (r.ok) {
+    res.json({
+      ...base,
+      probe: { ok: true as const, query: r.query, resultLines: r.text.split("\n").length }
+    });
+    return;
+  }
+  res.json({
+    ...base,
+    probe: { ok: false as const, query: r.query, error: r.error }
+  });
+});
+
+/**
+ * 국가법령정보센터 DRF lawSearch JSON 호출 (서버에서만 OC 사용).
+ * Query: q (필수), display (1~100, 선택), search=1|2 (법령명|본문, 선택)
+ */
+app.get("/api/law/search", async (req, res) => {
+  try {
+    const q = String(req.query.q ?? "").trim();
+    if (!q) {
+      res.status(400).json({ ok: false, error: "q_required" });
+      return;
+    }
+    const displayRaw = req.query.display;
+    let display: number | undefined;
+    if (typeof displayRaw === "string" && displayRaw.length > 0) {
+      const n = Number(displayRaw);
+      if (Number.isFinite(n)) display = n;
+    }
+    const sr = req.query.search;
+    const search = sr === "1" || sr === "2" ? (Number(sr) as 1 | 2) : undefined;
+
+    const r = await searchLawsJson(q, { display, search });
+    res.json(r);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e) });
+  }
 });
 
 app.get("/api/guidelines", (_req, res) => {
@@ -418,11 +479,39 @@ app.post(
       const namingIntent = String(req.body?.namingIntent ?? "").trim();
       const auditCategory = String(req.body?.auditCategory ?? "").trim();
       let requestText = String(req.body?.requestText ?? "").trim();
+
+      const generateStyle =
+        mode === "generate" && String(req.body?.generateStyle ?? "").trim() === "tiered" ? "tiered" : "general";
+      let tierStepCount = 4;
+      let tierLabelsEffective: string[] = [];
+      if (mode === "generate" && generateStyle === "tiered") {
+        const rawN = parseInt(String(req.body?.tierStepCount ?? "3"), 10);
+        tierStepCount = Number.isFinite(rawN) ? Math.min(6, Math.max(1, rawN)) : 3;
+        try {
+          const rawJ = req.body?.tierLabelsJson;
+          if (typeof rawJ === "string" && rawJ.trim()) {
+            const parsed = JSON.parse(rawJ) as unknown;
+            if (Array.isArray(parsed)) {
+              tierLabelsEffective = parsed.map((x) => String(x ?? "").trim() || "단계").slice(0, tierStepCount);
+            }
+          }
+        } catch {
+          tierLabelsEffective = [];
+        }
+        while (tierLabelsEffective.length < tierStepCount) {
+          tierLabelsEffective.push(`단계 ${tierLabelsEffective.length + 1}`);
+        }
+      }
+
       if (mode === "audit" && (auditName || namingIntent)) {
         const catBlock = auditCategory ? `${auditCategory}\n\n` : "";
         requestText = `${catBlock}[검수명]\n${auditName}\n\n${namingIntent}`;
       } else if (mode === "generate" && auditCategory) {
         requestText = `${auditCategory}\n\n[생성 요청]\n${requestText}`;
+      }
+      if (mode === "generate" && generateStyle === "tiered" && tierLabelsEffective.length > 0) {
+        const tierBlock = tierLabelsEffective.map((lb, i) => `${i + 1}. ${lb}`).join("\n");
+        requestText = `${requestText}\n\n[단계별 생성 — 요금제·가격대 라인업]\n한 번의 생성에서 **서로 다른 세계관·스토리라인을 가진 대안 패키지를 정확히 4개** 제안합니다. 각 패키지는 아래 ${tierStepCount}개 단계명과 **1:1 순서**로 대응하는 네이밍을 모두 포함해야 하며(순서 동일), **같은 패키지 안의 단계 네이밍은 하나의 스토리라인에서 일관되게 파생**되도록 하십시오.\n${tierBlock}`;
       }
       const referenceText =
         typeof req.body?.referenceText === "string" ? req.body.referenceText.trim() : "";
@@ -485,7 +574,13 @@ app.post(
         requestText,
         referenceNotes,
         guidelineBlock,
-        auditCategoryRaw: auditCategory || undefined
+        auditCategoryRaw: auditCategory || undefined,
+        generatePlan:
+          mode === "generate" && generateStyle === "tiered"
+            ? { kind: "tiered" as const, stepCount: tierStepCount, labels: tierLabelsEffective }
+            : mode === "generate"
+              ? { kind: "general" as const }
+              : undefined
       });
 
       res.json({
@@ -493,7 +588,16 @@ app.post(
         mode,
         guidelineId: useLibrary && guidelineId ? guidelineId : null,
         ...result,
-        namingGeminiConfigured: hasGeminiApiKey()
+        namingGeminiConfigured: hasGeminiApiKey(),
+        generateMeta:
+          mode === "generate"
+            ? {
+                style: generateStyle,
+                ...(generateStyle === "tiered"
+                  ? { tierStepCount, tierLabels: tierLabelsEffective }
+                  : {})
+              }
+            : undefined
       });
     } catch (e) {
       res.status(500).json({ error: String(e) });

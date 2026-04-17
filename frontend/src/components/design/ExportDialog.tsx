@@ -110,7 +110,7 @@ export function ExportDialog({ open, onOpenChange, templateName }: ExportDialogP
           if (!blob) return;
           const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
-          link.download = `${templateName.replace(/\\s+/g, \"-\").toLowerCase()}-${Date.now()}.jpeg`;
+          link.download = `${templateName.replace(/\s+/g, "-").toLowerCase()}-${Date.now()}.jpeg`;
           link.href = url;
           link.click();
           URL.revokeObjectURL(url);

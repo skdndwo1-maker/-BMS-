@@ -32,6 +32,7 @@ import {
   type BrandNamingProposal,
   type BrandNamingRunResult,
   type GuidelineInfo,
+  type TierPackageEvaluation,
 } from "@/lib/guidelineApi";
 import { GUIDELINE_REFERENCE_OPTIONS } from "@/constants/guidelineReferences";
 import { buildAuditCategoryContext } from "@/constants/namingCategoryRules";
@@ -224,6 +225,17 @@ const NAMING_AUDIT_GAUGE_SHIFT_DOWN_PX = Math.round(NAMING_AUDIT_GAUGE_DIAMETER_
 /** 지름의 1/8만큼 추가로 아래로(크기 유지·위치만 조정) */
 const NAMING_AUDIT_GAUGE_SHIFT_DOWN_EIGHTH_PX = Math.round(NAMING_AUDIT_GAUGE_DIAMETER_PX / 8);
 
+/** 단계별 생성: 기본 단계 라벨(요금제·가격대 라인업) */
+const DEFAULT_TIER_LABELS = ["최고가", "고가", "중가", "저가", "최저가", "라이트"];
+
+function resizeTierLabels(count: number, prev: string[]): string[] {
+  const next = prev.slice(0, count);
+  while (next.length < count) {
+    next.push(DEFAULT_TIER_LABELS[next.length] ?? `단계 ${next.length + 1}`);
+  }
+  return next;
+}
+
 /** 점수 게이지 (큰 버전). scoreSize: 중앙 점수 숫자(px), 기본 48 */
 function ScoreGauge({ score, r = 85, scoreSize = 48 }: { score: number; r?: number; scoreSize?: number }) {
   const size = (r + 16) * 2;
@@ -267,6 +279,18 @@ const GENERATE_EVAL_BOXES: {
 function passFail(score: number): "PASS" | "FAIL" {
   const v = Number.isFinite(score) ? score : 0;
   return v >= 70 ? "PASS" : "FAIL";
+}
+
+function tierPackageToProposal(tp: TierPackageEvaluation): BrandNamingProposal {
+  return {
+    name: "(단계별 패키지 전체)",
+    rationale: "",
+    hierarchyScore: tp.hierarchyScore,
+    originalityDimensionScore: tp.originalityDimensionScore,
+    pronunciationScore: tp.pronunciationScore,
+    legalityScore: tp.legalityScore,
+    proposalDetailLogic: tp.proposalDetailLogic,
+  };
 }
 
 /** 생성 모드 평가 점수 바 — 대안 1~4 카드 공통: 고정 높이, 트랙·채움 색 통일 */
@@ -455,6 +479,10 @@ export function BrandNaming() {
   const [guidelineDetailOpen, setGuidelineDetailOpen] = useState(false);
   const [selectedGuidelineLibrary, setSelectedGuidelineLibrary] = useState("");
   const [namingExportFormat, setNamingExportFormat] = useState<ExportFormat>("pdf");
+  /** 생성 모드: 일반(4안) vs 단계별(1~6단계 요금제 라인업) */
+  const [generateStyle, setGenerateStyle] = useState<"general" | "tiered">("general");
+  const [tierStepCount, setTierStepCount] = useState(3);
+  const [tierLabels, setTierLabels] = useState<string[]>(["최고가", "중가", "저가"]);
   const [auditLogicModalOpen, setAuditLogicModalOpen] = useState(false);
   const [auditZoomDimension, setAuditZoomDimension] = useState<
     null | "hierarchy" | "originality" | "pronunciation" | "legality"
@@ -485,6 +513,11 @@ export function BrandNaming() {
       namingStepTimersRef.current = [];
     };
   }, []);
+
+  useEffect(() => {
+    if (generateStyle !== "tiered") return;
+    setTierLabels((prev) => resizeTierLabels(tierStepCount, prev));
+  }, [tierStepCount, generateStyle]);
 
   useEffect(() => {
     let cancelled = false;
@@ -573,6 +606,7 @@ export function BrandNaming() {
 
   const switchNamingMode = (mode: "generate" | "audit") => {
     setNamingMode(mode);
+    setGenerateStyle("general");
     setShowResults(false);
     setNamingResult(null);
     setCurrentStep("idle");
@@ -621,6 +655,9 @@ export function BrandNaming() {
     setGenerateOverview(EMPTY_NAMING_OVERVIEW);
     setAuditCategoryMajor(null);
     setAuditCategoryMinor("");
+    setGenerateStyle("general");
+    setTierStepCount(3);
+    setTierLabels(["최고가", "중가", "저가"]);
     // referenceText는 UI 입력을 제거하여 항상 빈 값으로 전달
     setReferenceFile(null);
     if (referenceInputRef.current) referenceInputRef.current.value = "";
@@ -661,6 +698,9 @@ export function BrandNaming() {
           supplementaryReference: referenceFile,
           useGuidelineLibrary: Boolean(selectedGuidelineLibrary),
           guidelineId: selectedGuidelineLibrary || undefined,
+          generateStyle: namingMode === "generate" ? generateStyle : undefined,
+          tierStepCount: namingMode === "generate" && generateStyle === "tiered" ? tierStepCount : undefined,
+          tierLabels: namingMode === "generate" && generateStyle === "tiered" ? tierLabels : undefined,
         });
         clearNamingStepTimers();
         if (runToken !== runTokenRef.current) return;
@@ -807,9 +847,74 @@ export function BrandNaming() {
             </div>
             {namingMode === "generate" ? (
               <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <label className="text-[12px] font-medium text-gray-600">작명 개요</label>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] font-medium text-gray-400">생성 방식</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={generateStyle === "general" ? "default" : "outline"}
+                      className={`h-7 px-2.5 text-[11px] ${generateStyle === "general" ? "bg-[#F43182] hover:bg-[#d41f6e]" : ""}`}
+                      onClick={() => setGenerateStyle("general")}
+                    >
+                      일반 생성
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={generateStyle === "tiered" ? "default" : "outline"}
+                      className={`h-7 px-2.5 text-[11px] ${generateStyle === "tiered" ? "bg-[#F43182] hover:bg-[#d41f6e]" : ""}`}
+                      onClick={() => setGenerateStyle("tiered")}
+                    >
+                      단계별 생성
+                    </Button>
+                  </div>
                 </div>
+                {generateStyle === "tiered" ? (
+                  <div className="rounded-[10px] border border-pink-100 bg-gradient-to-br from-pink-50/90 to-white px-3 py-3">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <label htmlFor="naming-tier-step-count" className="text-[11px] font-medium text-gray-600">
+                        단계 수 (1~6)
+                      </label>
+                      <select
+                        id="naming-tier-step-count"
+                        value={tierStepCount}
+                        onChange={(e) => setTierStepCount(Math.min(6, Math.max(1, Number(e.target.value) || 3)))}
+                        className="h-8 rounded-lg border border-gray-200 bg-white px-2 text-[12px] text-gray-800 outline-none focus:border-[#F43182]"
+                      >
+                        {[1, 2, 3, 4, 5, 6].map((n) => (
+                          <option key={n} value={n}>
+                            {n}단계
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="mb-2 text-[11px] leading-snug text-gray-500">
+                      요금제·가격대별(예: 최고가~최저가)로 서로 다른 네이밍을 한 세트로 제안합니다. 각 단계 라벨에 맞는 후보명과, 전 단계를 묶어서 보는 4개 평가 근거가 함께 생성됩니다.
+                    </p>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {tierLabels.map((lb, i) => (
+                        <div key={i} className="flex min-w-0 items-center gap-2">
+                          <span className="w-6 shrink-0 text-center text-[11px] font-semibold text-[#F43182]">{i + 1}</span>
+                          <input
+                            value={lb}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setTierLabels((prev) => {
+                                const copy = [...prev];
+                                copy[i] = v;
+                                return copy;
+                              });
+                            }}
+                            placeholder={`단계 ${i + 1} 라벨`}
+                            className="h-9 min-w-0 flex-1 rounded-lg border border-gray-200 px-3 text-[13px] outline-none focus:border-[#F43182] focus:ring-2 focus:ring-[#F43182]/20"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 <NamingOverviewGrid value={generateOverview} onChange={setGenerateOverview} />
               </div>
             ) : (
@@ -834,7 +939,9 @@ export function BrandNaming() {
             )}
             <p className="mt-[16px] px-[2px] text-[13px] text-gray-500">
               {namingMode === "generate"
-                ? "생성 모드: 상단에서 카테고리를 선택한 뒤 요청을 입력하면, 동일한 브랜드 계층 맥락으로 네이밍 후보를 제안합니다."
+                ? generateStyle === "tiered"
+                  ? "단계별 생성: 한 번의 실행마다 서로 다른 세계관을 가진 패키지 대안이 네 가지 나오며, 각 패키지는 설정한 모든 단계 네이밍과 스토리라인·패키지 단위 평가(창의성에 스토리 연계 반영)를 포함합니다."
+                  : "일반 생성: 상단에서 카테고리를 선택한 뒤 요청을 입력하면, 동일한 브랜드 계층 맥락으로 네이밍 후보 4안을 제안합니다."
                 : "검수 모드: 입력하신 문구를 가이드라인·참고 자료 기준으로 평가합니다."}
             </p>
             <p className="mt-[8px] px-[2px] text-[12px] text-gray-400">
@@ -1027,9 +1134,15 @@ export function BrandNaming() {
                         <Sparkles className="h-6 w-6" />
                       </div>
                       <div>
-                        <h2 className="text-[22px] font-bold text-gray-900">AI 네이밍 제안 (4안)</h2>
+                        <h2 className="text-[22px] font-bold text-gray-900">
+                          {namingResult.generateMeta?.style === "tiered"
+                            ? `AI 네이밍 제안 (${namingResult.generateMeta.tierStepCount ?? namingResult.namingProposals?.length ?? 0}단계 × 대안 4패키지)`
+                            : "AI 네이밍 제안 (4안)"}
+                        </h2>
                         <p className="mt-[6px] text-[13px] leading-snug text-gray-600">
-                          각 안의 종합 점수는 창의성·직관성 가중합(각 50%)입니다. 브랜드 계층 정렬·적법성은 Pass/Fail만 표시됩니다.
+                          {namingResult.generateMeta?.style === "tiered"
+                            ? "한 번의 생성마다 서로 다른 세계관·스토리라인을 가진 패키지 대안이 4개 제시됩니다. 각 패키지는 요청한 모든 단계 네이밍을 포함하며, 단계 간 이름은 같은 스토리라인에서 파생되도록 설계된 것이 기본입니다. 브랜드 계층 정렬·적법성·창의성·직관성은 패키지(대안)마다 통합 평가되며, 창의성 근거에는 스토리라인과 단계 네이밍의 연결이 반영됩니다. 표시되는 종합 점수는 창의성·직관성 가중합(각 50%)입니다."
+                            : "각 안의 종합 점수는 창의성·직관성 가중합(각 50%)입니다. 브랜드 계층 정렬·적법성은 Pass/Fail만 표시됩니다."}
                         </p>
                       </div>
                     </div>
@@ -1059,10 +1172,81 @@ export function BrandNaming() {
                       </Button>
                     </div>
                   </div>
-                  {(namingResult.namingProposals?.length ?? 0) > 0 ? (
+                  {namingResult.generateMeta?.style === "tiered" &&
+                  namingResult.tierNamingAlternatives &&
+                  namingResult.tierNamingAlternatives.length > 0 ? (
+                    <ul className="flex flex-col gap-4">
+                      {namingResult.tierNamingAlternatives.map((alt, i) => (
+                        <li
+                          key={`tier-alt-${i}`}
+                          className="rounded-[12px] border border-pink-200/90 bg-white p-5 shadow-sm"
+                        >
+                          <div className="mb-2">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#F43182]">
+                              대안 패키지 {i + 1} / 4
+                            </span>
+                            <h3 className="mt-1 text-[15px] font-bold text-gray-900">세계관·스토리라인</h3>
+                            <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed text-gray-700">
+                              {alt.storyline}
+                            </p>
+                          </div>
+                          <div className="mb-4">
+                            <h4 className="mb-2 text-[13px] font-semibold text-gray-800">단계별 네이밍</h4>
+                            <ul className="flex flex-col gap-2">
+                              {alt.tierSteps.map((row, j) => (
+                                <li
+                                  key={`${i}-${j}-${row.name}`}
+                                  className="rounded-lg border border-gray-100 bg-gray-50/80 px-3 py-2 text-[13px]"
+                                >
+                                  <span className="font-semibold text-[#F43182]">
+                                    {row.tierLabel || namingResult.generateMeta?.tierLabels?.[j] || `단계 ${j + 1}`}
+                                  </span>
+                                  {" — "}
+                                  <span className="font-bold text-gray-900">{row.name}</span>
+                                  {row.rationale ? (
+                                    <span className="mt-1 block text-[12px] leading-snug text-gray-600">
+                                      {row.rationale}
+                                    </span>
+                                  ) : null}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div>
+                            <h4 className="mb-1 text-[13px] font-semibold text-gray-800">
+                              패키지 통합 평가 (창의성·스토리 연계)
+                            </h4>
+                            <p className="mb-2 text-[12px] leading-snug text-gray-500">
+                              창의성 상세에는 위 스토리라인과 각 단계 이름의 연결이 서술됩니다.
+                            </p>
+                            <ProposalDimensionBars proposal={tierPackageToProposal(alt.tierPackageEvaluation)} />
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : namingResult.generateMeta?.style === "tiered" && namingResult.tierPackageEvaluation ? (
+                    <div className="mb-4 rounded-[12px] border-2 border-[#F43182]/45 bg-white p-5 shadow-sm">
+                      <h3 className="mb-1 text-[15px] font-bold text-gray-900">패키지 통합 평가 (레거시 단일 패키지)</h3>
+                      <p className="mb-3 text-[12px] leading-snug text-gray-500">
+                        {namingResult.generateMeta.tierStepCount ?? namingResult.namingProposals?.length ?? 0}단계 네이밍을 하나의 요금제 라인업으로 본 4대 항목 평가입니다.
+                      </p>
+                      <ProposalDimensionBars proposal={tierPackageToProposal(namingResult.tierPackageEvaluation)} />
+                    </div>
+                  ) : null}
+                  {(namingResult.namingProposals?.length ?? 0) > 0 &&
+                  !(
+                    namingResult.generateMeta?.style === "tiered" &&
+                    namingResult.tierNamingAlternatives &&
+                    namingResult.tierNamingAlternatives.length > 0
+                  ) ? (
                     <ul className="flex flex-col gap-3">
                       {(namingResult.namingProposals ?? []).map((raw, i) => {
                         const p = normalizeNamingProposal(raw);
+                        const tierLb =
+                          namingResult.generateMeta?.style === "tiered" &&
+                          namingResult.generateMeta.tierLabels?.[i]?.trim();
+                        const showPerCardBars =
+                          namingResult.generateMeta?.style !== "tiered" || !namingResult.tierPackageEvaluation;
                         return (
                         <li
                           key={`${i}-${p.name}`}
@@ -1070,12 +1254,12 @@ export function BrandNaming() {
                         >
                           <div className="mb-2 flex flex-wrap items-baseline gap-2">
                             <span className="text-[11px] font-semibold uppercase tracking-wide text-[#F43182]">
-                              대안 {i + 1}
+                              {tierLb ? `${tierLb} · ` : ""}대안 {i + 1}
                             </span>
                             <h3 className="text-[18px] font-bold text-gray-900">{p.name}</h3>
                           </div>
                           <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-gray-700">{p.rationale}</p>
-                          <ProposalDimensionBars proposal={p} />
+                          {showPerCardBars ? <ProposalDimensionBars proposal={p} /> : null}
                         </li>
                         );
                       })}
@@ -1424,10 +1608,6 @@ export function BrandNaming() {
                     },
                   ].map((box) => {
                     const BoxIcon = box.icon;
-                    const auditPassFail =
-                      box.id === "hierarchy" || box.id === "legality"
-                        ? passFail(typeof box.score === "number" ? box.score : Number(box.score))
-                        : null;
                     return (
                     <div
                       key={box.id}
@@ -1450,18 +1630,7 @@ export function BrandNaming() {
                         </div>
                       </div>
                       <div className="min-h-0 flex-1 overflow-y-auto pr-1 leading-relaxed">{box.body}</div>
-                      <div
-                        className={`mt-2 flex w-full shrink-0 items-center gap-2 ${auditPassFail ? "justify-between" : "justify-end"}`}
-                      >
-                        {auditPassFail ? (
-                          <span
-                            className={`text-[13px] font-bold tabular-nums leading-none ${
-                              auditPassFail === "PASS" ? "text-emerald-600" : "text-red-600"
-                            }`}
-                          >
-                            {auditPassFail}
-                          </span>
-                        ) : null}
+                      <div className="mt-2 flex w-full shrink-0 items-center justify-end gap-2">
                         <Button
                           type="button"
                           variant="ghost"
