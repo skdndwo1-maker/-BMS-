@@ -6,7 +6,7 @@ import react from "@vitejs/plugin-react";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/** 브라우저의 `/api/*` → Express (`npm run server`, 기본 PORT=3001) */
+/** 로컬: `/api/*` → Express(기본 3001). 프로덕션(Vercel)은 동일 출처 `api/[[...path]]` 서버리스로 처리 */
 const apiProxy = {
   "/api": {
     target: "http://127.0.0.1:3001",

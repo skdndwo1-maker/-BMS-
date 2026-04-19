@@ -1,11 +1,36 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-/** 프로젝트 루트 (server/의 상위) */
-export const PROJECT_ROOT = join(__dirname, "..");
-export const DATA_DIR = join(PROJECT_ROOT, "data");
+
+/**
+ * 저장소 루트. Vercel 빌드에서는 `process.cwd()`가 리포지토리 루트(고정 PDF 등 읽기).
+ * 로컬 `tsx server/...`에서는 `server/` 기준 상위.
+ */
+function resolveProjectRoot(): string {
+  if (process.env.VERCEL === "1") {
+    return process.cwd();
+  }
+  return join(__dirname, "..");
+}
+
+export const PROJECT_ROOT = resolveProjectRoot();
+
+/**
+ * 업로드·메타 JSON 등 **쓰기 가능**한 데이터 디렉터리.
+ * - 로컬: `<repo>/data`
+ * - Vercel 서버리스: `/tmp/...` (배포 번들은 읽기 전용)
+ */
+function resolveDataDir(): string {
+  if (process.env.VERCEL === "1") {
+    return join(tmpdir(), "u-layer1-data");
+  }
+  return join(PROJECT_ROOT, "data");
+}
+
+export const DATA_DIR = resolveDataDir();
 export const GUIDELINES_DIR = join(DATA_DIR, "guidelines");
 const META_PATH = join(DATA_DIR, "guidelines-meta.json");
 
@@ -60,6 +85,11 @@ export function setGuideline(record: GuidelineRecord): void {
   saveMeta(meta);
 }
 
+/** `data/guidelines/...` 형태는 DATA_DIR 기준으로 해석 (Vercel에서 /tmp로 매핑) */
 export function resolveStoredPath(storedRelativePath: string): string {
-  return join(PROJECT_ROOT, storedRelativePath);
+  const norm = storedRelativePath.replace(/\\/g, "/");
+  if (norm.startsWith("data/")) {
+    return join(DATA_DIR, norm.slice("data/".length));
+  }
+  return join(PROJECT_ROOT, norm);
 }

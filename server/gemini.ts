@@ -34,18 +34,26 @@ async function parsePdfBufferToText(buf: Buffer): Promise<string> {
 
 /**
  * 텍스트/멀티모달 분석용 모델 후보 (앞에서부터 시도).
- * - gemini-2.0-flash 등은 신규 API 키에서 404(no longer available)가 나는 경우가 많아 기본 후보에서 제외.
- * - GEMINI_MODEL 미설정 시 gemini-2.5-flash 권장.
+ * - 기본: gemini-3.1-pro-preview (고성능). 404·쿼터 시 아래 순으로 폴백.
+ * - gemini-2.0-flash 등 구형 ID는 신규 키에서 404가 나는 경우가 많아 기본 후보에서 제외.
  */
 function textModelCandidates(): string[] {
-  const primary = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+  const primary = process.env.GEMINI_MODEL?.trim() || "gemini-3.1-pro-preview";
   const pool = [
     primary,
+    "gemini-3.1-pro-preview",
+    "gemini-2.5-pro",
     "gemini-2.5-flash",
-    "gemini-2.5-pro"
   ].filter((x): x is string => Boolean(x));
   return [...new Set(pool)];
 }
+
+/** 이미지 생성·편집 REST 호출 시 모델 후보 (앞에서부터 시도). GEMINI_IMAGE_MODEL이 있으면 최우선. */
+const GEMINI_IMAGE_MODEL_FALLBACKS = [
+  "gemini-3.1-flash-image-preview",
+  "gemini-2.5-flash-image",
+  "gemini-2.0-flash-preview-image-generation",
+] as const;
 
 /** 429 / 쿼터 또는 모델 미제공(404) — 다음 후보 모델로 재시도 */
 function shouldTryNextTextModel(e: unknown): boolean {
@@ -1030,8 +1038,7 @@ ${userBlock}`;
 
   const models = [
     process.env.GEMINI_IMAGE_MODEL?.trim(),
-    "gemini-2.5-flash-image",
-    "gemini-2.0-flash-preview-image-generation"
+    ...GEMINI_IMAGE_MODEL_FALLBACKS,
   ].filter((m): m is string => Boolean(m));
 
   for (const model of models) {
@@ -1107,8 +1114,7 @@ function runGeminiImageGenerateWithParts(
 
   const models = [
     process.env.GEMINI_IMAGE_MODEL?.trim(),
-    "gemini-2.5-flash-image",
-    "gemini-2.0-flash-preview-image-generation"
+    ...GEMINI_IMAGE_MODEL_FALLBACKS,
   ].filter((m): m is string => Boolean(m));
 
   return (async () => {
@@ -1180,8 +1186,7 @@ function runGeminiImageGenerateWithMultiParts(parts: GeminiImageUserPart[]): Pro
 
   const models = [
     process.env.GEMINI_IMAGE_MODEL?.trim(),
-    "gemini-2.5-flash-image",
-    "gemini-2.0-flash-preview-image-generation"
+    ...GEMINI_IMAGE_MODEL_FALLBACKS,
   ].filter((m): m is string => Boolean(m));
 
   return (async () => {
