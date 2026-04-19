@@ -7,22 +7,30 @@ import { parseFigmaUrl } from "./figma/url.js";
 import { listFrames, normalizeTree } from "./figma/normalize.js";
 import { extractTokensFromDocument } from "./figma/tokens.js";
 
-function requireEnv(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing required env var: ${name}`);
-  return v;
-}
-
 function b64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64");
+}
+
+let figmaClient: FigmaClient | null = null;
+
+/** Figma MCP 도구 호출 시에만 필요. 미설정이면 도구 실행 시 명확히 에러 */
+function getFigmaClient(): FigmaClient {
+  const token = process.env.FIGMA_TOKEN?.trim();
+  if (!token) {
+    throw new Error(
+      "FIGMA_TOKEN is not set. Add a Figma Personal Access Token to use these tools (see README → npm run start:mcp)."
+    );
+  }
+  if (!figmaClient) {
+    figmaClient = new FigmaClient({ token });
+  }
+  return figmaClient;
 }
 
 const server = new McpServer(
   { name: "figma-import-mcp", version: "0.1.0" },
   { capabilities: { tools: {} } }
 );
-
-const figma = new FigmaClient({ token: requireEnv("FIGMA_TOKEN") });
 
 const ImportFromUrlSchema = z.object({
   url: z.string(),
@@ -54,7 +62,7 @@ server.registerTool(
       };
     }
 
-    const file = await figma.getFile(fileKey, { depth });
+    const file = await getFigmaClient().getFile(fileKey, { depth });
     const normalized = normalizeTree(file.document, { maxDepth: normalizeMaxDepth ?? 8 });
     const frames = listFrames(file.document);
 
@@ -93,7 +101,7 @@ server.registerTool(
   },
   async (args) => {
     const { fileKey, depth } = args;
-    const file = await figma.getFile(fileKey, { depth });
+    const file = await getFigmaClient().getFile(fileKey, { depth });
     const frames = listFrames(file.document);
     return { content: [{ type: "text", text: JSON.stringify({ fileKey, frames }, null, 2) }] };
   }
@@ -117,7 +125,7 @@ server.registerTool(
   },
   async (args) => {
     const { fileKey, nodeIds, format, scale, useAbsoluteBounds, inlineBytesBase64 } = args;
-    const resp = await figma.getImages(fileKey, {
+    const resp = await getFigmaClient().getImages(fileKey, {
       ids: nodeIds,
       format,
       scale,
@@ -164,7 +172,7 @@ server.registerTool(
   },
   async (args) => {
     const { fileKey, depth } = args;
-    const file = await figma.getFile(fileKey, { depth });
+    const file = await getFigmaClient().getFile(fileKey, { depth });
     const tokens = extractTokensFromDocument(file.document);
     return { content: [{ type: "text", text: JSON.stringify({ fileKey, tokens }, null, 2) }] };
   }

@@ -10,12 +10,24 @@ npm install
 
 ## 환경변수
 
-- `FIGMA_TOKEN`: Figma Personal Access Token
+일반 백엔드(Express, `npm run server` / `npm start`)에는 **Figma 토큰이 필요 없습니다.**
+
+Figma MCP만 쓸 때만 루트 `.env` 등에 `FIGMA_TOKEN`(Figma Personal Access Token)을 넣습니다. 토큰 없이 MCP를 띄울 수 있으며, Figma 도구를 호출할 때만 오류가 납니다.
 
 ## 실행
 
+**Express API(가이드라인·Gemini 등)**
+
 ```bash
-FIGMA_TOKEN="YOUR_TOKEN" npm run start
+npm run server
+# 또는
+npm start
+```
+
+**Figma MCP(stdio)**
+
+```bash
+FIGMA_TOKEN="YOUR_TOKEN" npm run start:mcp
 ```
 
 ## 제공 도구
