@@ -178,10 +178,10 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
 
   return (
     <TooltipProvider>
-      <div className="h-screen flex flex-col bg-[#F5F5F5]">
+      <div className="flex h-[100dvh] max-h-[100dvh] min-h-0 flex-col overflow-hidden bg-[#F5F5F5]">
 
         {/* ── Header ──────────────────────────────────────────────── */}
-        <header className="bg-white border-b border-gray-200 flex-shrink-0">
+        <header className="flex-shrink-0 bg-white border-b border-gray-200">
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-4">
               <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
@@ -245,11 +245,11 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
         </header>
 
         {/* ── Main Editor ─────────────────────────────────────────── */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
 
           {/* Left Panel */}
           {!showPreview && (
-            <div className="w-64 flex-shrink-0 flex flex-col min-h-0 bg-white border-r border-gray-200">
+            <div className="flex w-64 min-h-0 flex-shrink-0 flex-col bg-white border-r border-gray-200">
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <LayersPanel content={content} />
               </div>
@@ -319,11 +319,10 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
             <div className="flex-1 overflow-hidden min-h-0">{renderCanvas()}</div>
           </div>
 
-          {/* Right Panel */}
+          {/* Right Panel — 전체 높이 고정, 패널만 독립 스크롤 */}
           {!showPreview && (
-            <div className="w-96 flex-shrink-0 bg-white border-l border-gray-200 flex flex-col">
-
-              <div className="flex-1 overflow-y-auto">
+            <div className="flex w-96 min-h-0 flex-shrink-0 flex-col overflow-hidden border-l border-gray-200 bg-white">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
                 <ContentPanel
                   content={content}
                   onContentChange={setContentWithHistory}
@@ -331,27 +330,25 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                   templateId={actualTemplateId}
                   focusTarget={focusTarget}
                 />
-              </div>
-
-              <div className="flex-shrink-0 border-t border-gray-200 bg-gradient-to-br from-purple-50 to-blue-50">
-                <div className="p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-gradient-to-br from-[#F43182] to-purple-600 rounded-full flex items-center justify-center">
-                      <Sparkles className="w-4 h-4 text-white" />
+                <div className="border-t border-gray-200 bg-gradient-to-br from-purple-50 to-blue-50">
+                  <div className="space-y-3 p-4">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#F43182] to-purple-600">
+                        <Sparkles className="h-4 w-4 text-white" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm font-semibold text-gray-900">AI 디자인 어시스턴트</h3>
+                        <p className="text-xs text-gray-500">텍스트 제안 · VI 검수 · 시각 교정</p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <h3 className="text-sm font-semibold text-gray-900">AI 디자인 어시스턴트</h3>
-                      <p className="text-xs text-gray-500">텍스트 제안 · VI 검수 · 시각 교정</p>
-                    </div>
+                    <DesignAssistantChat
+                      content={content}
+                      onApplyContent={setContentWithHistory}
+                      templateId={actualTemplateId ?? ""}
+                    />
                   </div>
-                  <DesignAssistantChat
-                    content={content}
-                    onApplyContent={setContentWithHistory}
-                    templateId={actualTemplateId ?? ""}
-                  />
                 </div>
               </div>
-
             </div>
           )}
         </div>
@@ -368,7 +365,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
         />
 
         {/* ── Status Bar ──────────────────────────────────────────── */}
-        <div className="bg-white border-t border-gray-200 px-4 py-2 flex items-center justify-between text-xs text-gray-500 flex-shrink-0">
+        <div className="flex flex-shrink-0 items-center justify-between border-t border-gray-200 bg-white px-4 py-2 text-xs text-gray-500">
           <div className="flex items-center gap-4">
             {renderStatusBar()}
           </div>
