@@ -11,6 +11,10 @@
     }
   ],
   "functions": {
+    "api/health.ts": {
+      "maxDuration": 10,
+      "memory": 128
+    },
     "api/[[...path]].ts": {
       "maxDuration": 300,
       "memory": 1024
