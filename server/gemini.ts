@@ -3,7 +3,7 @@ import { GoogleGenerativeAI, SchemaType, type Schema } from "@google/generative-
 import { existsSync, readFileSync } from "node:fs";
 
 import type { GuidelineRecord } from "./store.js";
-import { resolveStoredPath } from "./store.js";
+import { loadMeta, resolveStoredPath } from "./store.js";
 import {
   buildAuditCategoryGeminiPromptSection,
   buildTierStorylineToneBlock
@@ -1564,6 +1564,104 @@ ${opts.userMessage.trim()}`;
       if (shouldTryNextTextModel(e)) {
         console.warn(
           `[gemini] agent chat model=${mid} → 다음 모델 시도`,
+          e instanceof Error ? e.message : e
+        );
+        continue;
+      }
+      throw e;
+    }
+  }
+  return `답변 생성에 실패했습니다: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`;
+}
+
+/** 옵션 페이지 하단 채팅 — 등록된 가이드라인 요약·발췌를 맥락으로 사용 (토큰 상한 내) */
+async function buildOptionsChatGuidelineContext(): Promise<string> {
+  const { guidelines } = loadMeta();
+  const list = Object.values(guidelines);
+  if (list.length === 0) {
+    return "(등록된 브랜드 가이드라인 파일이 없습니다. 일반 지식으로 답하되, 브랜드 전용 판단은 가이드 등록 후 정확해집니다.)";
+  }
+  const parts: string[] = [];
+  let budget = 72_000;
+  for (const g of list) {
+    if (budget <= 0) break;
+    let block: string;
+    if (g.aiSummary?.trim()) {
+      block = `[${g.displayName} — 요약]\n${g.aiSummary.trim()}`;
+    } else {
+      block = `[${g.displayName} — 발췌]\n${(await excerptGuidelineForInspection(g)).trim()}`;
+    }
+    if (block.length > budget) block = `${block.slice(0, budget)}\n…(이하 생략)`;
+    parts.push(block);
+    budget -= block.length;
+  }
+  return parts.join("\n\n---\n\n");
+}
+
+/**
+ * 옵션 페이지 멀티턴 채팅. `messages`의 마지막은 반드시 user.
+ * 브랜드 관련 질문은 시스템 프롬프트로 주입한 가이드라인 맥락을 우선 참조.
+ */
+export async function runOptionsPageChat(opts: {
+  messages: Array<{ role: "user" | "assistant"; content: string }>;
+}): Promise<string> {
+  const key = getKey();
+  if (!key) {
+    throw new Error("GEMINI_API_KEY가 설정되어 있지 않습니다.");
+  }
+
+  const trimmed = opts.messages
+    .map((m) => ({ role: m.role, content: m.content.trim() }))
+    .filter((m) => m.content.length > 0);
+  if (trimmed.length === 0) {
+    throw new Error("메시지가 비어 있습니다.");
+  }
+  const last = trimmed[trimmed.length - 1];
+  if (last.role !== "user") {
+    throw new Error("마지막 메시지는 사용자 질문이어야 합니다.");
+  }
+
+  const guidelineContext = (await buildOptionsChatGuidelineContext()).slice(0, 120_000);
+
+  const systemInstruction = `당신은 LG U+ 브랜드·VI·디자인 업무를 돕는 AI 어시스턴트입니다.
+
+[응답 언어]
+- 기본 응답 언어는 한국어입니다.
+
+[브랜드 가이드라인]
+- 일반적인 질문(인사, 설명 요청 등)에도 답할 수 있습니다.
+- LG U+·자사 브랜드·VI·로고·컬러·타이포·톤앤매너·슬로건 등 **브랜드·디자인 관련 질문**이면 아래 [참고 자료]를 **우선** 참고하세요.
+- 참고 자료에 없는 내용은 추측임을 분명히 밝히고, 일반 원칙만 짧게 언급하세요.
+
+[참고 자료 — 서버에 등록된 브랜드 가이드라인]
+${guidelineContext}`;
+
+  const history = trimmed.slice(0, -1).map((m) => ({
+    role: m.role === "user" ? ("user" as const) : ("model" as const),
+    parts: [{ text: m.content }]
+  }));
+
+  const lastUserText = last.content;
+  const genAI = new GoogleGenerativeAI(key);
+  let lastErr: unknown;
+
+  for (const mid of textModelCandidates()) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: mid,
+        systemInstruction
+      });
+      const chat = model.startChat({ history });
+      const result = await chat.sendMessage(lastUserText);
+      const text = result.response.text();
+      if (text?.trim()) return text;
+      return "(빈 응답이 반환되었습니다. 다시 시도해 주세요.)";
+    } catch (e) {
+      rethrowIfInvalidApiKey(e);
+      lastErr = e;
+      if (shouldTryNextTextModel(e)) {
+        console.warn(
+          `[gemini] options chat model=${mid} → 다음 모델 시도`,
           e instanceof Error ? e.message : e
         );
         continue;

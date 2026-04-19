@@ -35,14 +35,7 @@ interface ContentPanelProps {
 }
 
 /** 현수막·X배너 등 — 우측 패널 배경·날짜·장소 필드 표시 */
-const PLACARD_IDS = [
-  "placard-wide-landscape",
-  "placard-1000x600",
-  "placard-2000x1000",
-  "placard-600x1800",
-  "placard-vertical",
-  "xbanner",
-];
+const PLACARD_IDS = ["placard-wide-landscape", "xbanner"];
 
 function PosterBodyTextarea({
   value,

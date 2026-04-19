@@ -5,7 +5,6 @@ export type TemplateCategory =
   | 'poster'
   | 'social-media'
   | 'internal-notice'
-  | 'signage'
   | 'presentation'
   | 'placard';
 

@@ -8,7 +8,6 @@ import {
   LayoutTemplate,
   Share2,
   Bell,
-  Signpost,
   Presentation,
   Layers,
 } from "lucide-react";
@@ -23,7 +22,6 @@ const categoryIconMap: Record<string, React.ComponentType<{ className?: string }
   FileImage,
   Share2,
   Bell,
-  Signpost,
   Presentation,
   RectangleHorizontal,
 };

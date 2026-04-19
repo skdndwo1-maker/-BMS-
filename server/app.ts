@@ -21,6 +21,7 @@ import {
   runDesignEditorCanvasVisualCorrection,
   runDesignEditorTextSuggestion,
   runInspectionWithGemini,
+  runOptionsPageChat,
   summarizeGuidelineFile,
   type DesignEditorTextSuggestionTarget
 } from "./gemini.js";
@@ -167,6 +168,41 @@ app.get("/api/health", (_req, res) => {
     law: Boolean(resolveLawApiOc()),
     publicBase: getPublicApiBaseUrl()
   });
+});
+
+/** 옵션 페이지 하단 채팅 — Gemini 멀티턴 (브랜드 가이드라인 맥락) */
+app.post("/api/options/chat", async (req, res) => {
+  try {
+    if (!hasGeminiApiKey()) {
+      res.status(503).json({
+        ok: false,
+        error: "GEMINI_API_KEY가 설정되어 있지 않습니다. 서버 환경 변수를 확인하세요."
+      });
+      return;
+    }
+    const raw = req.body?.messages;
+    if (!Array.isArray(raw)) {
+      res.status(400).json({ ok: false, error: "messages 배열이 필요합니다." });
+      return;
+    }
+    const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
+    for (const item of raw) {
+      if (!item || typeof item !== "object") continue;
+      const role = (item as { role?: string }).role;
+      const content = String((item as { content?: unknown }).content ?? "");
+      if (role !== "user" && role !== "assistant") continue;
+      messages.push({ role, content });
+    }
+    if (messages.length === 0) {
+      res.status(400).json({ ok: false, error: "유효한 메시지가 없습니다." });
+      return;
+    }
+    const text = await runOptionsPageChat({ messages });
+    res.json({ ok: true, text });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ ok: false, error: msg });
+  }
 });
 
 /** 초대코드 게이트: `INVITE_CODE`가 비어 있으면 프론트에서 게이트 비활성화. Railway 등에 설정 시에만 검증 */

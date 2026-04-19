@@ -1,4 +1,4 @@
-import { useState, useRef, type ChangeEvent, type FormEvent } from "react";
+import { useState, useRef, useEffect, type ChangeEvent, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Palette,
@@ -15,7 +15,9 @@ import {
   Mic,
   FileSearch,
   X,
+  Loader2,
 } from "lucide-react";
+import { postOptionsChat, type OptionsChatMessage } from "@/lib/optionsChatApi";
 
 const mainOptions = [
   {
@@ -106,19 +108,54 @@ export function OptionSelection() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
+  const [chatMessages, setChatMessages] = useState<
+    Array<{ id: string; role: "user" | "assistant"; content: string }>
+  >([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: chatMessages.length <= 1 ? "auto" : "smooth" });
+  }, [chatMessages, chatLoading]);
+
   const handleOptionClick = (route: string) => {
     navigate(route);
   };
 
-  const submitChat = () => {
-    if (chatInput.trim() || attachedImage) {
-      navigate(`/dashboard?q=${encodeURIComponent(chatInput.trim())}`);
+  const submitChat = async () => {
+    const text = chatInput.trim();
+    if (!text || chatLoading) return;
+
+    const userMsg: OptionsChatMessage = { role: "user", content: text };
+    const historyForApi: OptionsChatMessage[] = [
+      ...chatMessages.map(({ role, content }) => ({ role, content })),
+      userMsg
+    ];
+
+    setChatError(null);
+    setChatMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", content: text }]);
+    setChatInput("");
+    setChatLoading(true);
+
+    try {
+      const reply = await postOptionsChat(historyForApi);
+      setChatMessages((prev) => [...prev, { id: `a-${Date.now()}`, role: "assistant", content: reply }]);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setChatError(msg);
+      setChatMessages((prev) => prev.slice(0, -1));
+      setChatInput(text);
+    } finally {
+      setChatLoading(false);
     }
   };
 
   const handleChatSubmit = (e: FormEvent) => {
     e.preventDefault();
-    submitChat();
+    void submitChat();
   };
 
   const handleSuggestion = (text: string) => {
@@ -167,7 +204,7 @@ export function OptionSelection() {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col justify-between max-w-6xl w-full mx-auto px-6 py-6">
+      <main className="flex min-h-0 flex-1 flex-col justify-between max-w-6xl w-full mx-auto px-6 py-6">
         <div>
           <div className="mb-6">
             <div className="inline-flex items-center gap-2 bg-gray-100 border border-gray-200 rounded-full px-3 py-1 mb-3">
@@ -220,8 +257,8 @@ export function OptionSelection() {
           </div>
         </div>
 
-        <div>
-          <div className="flex items-center gap-4 mb-3">
+        <div className="mt-auto flex min-h-0 flex-col">
+          <div className="flex items-center gap-4 mb-3 shrink-0">
             <div className="flex-1 h-px bg-gray-200" />
             <div className="flex items-center gap-2 text-xs text-gray-400">
               <Sparkles className="w-3 h-3" />
@@ -230,7 +267,7 @@ export function OptionSelection() {
             <div className="flex-1 h-px bg-gray-200" />
           </div>
 
-          <div className="flex flex-wrap gap-1.5 mb-3 justify-center">
+          <div className="flex flex-wrap gap-1.5 mb-3 justify-center shrink-0">
             {quickSuggestions.map((s) => (
               <button
                 key={s}
@@ -243,9 +280,48 @@ export function OptionSelection() {
             ))}
           </div>
 
-          <form onSubmit={handleChatSubmit} className="relative">
-            {/* 전체 높이만 제한 — 내부 타이포·패딩은 원래 서식 유지, 넘치면 이 영역 안에서 스크롤 */}
-            <div className="max-h-[min(480px,84vh)] overflow-y-auto overscroll-contain rounded-2xl">
+          <div
+            ref={chatScrollRef}
+            className="mb-3 max-h-[min(42vh,400px)] min-h-[120px] overflow-y-auto overscroll-contain rounded-xl border border-gray-200 bg-white/90 px-3 py-3 shadow-sm"
+          >
+            {chatMessages.length === 0 && !chatLoading && (
+              <p className="text-center text-xs text-gray-400">
+                질문을 입력하면 여기에 답변이 표시됩니다. 이전 대화 맥락이 유지됩니다.
+              </p>
+            )}
+            <div className="space-y-3">
+              {chatMessages.map((m) => (
+                <div
+                  key={m.id}
+                  className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[min(100%,42rem)] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm ${
+                      m.role === "user"
+                        ? "bg-[#F43182] text-white"
+                        : "border border-gray-100 bg-gray-50 text-gray-800"
+                    }`}
+                  >
+                    <span className="whitespace-pre-wrap break-words">{m.content}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {chatLoading && (
+              <div className="mt-3 flex items-center gap-2 text-sm text-gray-500">
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#F43182]" aria-hidden />
+                <span>답변 생성 중…</span>
+              </div>
+            )}
+            {chatError && (
+              <p className="mt-2 text-xs text-red-600" role="alert">
+                {chatError}
+              </p>
+            )}
+          </div>
+
+          <form onSubmit={handleChatSubmit} className="relative shrink-0">
+            <div className="rounded-2xl">
               <div className="bg-white border border-gray-200 rounded-2xl shadow-sm hover:border-gray-200 focus-within:border-[#F43182]/40 focus-within:ring-2 focus-within:ring-[#F43182]/10 transition-all">
                 <div className="flex items-center gap-1 border-b border-gray-100 bg-white px-4 pt-3 pb-2">
                   {searchModes.map((mode) => {
@@ -326,7 +402,7 @@ export function OptionSelection() {
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
-                        submitChat();
+                        void submitChat();
                       }
                     }}
                     placeholder={
@@ -339,7 +415,8 @@ export function OptionSelection() {
                             : "필요한 내용을 입력하세요 — 예) 여름 캠페인용 A3 이벤트 포스터가 필요해요"
                     }
                     rows={3}
-                    className="min-w-0 flex-1 resize-none bg-white text-sm leading-relaxed tracking-normal text-gray-800 placeholder:text-gray-400 focus:outline-none"
+                    disabled={chatLoading}
+                    className="min-w-0 flex-1 resize-none bg-white text-sm leading-relaxed tracking-normal text-gray-800 placeholder:text-gray-400 focus:outline-none disabled:opacity-60"
                   />
                   <div className="flex shrink-0 flex-col items-center gap-2 pb-0.5">
                     <button
@@ -351,10 +428,14 @@ export function OptionSelection() {
                     </button>
                     <button
                       type="submit"
-                      disabled={!chatInput.trim() && !attachedImage}
+                      disabled={!chatInput.trim() || chatLoading}
                       className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#F43182] text-white shadow-sm transition-all hover:bg-[#d41f6e] disabled:bg-gray-100 disabled:text-gray-400"
                     >
-                      <Send className="h-4 w-4" />
+                      {chatLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
                     </button>
                   </div>
                 </div>
