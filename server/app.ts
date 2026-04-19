@@ -39,31 +39,41 @@ import {
 
 const app = express();
 
-/** 프로덕션 Vercel 프론트 등 (명시 허용). 그 외 출처·로컬은 아래 콜백에서 계속 허용 */
+/** 프로덕션 Vercel (프리뷰는 *.vercel.app으로 별도 허용) */
 const CORS_ALLOWED_ORIGINS: readonly string[] = ["https://bms-sage-one.vercel.app"];
+
+function corsAllowOrigin(origin: string | undefined, callback: (err: Error | null, allow?: boolean | string) => void) {
+  if (!origin) {
+    callback(null, true);
+    return;
+  }
+  if (CORS_ALLOWED_ORIGINS.includes(origin)) {
+    callback(null, origin);
+    return;
+  }
+  try {
+    const { hostname } = new URL(origin);
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      callback(null, origin);
+      return;
+    }
+    if (hostname.endsWith(".vercel.app")) {
+      callback(null, origin);
+      return;
+    }
+  } catch {
+    callback(null, false);
+    return;
+  }
+  callback(null, true);
+}
 
 app.use(
   cors({
-    origin(origin, callback) {
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-      if (CORS_ALLOWED_ORIGINS.includes(origin)) {
-        callback(null, true);
-        return;
-      }
-      try {
-        const host = new URL(origin).hostname;
-        if (host === "localhost" || host === "127.0.0.1") {
-          callback(null, true);
-          return;
-        }
-      } catch {
-        /* ignore */
-      }
-      callback(null, true);
-    }
+    origin: corsAllowOrigin,
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    maxAge: 86_400
   })
 );
 /** 검수 follow-up·대용량 base64 본문 대응 (2mb면 이미지 포함 요청이 잘림) */
