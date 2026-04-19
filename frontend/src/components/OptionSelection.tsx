@@ -282,7 +282,7 @@ export function OptionSelection() {
 
           <div
             ref={chatScrollRef}
-            className="mb-3 max-h-[min(42vh,400px)] min-h-[120px] overflow-y-auto overscroll-contain rounded-xl border border-gray-200 bg-white/90 px-3 py-3 shadow-sm"
+            className="mb-3 max-h-[min(29.4vh,280px)] min-h-[84px] overflow-y-auto overscroll-contain rounded-xl border border-gray-200 bg-white/90 px-3 py-3 shadow-sm"
           >
             {chatMessages.length === 0 && !chatLoading && (
               <p className="text-center text-xs text-gray-400">
