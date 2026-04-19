@@ -6,7 +6,7 @@ import react from "@vitejs/plugin-react";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/** 로컬: `/api/*` → Express(기본 3001). 프로덕션(Vercel)은 동일 출처 `api/[[...path]]` 서버리스로 처리 */
+/** 로컬: `/api/*` → Express(기본 3001). 프로덕션 번들은 `VITE_API_URL`(루트 `.env.production`)로 Railway 등 직접 호출 */
 const apiProxy = {
   "/api": {
     target: "http://127.0.0.1:3001",

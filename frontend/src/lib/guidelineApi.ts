@@ -1,16 +1,4 @@
-/**
- * 절대 URL이면 그대로 붙이고, 비어 있으면 상대 경로(개발 시 Vite `/api` → 백엔드 프록시).
- * `VITE_API_URL`이 `.../api`로 끝나는데 path도 `/api/...`이면 `/api`가 두 번 붙는 실수를 막습니다.
- */
-function apiUrl(path: string): string {
-  const b = (import.meta.env.VITE_API_URL as string | undefined)?.trim().replace(/\/$/, "") ?? "";
-  const p = path.startsWith("/") ? path : `/${path}`;
-  if (!b) return p;
-  if (b.endsWith("/api") && p.startsWith("/api")) {
-    return `${b}${p.slice(4)}`;
-  }
-  return `${b}${p}`;
-}
+import { apiUrl } from "./apiUrl.ts";
 
 export type GuidelineInfo = {
   id: string;
