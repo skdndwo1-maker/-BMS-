@@ -29,10 +29,10 @@ export function LoginScreen() {
         <div className="text-center mb-8 flex flex-col items-center">
           <img
             src="/uplus-main-logo.png"
-            alt="브랜드관리시스템"
+            alt="U+ AI 브랜드 Agent"
             className="h-16 rounded-xl w-auto object-contain mb-4 drop-shadow-sm"
           />
-          <h1 className="text-3xl font-semibold text-gray-900 mb-2">브랜드관리시스템</h1>
+          <h1 className="text-3xl font-semibold text-gray-900 mb-2">U+ AI 브랜드 Agent</h1>
           <p className="text-gray-500 font-regular tracking-wide">U+ Brand Contents Total Managing Platform</p>
         </div>
 

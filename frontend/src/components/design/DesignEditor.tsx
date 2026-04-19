@@ -2,16 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from "react-router-dom";
 import { templates } from "@/design/templates";
 import type { DesignContent } from "@/design/types";
-import { DesignCanvas, type DesignFocusTarget } from './DesignCanvas';
+import { DesignCanvas, type DesignCanvasHandle, type DesignFocusTarget } from './DesignCanvas';
+import type { CanvasTextEditTarget } from '@/design/canvasTextTypography';
+import { CanvasTextFormatPanel } from './CanvasTextFormatPanel';
 import { PlacardWideCanvas }      from './PlacardWideCanvas';
 import { Placard1000x600Canvas }  from './Placard1000x600Canvas';
 import { Placard2000x1000Canvas } from './Placard2000x1000Canvas';
 import { Placard600x1800Canvas }  from './Placard600x1800Canvas';
 import { ContentPanel }           from './ContentPanel';
 import { LayersPanel }            from './LayersPanel';
-import { BrandCompliancePanel }   from './BrandCompliancePanel';
 import { ExportDialog }           from './ExportDialog';
 import { QuickStartDialog }       from './QuickStartDialog';
+import { DesignAssistantChat }    from './DesignAssistantChat';
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -22,8 +24,8 @@ import {
   Maximize2,
   Sparkles,
   Eye,
-  ChevronDown,
-  ChevronUp,
+  Grid3x3,
+  Magnet,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -89,7 +91,28 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   const [showExportDialog,     setShowExportDialog]     = useState(false);
   const [showPreview,          setShowPreview]           = useState(false);
   const [zoom,                 setZoom]                  = useState(getInitialZoom());
-  const [showBrandCompliance,  setShowBrandCompliance]   = useState(false);
+  /** VI 12분할 정렬 그리드 (캔버스 위 오버레이) */
+  const [showViGrid, setShowViGrid] = useState(true);
+  /** VI 격자에 맞춘 요소 스냅 (끄면 1px 단위 이동) */
+  const [layoutSnapEnabled, setLayoutSnapEnabled] = useState(true);
+
+  const designCanvasRef = useRef<DesignCanvasHandle>(null);
+  const [textFormatTarget, setTextFormatTarget] = useState<CanvasTextEditTarget | null>(null);
+  const [textOptionsPanelOpen, setTextOptionsPanelOpen] = useState(false);
+  const [textFormatSelectionTick, setTextFormatSelectionTick] = useState(0);
+  useEffect(() => {
+    if (textFormatTarget) setTextOptionsPanelOpen(true);
+  }, [textFormatTarget]);
+
+  const pushUndoSnapshot = () => {
+    setContent((prev) => {
+      const u = undoRef.current;
+      const trimmed = u.stack.slice(0, u.idx + 1);
+      trimmed.push(prev);
+      undoRef.current = { stack: trimmed, idx: trimmed.length - 1 };
+      return prev;
+    });
+  };
 
   // ── Template type flags ──────────────────────────────────────────────
   const isPlacardWide      = actualTemplateId === 'placard-wide-landscape';
@@ -120,22 +143,42 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   const handleZoomFit = () => setZoom(1.0);
 
   const handleLoadDemo = (demoContent: DesignContent) => {
-    setContent(demoContent);
+    setContentWithHistory(() => demoContent);
   };
 
   // ── Canvas renderer ──────────────────────────────────────────────────
   const renderCanvas = () => {
-    if (isPlacardWide)      return <PlacardWideCanvas     content={content} canvasSize={template.size} zoom={zoom} />;
-    if (isPlacard1000x600)  return <Placard1000x600Canvas  content={content} canvasSize={template.size} zoom={zoom} />;
-    if (isPlacard2000x1000) return <Placard2000x1000Canvas content={content} canvasSize={template.size} zoom={zoom} />;
-    if (isPlacard600x1800)  return <Placard600x1800Canvas  content={content} canvasSize={template.size} zoom={zoom} />;
+    const grid = showViGrid;
+    if (isPlacardWide)
+      return (
+        <PlacardWideCanvas content={content} canvasSize={template.size} zoom={zoom} showViGrid={grid} />
+      );
+    if (isPlacard1000x600)
+      return (
+        <Placard1000x600Canvas content={content} canvasSize={template.size} zoom={zoom} showViGrid={grid} />
+      );
+    if (isPlacard2000x1000)
+      return (
+        <Placard2000x1000Canvas content={content} canvasSize={template.size} zoom={zoom} showViGrid={grid} />
+      );
+    if (isPlacard600x1800)
+      return (
+        <Placard600x1800Canvas content={content} canvasSize={template.size} zoom={zoom} showViGrid={grid} />
+      );
     return (
       <DesignCanvas
+        ref={designCanvasRef}
         content={content}
         canvasSize={template.size}
         zoom={zoom}
         onContentChange={setContentWithHistory}
+        onContentDraftChange={setContent}
+        onBeginCanvasTextEdit={pushUndoSnapshot}
         onFocusChange={setFocusTarget}
+        showViGrid={grid}
+        layoutSnapEnabled={layoutSnapEnabled}
+        onTextFormatTargetChange={setTextFormatTarget}
+        onCanvasTextSelectionChanged={() => setTextFormatSelectionTick((n) => n + 1)}
       />
     );
   };
@@ -203,7 +246,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
               </Button>
               <Separator orientation="vertical" className="h-6" />
               <div>
-                <h1 className="font-semibold text-gray-900 text-sm">브랜드관리시스템 - {template.name}</h1>
+                <h1 className="font-semibold text-gray-900 text-sm">U+ AI 브랜드 Agent - {template.name}</h1>
                 <p className="text-xs text-gray-500">
                   {template.size.width} × {template.size.height} {template.size.unit}
                 </p>
@@ -244,8 +287,6 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                 </Tooltip>
               </div>
 
-              <Separator orientation="vertical" className="h-6" />
-
               <Button variant="outline" size="sm" onClick={() => setShowPreview(!showPreview)}>
                 <Eye className="w-4 h-4 mr-2" />
                 {showPreview ? '편집' : '미리보기'}
@@ -264,14 +305,74 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
 
           {/* Left Panel */}
           {!showPreview && (
-            <div className="w-64 flex-shrink-0 bg-white">
-              <LayersPanel content={content} />
+            <div className="w-64 flex-shrink-0 flex flex-col min-h-0 bg-white border-r border-gray-200">
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <LayersPanel content={content} />
+              </div>
+              <div className="flex-shrink-0 border-t border-gray-200 bg-gray-50 p-2 space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-9 text-xs font-medium"
+                  onClick={() => setTextOptionsPanelOpen((o) => !o)}
+                >
+                  텍스트 옵션
+                </Button>
+                {textOptionsPanelOpen ? (
+                  <CanvasTextFormatPanel
+                    target={textFormatTarget}
+                    content={content}
+                    onDraft={setContent}
+                    selectionRenderTick={textFormatSelectionTick}
+                    getSelection={() => designCanvasRef.current?.getInlineTextSelection() ?? null}
+                    onTogglePartialStyle={(w) => designCanvasRef.current?.handleTogglePartialStyle(w)}
+                    onClose={() => setTextOptionsPanelOpen(false)}
+                  />
+                ) : null}
+                <p className="text-[9px] text-gray-500 leading-snug px-0.5">
+                  텍스트 상자를 연속으로 클릭하면 여러 개를 선택해 함께 이동할 수 있습니다. Shift/Ctrl+클릭으로 토글할 수도 있습니다. 빈 배경을 클릭하면 선택이 해제됩니다.
+                </p>
+              </div>
             </div>
           )}
 
-          {/* Center - Canvas */}
-          <div className="flex-1 overflow-hidden">
-            {renderCanvas()}
+          {/* Center - Canvas + VI 그리드 토글 */}
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+            <div className="flex-shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-200 bg-white/95">
+              <span className="text-xs text-gray-500">캔버스 보기</span>
+              <div className="flex items-center gap-1.5">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={showViGrid ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => setShowViGrid((v) => !v)}
+                      className="gap-1.5 h-8"
+                    >
+                      <Grid3x3 className="w-4 h-4" />
+                      VI 그리드 {showViGrid ? "켜짐" : "꺼짐"}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>12분할 기준 격자를 캔버스 위에 표시합니다</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={layoutSnapEnabled ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => setLayoutSnapEnabled((v) => !v)}
+                      className="gap-1.5 h-8"
+                    >
+                      <Magnet className="w-4 h-4" />
+                      스냅 {layoutSnapEnabled ? "켜짐" : "꺼짐"}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>켜면 요소 이동·크기 조절이 VI 격자에 맞춰집니다</TooltipContent>
+                </Tooltip>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden min-h-0">{renderCanvas()}</div>
           </div>
 
           {/* Right Panel */}
@@ -288,28 +389,6 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                 />
               </div>
 
-              <div className="flex-shrink-0 border-t border-gray-200">
-                <button
-                  onClick={() => setShowBrandCompliance(!showBrandCompliance)}
-                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-[#F43182]" />
-                    <h3 className="text-sm font-semibold text-gray-900">브랜드 검수</h3>
-                  </div>
-                  {showBrandCompliance
-                    ? <ChevronUp   className="w-4 h-4 text-gray-500" />
-                    : <ChevronDown className="w-4 h-4 text-gray-500" />}
-                </button>
-                {showBrandCompliance && (
-                  <div className="h-64 overflow-y-auto border-t border-gray-100">
-                    <div className="p-4">
-                      <BrandCompliancePanel content={content} />
-                    </div>
-                  </div>
-                )}
-              </div>
-
               <div className="flex-shrink-0 border-t border-gray-200 bg-gradient-to-br from-purple-50 to-blue-50">
                 <div className="p-4 space-y-3">
                   <div className="flex items-center gap-2">
@@ -318,29 +397,14 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                     </div>
                     <div className="flex-1">
                       <h3 className="text-sm font-semibold text-gray-900">AI 디자인 어시스턴트</h3>
-                      <p className="text-xs text-gray-500">추가 솔루션 검색</p>
+                      <p className="text-xs text-gray-500">텍스트 제안 · VI 검수 · 시각 교정</p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="예: 색상 조합 추천해줘"
-                      className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F43182] focus:border-transparent"
-                    />
-                    <button className="px-4 py-2 bg-gradient-to-r from-[#F43182] to-purple-600 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity">
-                      전송
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {['폰트 추천', '레이아웃 개선', '색상 대비', '사이즈 최적화'].map(tag => (
-                      <button
-                        key={tag}
-                        className="px-2.5 py-1 text-xs bg-white border border-gray-200 rounded-full hover:border-[#F43182] hover:text-[#F43182] transition-colors"
-                      >
-                        {tag}
-                      </button>
-                    ))}
-                  </div>
+                  <DesignAssistantChat
+                    content={content}
+                    onApplyContent={setContentWithHistory}
+                    templateId={actualTemplateId ?? ""}
+                  />
                 </div>
               </div>
 

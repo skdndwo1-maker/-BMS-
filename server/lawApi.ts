@@ -4,6 +4,12 @@
  * - 검색 엔드포인트: DRF lawSearch (JSON)
  */
 
+import { setDefaultResultOrder } from "node:dns";
+import * as https from "node:https";
+
+/** Node 기본 fetch(Undici)가 IPv6 우선으로 law.go.kr 연결에 실패하는 경우가 있어 IPv4 우선 */
+setDefaultResultOrder("ipv4first");
+
 function truncate(s: string, max: number): string {
   const t = s.trim();
   if (t.length <= max) return t;
@@ -21,6 +27,8 @@ export function resolveLawApiOc(): string {
 
 const LAW_SEARCH_JSON_URL = "https://www.law.go.kr/DRF/lawSearch.do";
 
+const LAW_FETCH_TIMEOUT_MS = 20_000;
+
 /** 일부 환경에서 기본 fetch UA가 거절되는 경우가 있어 브라우저에 가깝게 지정 */
 const LAW_API_FETCH_HEADERS: Record<string, string> = {
   Accept: "application/json, text/plain, */*",
@@ -28,6 +36,63 @@ const LAW_API_FETCH_HEADERS: Record<string, string> = {
     "Mozilla/5.0 (compatible; U-Layer1-BrandNaming/1.0; +https://github.com/) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   Referer: "https://www.law.go.kr/"
 };
+
+/** undici fetch 실패 시 동일 URL을 node:https로 재시도 (TLS·DNS 환경 차이 대응) */
+function lawSearchViaHttps(urlStr: string): Promise<{ status: number; raw: string }> {
+  const u = new URL(urlStr);
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: u.hostname,
+        port: u.port ? Number(u.port) : 443,
+        path: `${u.pathname}${u.search}`,
+        method: "GET",
+        headers: { ...LAW_API_FETCH_HEADERS, Host: u.hostname },
+        timeout: LAW_FETCH_TIMEOUT_MS,
+        servername: u.hostname
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+        res.on("end", () => {
+          const raw = Buffer.concat(chunks).toString("utf8");
+          resolve({ status: res.statusCode ?? 0, raw });
+        });
+      }
+    );
+    req.on("error", reject);
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("https timeout"));
+    });
+    req.end();
+  });
+}
+
+async function fetchLawSearchResponse(urlStr: string): Promise<{ status: number; raw: string }> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(urlStr, {
+        headers: LAW_API_FETCH_HEADERS,
+        signal: AbortSignal.timeout(LAW_FETCH_TIMEOUT_MS)
+      });
+      const raw = await res.text();
+      return { status: res.status, raw };
+    } catch (e) {
+      lastErr = e;
+      if (attempt === 0) {
+        console.warn("[LAW] fetch 실패, 300ms 후 1회 재시도:", e instanceof Error ? e.message : e);
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    }
+  }
+  console.warn(
+    "[LAW] fetch 2회 실패, node:https 폴백. 마지막 오류:",
+    lastErr instanceof Error ? lastErr.message : lastErr
+  );
+  return lawSearchViaHttps(urlStr);
+}
 
 /** 로그용: URL의 OC 파라미터만 마스킹 */
 function redactLawSearchUrl(urlStr: string): string {
@@ -143,17 +208,13 @@ export async function searchLawsJson(
   console.log("[LAW] request:", urlSafe);
 
   try {
-    const res = await fetch(url.toString(), {
-      headers: LAW_API_FETCH_HEADERS,
-      signal: AbortSignal.timeout(20_000)
-    });
-    const raw = await res.text();
-    if (!res.ok) {
-      console.warn("[LAW] HTTP 오류:", { query: q, status: res.status, bodyHead: raw.slice(0, 500) });
+    const { status: httpStatus, raw } = await fetchLawSearchResponse(url.toString());
+    if (httpStatus < 200 || httpStatus >= 300) {
+      console.warn("[LAW] HTTP 오류:", { query: q, status: httpStatus, bodyHead: raw.slice(0, 500) });
       return {
         ok: false,
         query: q,
-        error: enrichLawApiErrorHint(`HTTP ${res.status}: ${truncate(raw, 400)}`)
+        error: enrichLawApiErrorHint(`HTTP ${httpStatus}: ${truncate(raw, 400)}`)
       };
     }
 
@@ -175,7 +236,7 @@ export async function searchLawsJson(
     const lines = parseLawSearchJson(raw);
     console.log("[LAW] response:", {
       query: q,
-      status: res.status,
+      status: httpStatus,
       bodyLength: raw.length,
       parsedLawCount: lines.length,
       bodyHead: raw.slice(0, 400).replace(/\s+/g, " ")
@@ -193,12 +254,20 @@ export async function searchLawsJson(
       text: truncate(raw.length > 800 ? `[원문 일부]\n${raw.slice(0, 800)}` : raw, 4000)
     };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.warn("[LAW] fetch 예외:", msg, "| query:", q);
+    let detail = e instanceof Error ? e.message : String(e);
+    if (e instanceof Error && e.cause != null) {
+      const c = e.cause;
+      detail += ` | cause: ${c instanceof Error ? c.message : String(c)}`;
+    }
+    if (typeof AggregateError !== "undefined" && e instanceof AggregateError && e.errors?.length) {
+      detail += ` | ${e.errors.map((x) => (x instanceof Error ? x.message : String(x))).join("; ")}`;
+    }
+    console.warn("[LAW] fetch 예외:", detail, "| query:", q);
+    const short = detail.length > 800 ? `${detail.slice(0, 800)}…` : detail;
     return {
       ok: false,
       query: q,
-      error: enrichLawApiErrorHint(msg)
+      error: enrichLawApiErrorHint(short)
     };
   }
 }

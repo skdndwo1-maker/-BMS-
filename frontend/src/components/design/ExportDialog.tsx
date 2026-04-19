@@ -6,6 +6,29 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { toast } from 'sonner';
 
+function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality?: number
+): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('Failed to create image blob'));
+      },
+      type,
+      quality
+    );
+  });
+}
+
+const html2canvasOpts = {
+  scale: 2,
+  logging: false,
+  useCORS: true,
+} as const;
+
 interface ExportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -27,25 +50,21 @@ export function ExportDialog({ open, onOpenChange, templateName }: ExportDialogP
       }
 
       const exportCanvas = await html2canvas(canvas, {
-        scale: 2,
+        ...html2canvasOpts,
         backgroundColor: null,
-        logging: false,
       });
 
-      exportCanvas.toBlob((blob) => {
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.download = `${templateName.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.png`;
-          link.href = url;
-          link.click();
-          URL.revokeObjectURL(url);
-          
-          toast.success('PNG exported successfully!');
-          setIsExporting(false);
-          setTimeout(() => onOpenChange(false), 1000);
-        }
-      }, 'image/png');
+      const blob = await canvasToBlob(exportCanvas, 'image/png');
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `${templateName.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.png`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      toast.success('PNG exported successfully!');
+      setIsExporting(false);
+      setTimeout(() => onOpenChange(false), 1000);
     } catch (error) {
       console.error('Export failed:', error);
       toast.error('Failed to export PNG');
@@ -65,9 +84,8 @@ export function ExportDialog({ open, onOpenChange, templateName }: ExportDialogP
       }
 
       const exportCanvas = await html2canvas(canvas, {
-        scale: 2,
+        ...html2canvasOpts,
         backgroundColor: '#ffffff',
-        logging: false,
       });
 
       const imgData = exportCanvas.toDataURL('image/png');
@@ -100,28 +118,21 @@ export function ExportDialog({ open, onOpenChange, templateName }: ExportDialogP
       if (!canvas) throw new Error("Canvas not found");
 
       const exportCanvas = await html2canvas(canvas, {
-        scale: 2,
-        backgroundColor: "#ffffff", // JPEG는 투명 지원 X
-        logging: false,
+        ...html2canvasOpts,
+        backgroundColor: "#ffffff",
       });
 
-      exportCanvas.toBlob(
-        (blob) => {
-          if (!blob) return;
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.download = `${templateName.replace(/\s+/g, "-").toLowerCase()}-${Date.now()}.jpeg`;
-          link.href = url;
-          link.click();
-          URL.revokeObjectURL(url);
+      const blob = await canvasToBlob(exportCanvas, "image/jpeg", 0.92);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.download = `${templateName.replace(/\s+/g, "-").toLowerCase()}-${Date.now()}.jpeg`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
 
-          toast.success("JPEG exported successfully!");
-          setIsExporting(false);
-          setTimeout(() => onOpenChange(false), 1000);
-        },
-        "image/jpeg",
-        0.92
-      );
+      toast.success("JPEG exported successfully!");
+      setIsExporting(false);
+      setTimeout(() => onOpenChange(false), 1000);
     } catch (error) {
       console.error("Export failed:", error);
       toast.error("Failed to export JPEG");

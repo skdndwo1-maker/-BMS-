@@ -87,7 +87,7 @@ export function LayersPanel({ content }: LayersPanelProps) {
   };
 
   return (
-    <div className="h-full bg-white border-r border-gray-200 flex flex-col">
+    <div className="h-full bg-white flex flex-col">
       <div className="p-4 border-b border-gray-200">
         <h3 className="text-sm font-semibold text-gray-900">Layers</h3>
         <p className="text-xs text-gray-500 mt-1">View design structure</p>

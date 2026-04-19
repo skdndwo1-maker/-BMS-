@@ -3,6 +3,7 @@
  */
 
 import { useRef, useCallback, type ReactNode } from "react";
+import { X } from "lucide-react";
 
 export type NormalizedRect = { x: number; y: number; width: number; height: number };
 
@@ -16,7 +17,7 @@ interface Props {
   canvasH: number;
   onRectChange: (next: NormalizedRect) => void;
   isSelected: boolean;
-  onSelect: (opts?: { toggle?: boolean }) => void;
+  onSelect: (opts?: { additive?: boolean }) => void;
   zIndex: number;
   children: ReactNode;
   /** 선택 시 외곽선 (편집 가능 표시) */
@@ -27,6 +28,15 @@ interface Props {
   borderRadiusScale?: number;
   /** Alt+드래그로 내부 패닝 */
   onPan?: (deltaPx: { dx: number; dy: number }, ev: MouseEvent) => void;
+  /** VI 격자 스냅(px). 미지정 시 1px */
+  snapStepPx?: number;
+  /** 리사이즈 최소 너비(px). 미지정 시 24 */
+  minWidthPx?: number;
+  /** 리사이즈 최소 높이(px). 미지정 시 24 */
+  minHeightPx?: number;
+  onOverlayDoubleClick?: (e: React.MouseEvent) => void;
+  /** 선택 시 라벨 옆에 표시 — 캔버스에서 해당 박스 제거 */
+  onRequestDelete?: () => void;
 }
 
 export function DraggableCanvasOverlay({
@@ -42,7 +52,14 @@ export function DraggableCanvasOverlay({
   borderRadiusMode = "auto",
   borderRadiusScale = 1,
   onPan,
+  snapStepPx,
+  minWidthPx,
+  minHeightPx,
+  onOverlayDoubleClick,
+  onRequestDelete,
 }: Props) {
+  const minW = minWidthPx ?? 24;
+  const minH = minHeightPx ?? 24;
   const px = {
     x: rect.x * canvasW,
     y: rect.y * canvasH,
@@ -60,7 +77,7 @@ export function DraggableCanvasOverlay({
   const onMouseDownMove = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      onSelect({ toggle: e.shiftKey });
+      onSelect({ additive: e.shiftKey });
       dragStart.current = { mx: e.clientX, my: e.clientY, ox: px.x, oy: px.y };
       const onMove = (ev: MouseEvent) => {
         if (!dragStart.current) return;
@@ -70,11 +87,12 @@ export function DraggableCanvasOverlay({
           onPan({ dx, dy }, ev);
           return;
         }
-        const snap = ev.shiftKey ? 10 : 1;
+        const fine = snapStepPx ?? 1;
+        const snap = ev.shiftKey ? 10 : fine;
         const sx = Math.round((dragStart.current.ox + dx) / snap) * snap;
         const sy = Math.round((dragStart.current.oy + dy) / snap) * snap;
-        const newX = Math.max(0, Math.min(canvasW - px.width, sx));
-        const newY = Math.max(0, Math.min(canvasH - px.height, sy));
+        const newX = Math.max(0, Math.min(canvasW - Math.max(minW, px.width), sx));
+        const newY = Math.max(0, Math.min(canvasH - Math.max(minH, px.height), sy));
         onRectChange({
           x: newX / canvasW,
           y: newY / canvasH,
@@ -90,7 +108,7 @@ export function DraggableCanvasOverlay({
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     },
-    [rect, px, canvasW, canvasH, onRectChange, onSelect]
+    [rect, px, canvasW, canvasH, onRectChange, onSelect, snapStepPx, onPan, minW, minH]
   );
 
   const resizeStart = useRef<{
@@ -107,7 +125,7 @@ export function DraggableCanvasOverlay({
     (e: React.MouseEvent, handle: ResizeHandle) => {
       e.stopPropagation();
       e.preventDefault();
-      onSelect({ toggle: e.shiftKey });
+      onSelect({ additive: e.shiftKey });
       resizeStart.current = {
         mx: e.clientX,
         my: e.clientY,
@@ -122,35 +140,35 @@ export function DraggableCanvasOverlay({
         const { mx, my, ox, oy, ow, oh, handle } = resizeStart.current;
         const dx = ev.clientX - mx;
         const dy = ev.clientY - my;
-        const MIN = 24;
         let nx = ox,
           ny = oy,
           nw = ow,
           nh = oh;
-        const snap = ev.shiftKey ? 10 : 1;
-        if (handle.includes("e")) nw = Math.max(MIN, ow + dx);
-        if (handle.includes("s")) nh = Math.max(MIN, oh + dy);
+        const fine = snapStepPx ?? 1;
+        const snap = ev.shiftKey ? 10 : fine;
+        if (handle.includes("e")) nw = Math.max(minW, ow + dx);
+        if (handle.includes("s")) nh = Math.max(minH, oh + dy);
         if (handle.includes("w")) {
-          nw = Math.max(MIN, ow - dx);
+          nw = Math.max(minW, ow - dx);
           nx = ox + ow - nw;
         }
         if (handle.includes("n")) {
-          nh = Math.max(MIN, oh - dy);
+          nh = Math.max(minH, oh - dy);
           ny = oy + oh - nh;
         }
 
         // Shift: 코너 리사이즈는 비율 유지 + 스냅
         if (ev.shiftKey && (handle === "nw" || handle === "ne" || handle === "se" || handle === "sw")) {
           const ratio = ow / Math.max(1, oh);
-          if (nw / Math.max(1, nh) > ratio) nh = Math.max(MIN, nw / ratio);
-          else nw = Math.max(MIN, nh * ratio);
+          if (nw / Math.max(1, nh) > ratio) nh = Math.max(minH, nw / ratio);
+          else nw = Math.max(minW, nh * ratio);
           if (handle.includes("w")) nx = ox + ow - nw;
           if (handle.includes("n")) ny = oy + oh - nh;
         }
 
         // 스냅
-        nw = Math.max(MIN, Math.round(nw / snap) * snap);
-        nh = Math.max(MIN, Math.round(nh / snap) * snap);
+        nw = Math.max(minW, Math.round(nw / snap) * snap);
+        nh = Math.max(minH, Math.round(nh / snap) * snap);
         nx = Math.round(nx / snap) * snap;
         ny = Math.round(ny / snap) * snap;
 
@@ -171,7 +189,7 @@ export function DraggableCanvasOverlay({
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     },
-    [rect, px, canvasW, canvasH, onRectChange, onSelect]
+    [rect, px, canvasW, canvasH, onRectChange, onSelect, snapStepPx, minW, minH]
   );
 
   const handles: { key: ResizeHandle; style: React.CSSProperties }[] = [
@@ -201,10 +219,15 @@ export function DraggableCanvasOverlay({
         boxSizing: "border-box",
         cursor: "move",
         userSelect: "none",
+        WebkitUserSelect: "none",
       }}
       onMouseDown={(e) => {
         e.stopPropagation();
         onMouseDownMove(e);
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onOverlayDoubleClick?.(e);
       }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -214,7 +237,8 @@ export function DraggableCanvasOverlay({
           height: "100%",
           borderRadius: `${rPx}px`,
           overflow: "hidden",
-          pointerEvents: "none",
+          userSelect: "none",
+          WebkitUserSelect: "none",
         }}
       >
         {children}
@@ -238,24 +262,53 @@ export function DraggableCanvasOverlay({
               onMouseDown={(e) => onMouseDownResize(e, h.key)}
             />
           ))}
-          {label ? (
+          {label || onRequestDelete ? (
             <div
               style={{
                 position: "absolute",
-                top: "-26px",
+                top: "-28px",
                 left: "50%",
                 transform: "translateX(-50%)",
-                background: "#1A1A1A",
-                color: "#fff",
-                fontSize: "10px",
-                padding: "2px 8px",
-                borderRadius: "4px",
-                whiteSpace: "nowrap",
-                pointerEvents: "none",
                 zIndex: zIndex + 2,
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                pointerEvents: "auto",
               }}
             >
-              {label}
+              {label ? (
+                <div
+                  style={{
+                    background: "#1A1A1A",
+                    color: "#fff",
+                    fontSize: "10px",
+                    padding: "2px 8px",
+                    borderRadius: "4px",
+                    whiteSpace: "nowrap",
+                    pointerEvents: "none",
+                  }}
+                >
+                  {label}
+                </div>
+              ) : null}
+              {onRequestDelete ? (
+                <button
+                  type="button"
+                  aria-label="캔버스에서 제거"
+                  title="캔버스에서 제거"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-white bg-[#1A1A1A] text-white shadow hover:bg-[#F43182]"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onRequestDelete();
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                >
+                  <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+                </button>
+              ) : null}
             </div>
           ) : null}
         </>

@@ -12,12 +12,17 @@ import {
   additionalRevisionImagePipeline,
   answerInspectionAgentChat,
   excerptGuidelineForInspection,
+  generateDesignEditorReplacementImage,
   generateRevisedBrandingImage,
   generateRevisedBrandingImageFollowup,
   hasGeminiApiKey,
   runBrandNamingWithGemini,
+  runDesignEditorCanvasInspection,
+  runDesignEditorCanvasVisualCorrection,
+  runDesignEditorTextSuggestion,
   runInspectionWithGemini,
-  summarizeGuidelineFile
+  summarizeGuidelineFile,
+  type DesignEditorTextSuggestionTarget
 } from "./gemini.js";
 import { copyFixedGuidelineToSlot, FIXED_GUIDELINE_SOURCES } from "./fixedGuidelines.js";
 import { buildExternalNamingReferences } from "./namingExternalContext.js";
@@ -780,6 +785,175 @@ app.post("/api/inspection/additional-revision", async (req, res) => {
       revisedImage: { mimeType: out.mimeType, data: out.base64 },
       imageUpdated: true
     });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+/** 텍스트 제안 (메인/본문/유의) — VI 가이드 + 전체 문맥 */
+app.post("/api/design-editor/suggest-text", async (req, res) => {
+  try {
+    const guidelineId = (req.body?.guidelineId as string) || "uplus-brand-guideline";
+    const contentJson = String(req.body?.contentJson ?? "");
+    const templateLabel = String(req.body?.templateLabel ?? "template");
+    const rawTargets = req.body?.targets;
+    const allowed = new Set([
+      "mainTitle",
+      "subtitle",
+      "subtitle2",
+      "subtitle3",
+      "body",
+      "body2",
+      "body3",
+      "footer"
+    ]);
+    const targets = Array.isArray(rawTargets)
+      ? rawTargets.filter((t: unknown): t is DesignEditorTextSuggestionTarget =>
+          typeof t === "string" && allowed.has(t)
+        )
+      : [];
+    if (targets.length === 0) {
+      res.status(400).json({ error: "targets_required" });
+      return;
+    }
+    const creativeTopic =
+      typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
+    const guidelineSummary = await buildPrimaryGuidelineBlock(guidelineId);
+    const out = await runDesignEditorTextSuggestion({
+      guidelineSummary,
+      contentJson,
+      targets,
+      templateLabel,
+      creativeTopic: creativeTopic || undefined
+    });
+    res.json(out);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+/** 캔버스 전체 시각 교정 (이미지 생성) */
+app.post("/api/design-editor/correct-canvas", async (req, res) => {
+  try {
+    const guidelineId = (req.body?.guidelineId as string) || "uplus-brand-guideline";
+    const designBase64 = String(req.body?.designBase64 ?? "").replace(/^data:image\/\w+;base64,/, "");
+    const designMime = String(req.body?.designMime ?? "image/png");
+    const mode = req.body?.mode === "holistic" ? "holistic" : "inspection_followup";
+    const overallSummary = typeof req.body?.overallSummary === "string" ? req.body.overallSummary : "";
+    const rawViol = req.body?.violations;
+    const violations = Array.isArray(rawViol)
+      ? rawViol.map((v: { category?: string; issue?: string; severity?: string }) => ({
+          category: String(v?.category ?? ""),
+          issue: String(v?.issue ?? ""),
+          severity: String(v?.severity ?? "medium")
+        }))
+      : [];
+
+    if (!designBase64 || !designMime.startsWith("image/")) {
+      res.status(400).json({ error: "design_image_required" });
+      return;
+    }
+
+    if (!process.env.GEMINI_API_KEY?.trim()) {
+      res.status(503).json({ error: "GEMINI_API_KEY가 설정되어 있지 않습니다." });
+      return;
+    }
+
+    const creativeTopic =
+      typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
+    const guidelineContext = await buildPrimaryGuidelineBlock(guidelineId);
+    const out = await runDesignEditorCanvasVisualCorrection({
+      designBase64,
+      designMime,
+      guidelineContext,
+      overallSummary: overallSummary || undefined,
+      violations: violations.length > 0 ? violations : undefined,
+      mode,
+      creativeTopic: creativeTopic || undefined
+    });
+
+    if (!out) {
+      res.status(503).json({ error: "correction_failed" });
+      return;
+    }
+
+    res.json({ ok: true, mimeType: out.mimeType, data: out.base64, caption: out.caption });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+/** 브랜드 제작(디자인 에디터) 캔버스 캡처 검수 */
+app.post("/api/design-editor/inspect", async (req, res) => {
+  try {
+    const guidelineId = (req.body?.guidelineId as string) || "uplus-brand-guideline";
+    const imageBase64 = String(req.body?.imageBase64 ?? "").replace(/^data:image\/\w+;base64,/, "");
+    const imageMime = String(req.body?.imageMime ?? "image/png");
+    const templateId = String(req.body?.templateId ?? "");
+    const designContent = req.body?.designContent;
+
+    if (!imageBase64) {
+      res.status(400).json({ error: "image_required" });
+      return;
+    }
+
+    const creativeTopic =
+      typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
+    const guidelineSummary = await buildPrimaryGuidelineBlock(guidelineId);
+    const result = await runDesignEditorCanvasInspection({
+      designBase64: imageBase64,
+      designMime: imageMime,
+      guidelineSummary,
+      designContentJson: JSON.stringify(designContent ?? {}),
+      templateLabel: templateId || "template",
+      creativeTopic: creativeTopic || undefined
+    });
+
+    res.json({
+      score: result.score,
+      overallSummary: result.overallSummary,
+      violations: result.violations
+    });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+/** 디자인 에디터: 이미지 요소 교체용 생성 */
+app.post("/api/design-editor/replace-image", async (req, res) => {
+  try {
+    const guidelineId = (req.body?.guidelineId as string) || "uplus-brand-guideline";
+    const designBase64 = String(req.body?.designBase64 ?? "").replace(/^data:image\/\w+;base64,/, "");
+    const designMime = String(req.body?.designMime ?? "");
+    const imageBrief = String(req.body?.imageBrief ?? "").trim();
+
+    if (!designBase64 || !designMime.startsWith("image/") || !imageBrief) {
+      res.status(400).json({ error: "bad_request" });
+      return;
+    }
+
+    if (!process.env.GEMINI_API_KEY?.trim()) {
+      res.status(503).json({ error: "GEMINI_API_KEY가 설정되어 있지 않습니다." });
+      return;
+    }
+
+    const creativeTopic =
+      typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
+    const guidelineContext = await buildPrimaryGuidelineBlock(guidelineId);
+    const out = await generateDesignEditorReplacementImage({
+      designBase64,
+      designMime,
+      guidelineContext,
+      imageBrief,
+      creativeTopic: creativeTopic || undefined
+    });
+
+    if (!out) {
+      res.status(503).json({ error: "image_generation_failed" });
+      return;
+    }
+
+    res.json({ ok: true, mimeType: out.mimeType, data: out.base64 });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }

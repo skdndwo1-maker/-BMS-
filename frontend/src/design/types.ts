@@ -20,10 +20,29 @@ export type LogoPosition =
 // ── 포스터 카테고리 ──────────────────────────────────────────────────
 export type PosterCategory =
   | 'basic'
-  | 'service'
+  | 'notice'
+  | 'new-product'
   | 'promotion'
-  | 'mobile-launch'
   | 'plan-benefit';
+
+/** 포스터 캔버스 텍스트 정렬 (양쪽 맞춤 포함) */
+export type CanvasTextAlign = 'left' | 'center' | 'right' | 'justify';
+
+/** 캔버스 텍스트 대·소문자 표시 (CSS text-transform) */
+export type PosterTextCase = 'none' | 'uppercase' | 'lowercase' | 'capitalize';
+
+/** 요소별 타이포 오버라이드 (캔버스 툴바) */
+export interface PosterElementTypography {
+  fontFamily?: string;
+  /** 자간 (em) */
+  letterSpacingEm?: number;
+  /** 배수 행간 */
+  lineHeight?: number;
+  fontWeight?: number;
+  fontStyle?: 'normal' | 'italic';
+  textDecoration?: 'none' | 'underline';
+  textTransform?: PosterTextCase;
+}
 
 // ── 에셋 타입 ────────────────────────────────────────────────────────
 export type AssetType = 'pictogram' | 'illustration' | 'image' | 'sticker';
@@ -134,10 +153,12 @@ export interface DesignContent {
   bodyAlign?: 'left' | 'center' | 'right';
   bodyStyle?: 'normal' | 'italic';
 
-  /** 포스터 캔버스(DesignCanvas): 메인 타이틀·본문·하단 유의사항 폰트 크기 배율 % (기본 100 = 현재 비례 크기) */
+  /** 포스터 캔버스(DesignCanvas): 메인 타이틀·본문·하단 유의사항·부제 폰트 크기 배율 % (기본 100 = 현재 비례 크기) */
   posterTitleFontScale?: number;
   posterBodyFontScale?: number;
   posterFooterFontScale?: number;
+  /** 부제 블록 공통 크기 배율 (메인 타이틀 대비 기본 비율에 곱함) */
+  posterSubtitleFontScale?: number;
 
   /** 포스터: 배경 이미지 / 뱃지 영역 — 캔버스 대비 정규화 좌표 (0~1), 중앙 캔버스에서 드래그·리사이즈 */
   posterBackgroundImageRect?: { x: number; y: number; width: number; height: number };
@@ -147,16 +168,63 @@ export interface DesignContent {
   posterImagePosX?: number;
   posterImagePosY?: number;
   posterBadgeRect?: { x: number; y: number; width: number; height: number };
+  /** 뱃지 배경: 마젠타(기본) 또는 블랙 */
+  posterBadgeColor?: "magenta" | "black";
 
   /** 포스터: 메인 타이틀/본문/유의사항 박스 — 드래그·리사이즈 */
   posterTitleRect?: { x: number; y: number; width: number; height: number };
   posterBodyRect?: { x: number; y: number; width: number; height: number };
+
+  /** false면 해당 텍스트 영역을 캔버스에 그리지 않음(우측 패널 데이터는 유지). 미설정·true = 표시 */
+  posterTitleOnCanvas?: boolean;
+  posterBodyOnCanvas?: boolean;
+  posterFooterOnCanvas?: boolean;
+
+  /** 부제 (메인 타이틀 외, 최대 3) — 캔버스별 rect */
+  posterSubtitles?: Array<{ id: string; text: string }>;
+  posterSubtitleRects?: Record<string, { x: number; y: number; width: number; height: number }>;
+
+  /** 본문 블록 (최대 3) — 첫 블록은 bodyText와 동기화 */
+  posterBodies?: Array<{ id: string; text: string }>;
+  posterBodyRects?: Record<string, { x: number; y: number; width: number; height: number }>;
+  /** 본문 블록별 굵게 구간 [start,end) — plain 텍스트 기준 */
+  posterBodyBoldRanges?: Record<string, Array<{ start: number; end: number }>>;
+  /** 본문 블록별 기울임·밑줄 구간 */
+  posterBodyItalicRanges?: Record<string, Array<{ start: number; end: number }>>;
+  posterBodyUnderlineRanges?: Record<string, Array<{ start: number; end: number }>>;
+
+  /** 메인 타이틀·유의사항·부제: 부분 굵게/기울임/밑줄 (plain 기준) */
+  posterTitleBoldRanges?: Array<{ start: number; end: number }>;
+  posterTitleItalicRanges?: Array<{ start: number; end: number }>;
+  posterTitleUnderlineRanges?: Array<{ start: number; end: number }>;
+  posterFooterBoldRanges?: Array<{ start: number; end: number }>;
+  posterFooterItalicRanges?: Array<{ start: number; end: number }>;
+  posterFooterUnderlineRanges?: Array<{ start: number; end: number }>;
+  posterSubtitleBoldRanges?: Record<string, Array<{ start: number; end: number }>>;
+  posterSubtitleItalicRanges?: Record<string, Array<{ start: number; end: number }>>;
+  posterSubtitleUnderlineRanges?: Record<string, Array<{ start: number; end: number }>>;
   posterFooterRect?: { x: number; y: number; width: number; height: number };
 
-  /** 포스터: 메인 타이틀/본문/유의사항 정렬 */
-  posterTitleAlign?: "left" | "center" | "right";
-  posterBodyAlign?: "left" | "center" | "right";
-  posterFooterAlign?: "left" | "center" | "right";
+  /** 텍스트 박스 자동 크기: 사용자가 핸들로 크기 조절하면 해당 플래그로 자동 맞춤 일시 중단 */
+  posterTitleRectLocked?: boolean;
+  posterFooterRectLocked?: boolean;
+  posterBodyRectLocked?: Record<string, boolean>;
+
+  /** 포스터: 메인 타이틀/본문/하단 유의사항 정렬 */
+  posterTitleAlign?: CanvasTextAlign;
+  posterBodyAlign?: CanvasTextAlign;
+  posterFooterAlign?: CanvasTextAlign;
+  /** 부제 블록별 정렬 (미지정 시 메인 타이틀 정렬과 동일하게 취급) */
+  posterSubtitleAlign?: Record<string, CanvasTextAlign>;
+
+  /** 하단 유의사항 글자색 (미지정 시 VI 회색 톤) */
+  posterFooterColor?: string;
+
+  /** 캔버스 툴바 타이포 세부 */
+  posterTitleTypography?: PosterElementTypography;
+  posterFooterTypography?: PosterElementTypography;
+  posterBodyTypography?: Record<string, PosterElementTypography>;
+  posterSubtitleTypography?: Record<string, PosterElementTypography>;
 }
 
 export interface ComplianceIssue {

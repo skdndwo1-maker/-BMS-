@@ -106,10 +106,6 @@ const EMPTY_NAMING_OVERVIEW: NamingOverviewFields = {
   misc: "",
 };
 
-/** 생성/검수 공통: 입력창 폰트 85% 수준(기존 대비) + 볼드 해제 */
-const REQUEST_TEXTAREA_CLASS =
-  "w-full resize-none rounded-[12px] border-2 border-gray-200 px-[20px] py-[12px] text-[15px] font-normal leading-relaxed outline-none transition-all placeholder:font-normal placeholder:text-gray-300 focus:border-[#F43182] focus:ring-4 focus:ring-[#F43182]/20";
-
 function buildNamingOverviewForPrompt(fields: NamingOverviewFields): string {
   const rows = NAMING_OVERVIEW_FIELDS.map(({ key, label }) => {
     const v = (fields[key] ?? "").trim();
@@ -457,7 +453,6 @@ function ProposalDimensionBars({ proposal }: { proposal: BrandNamingProposal }) 
 export function BrandNaming() {
   const navigate = useNavigate();
 
-  const [namingInput, setNamingInput] = useState("");
   /** 검수 모드 전용: 위·아래 분리 입력 */
   const [auditName, setAuditName] = useState("");
   const [auditOverview, setAuditOverview] = useState<NamingOverviewFields>(EMPTY_NAMING_OVERVIEW);
@@ -649,7 +644,6 @@ export function BrandNaming() {
     setNamingResult(null);
     setRunError(null);
     setCurrentStep("idle");
-    setNamingInput("");
     setAuditName("");
     setAuditOverview(EMPTY_NAMING_OVERVIEW);
     setGenerateOverview(EMPTY_NAMING_OVERVIEW);
@@ -730,10 +724,10 @@ export function BrandNaming() {
               <div className="h-6 w-px bg-gray-200" />
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 shrink-0">
-                  <img src="/uplus-main-logo.png" alt="브랜드관리시스템" className="h-full w-full object-contain" />
+                  <img src="/uplus-main-logo.png" alt="U+ AI 브랜드 Agent" className="h-full w-full object-contain" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-semibold text-gray-900">브랜드관리시스템</h1>
+                  <h1 className="text-xl font-semibold text-gray-900">U+ AI 브랜드 Agent</h1>
                   <p className="text-xs text-gray-500">브랜드 네이밍 검토 Brand Naming Audit</p>
                 </div>
               </div>

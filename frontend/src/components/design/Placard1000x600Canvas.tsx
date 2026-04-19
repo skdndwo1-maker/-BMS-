@@ -14,24 +14,16 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import type { DesignContent, CanvasSize } from '@/design/types';
 
 import { defaultCI, defaultBI, defaultSLOGAN } from "@/design/defaultLogos";
+import { VI_COLORS, VI_FONT_STACK, VI_RIGHT_PANEL_BG, getViGridStepPx } from "@/design/viCanvasConstants";
+import { ViAlignmentGrid } from "./ViAlignmentGrid";
 
-const ASPECT     = 1000 / 600;
-const MAGENTA    = '#F43182';
-const DARK       = '#1A1A1A';
-const GRAY_TEXT  = '#5A5A5A';
-const BORDER_COL = '#C8C8C8';
-
-const RIGHT_BG: Record<string, string> = {
-  'white':      '#FFFFFF',
-  'light-grey': '#F2F2F2',
-  'ivory':      '#FDFAF0',
-  'light-pink': '#FFF0F5',
-};
+const ASPECT = 1000 / 600;
 
 interface Props {
   content: DesignContent;
   canvasSize: CanvasSize;
   zoom: number;
+  showViGrid?: boolean;
 }
 
 function AdminLogo({ option, height, customSrc }: {
@@ -44,7 +36,7 @@ function AdminLogo({ option, height, customSrc }: {
   return <img src={defaultSLOGAN} alt="LG U+ Slogan" style={{ height: `${height}px`, width: 'auto', objectFit: 'contain', display: 'block' }} />;
 }
 
-export function Placard1000x600Canvas({ content, zoom }: Props) {
+export function Placard1000x600Canvas({ content, zoom, showViGrid }: Props) {
   const outerRef = useRef<HTMLDivElement>(null);
   const [baseW, setBaseW] = useState(900);
   const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(null);
@@ -108,7 +100,7 @@ export function Placard1000x600Canvas({ content, zoom }: Props) {
 
   const bgKey      = content.rightPanelBg ?? 'white';
   const logoOption = content.logoOption   ?? 'CI';
-  const rightBg    = RIGHT_BG[bgKey];
+  const rightBg    = VI_RIGHT_PANEL_BG[bgKey] ?? VI_RIGHT_PANEL_BG.white;
 
   const mainTitle = content.title           || 'LG유플러스 AI경영시스템';
   const emphTitle = content.emphasizedTitle || '국제인증 획득';
@@ -123,7 +115,7 @@ export function Placard1000x600Canvas({ content, zoom }: Props) {
         width: '100%', height: '100%', minHeight: '100%',
         overflowX: zoom > 1 ? 'auto' : 'hidden',
         overflowY: 'auto',
-        background: '#E8E8E8',
+        background: VI_COLORS.outerChrome,
         display: 'flex',
         alignItems: zoom > 1 ? 'flex-start' : 'center',
         justifyContent: zoom > 1 ? 'flex-start' : 'center',
@@ -131,18 +123,19 @@ export function Placard1000x600Canvas({ content, zoom }: Props) {
       }}
     >
       <div
-        id="placard-1000x600-canvas"
+        id="design-canvas"
         style={{
           position: 'relative',
           width: `${displayW}px`, height: `${displayH}px`,
-          background: '#FFFFFF',
-          border: `1.5px solid ${BORDER_COL}`,
+          background: VI_COLORS.canvasBg,
+          border: `1.5px solid ${VI_COLORS.border}`,
           borderRadius: `${X * 0.1}px`,
           overflow: 'hidden', flexShrink: 0,
           boxShadow: '0 4px 28px rgba(0,0,0,0.12)',
-          fontFamily: '"Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif',
+          fontFamily: VI_FONT_STACK,
         }}
       >
+        {showViGrid && <ViAlignmentGrid width={displayW} height={displayH} step={getViGridStepPx(X)} />}
         {/* ── Right panel bg (라운드 프레임) ────────────────────── */}
         <div style={{
           position: 'absolute',
@@ -168,7 +161,7 @@ export function Placard1000x600Canvas({ content, zoom }: Props) {
           display: 'flex',
           flexDirection: 'column',
           gap: `${infoFontSize * 0.3}px`,
-          color: GRAY_TEXT,
+          color: VI_COLORS.textSecondary,
           fontSize: `${infoFontSize * 1}px`,
           fontWeight: 600,
           lineHeight: 1.3,
@@ -192,15 +185,15 @@ export function Placard1000x600Canvas({ content, zoom }: Props) {
           {/* 메인타이틀 + 강조 */}
           <div style={{ lineHeight: 1.2, textAlign: 'center', marginBottom: `${titleToSubGap}px`, wordBreak: 'keep-all' }}>
             {mainTitle && (
-              <span style={{ fontSize: `${X * 1.2}px`, fontWeight: 700, color: DARK, letterSpacing: '-0.02em' }}>
+              <span style={{ fontSize: `${X * 1.2}px`, fontWeight: 600, color: VI_COLORS.textPrimary, letterSpacing: '-0.02em' }}>
                 {mainTitle}
               </span>
             )}
             {mainTitle && emphTitle && (
-              <span style={{ fontSize: `${X * 1.15}px`, fontWeight: 700, color: DARK }}>{' '}</span>
+              <span style={{ fontSize: `${X * 1.15}px`, fontWeight: 600, color: VI_COLORS.textPrimary }}>{' '}</span>
             )}
             {emphTitle && (
-              <span style={{ fontSize: `${titleFontSz}px`, fontWeight: 800, color: MAGENTA, letterSpacing: '-0.02em' }}>
+              <span style={{ fontSize: `${titleFontSz}px`, fontWeight: 700, color: VI_COLORS.brandMagenta, letterSpacing: '-0.02em' }}>
                 {emphTitle}
               </span>
             )}
@@ -210,7 +203,7 @@ export function Placard1000x600Canvas({ content, zoom }: Props) {
           {subTitle && (
             <div style={{
               fontSize: `${subFontSz}px`, fontWeight: 400,
-              color: GRAY_TEXT, lineHeight: 2,
+              color: VI_COLORS.textSecondary, lineHeight: 2,
               textAlign: 'center', letterSpacing: '0.01em',
             }}>
               {subTitle}

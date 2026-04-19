@@ -23,10 +23,13 @@ export default defineConfig({
     /** 선호 포트(다른 Vite가 점유 중이면 다음 포트로 넘어감) */
     port: 5178,
     strictPort: false,
+    /** 127.0.0.1·localhost 모두에서 접속 가능하도록 (기본은 IPv6 localhost만인 환경이 있음) */
+    host: true,
     proxy: apiProxy
   },
   /** `vite preview`에서도 `/api`가 백엔드로 가도록 동일 프록시 */
   preview: {
+    host: true,
     proxy: apiProxy
   },
   resolve: {

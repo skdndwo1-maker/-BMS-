@@ -149,10 +149,10 @@ export function OptionSelection() {
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 shrink-0">
-              <img src="/uplus-main-logo.png" alt="브랜드관리시스템" className="h-full w-full object-contain" />
+              <img src="/uplus-main-logo.png" alt="U+ AI 브랜드 Agent" className="h-full w-full object-contain" />
             </div>
             <div>
-              <span className="font-semibold text-gray-900 text-xl block leading-tight">브랜드관리시스템</span>
+              <span className="font-semibold text-gray-900 text-xl block leading-tight">U+ AI 브랜드 Agent</span>
               <span className="text-xs text-gray-400 leading-tight block">Brand Contents Total Managing Platform</span>
             </div>
           </div>

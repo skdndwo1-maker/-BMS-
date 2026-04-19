@@ -14,8 +14,10 @@ interface Props {
   asset: AssetLayer;
   canvasW: number;   // 캔버스 실제 표시 너비 (px)
   canvasH: number;   // 캔버스 실제 표시 높이 (px)
+  /** VI 격자 스냅(px) */
+  snapStepPx?: number;
   isSelected: boolean;
-  onSelect: (id: string, opts?: { toggle?: boolean }) => void;
+  onSelect: (id: string, opts?: { additive?: boolean }) => void;
   onUpdate: (id: string, patch: Partial<AssetLayer>) => void;
   onDelete: (id: string) => void;
 }
@@ -26,7 +28,7 @@ type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 const HANDLE_SIZE = 8;
 
 export function DraggableAsset({
-  asset, canvasW, canvasH, isSelected, onSelect, onUpdate, onDelete,
+  asset, canvasW, canvasH, snapStepPx, isSelected, onSelect, onUpdate, onDelete,
 }: Props) {
   const elRef = useRef<HTMLDivElement>(null);
 
@@ -44,14 +46,15 @@ export function DraggableAsset({
   const onMouseDownMove = useCallback((e: React.MouseEvent) => {
     if (asset.locked) return;
     e.stopPropagation();
-    onSelect(asset.id, { toggle: e.shiftKey });
+    onSelect(asset.id, { additive: e.shiftKey });
     dragStart.current = { mx: e.clientX, my: e.clientY, ox: px.x, oy: px.y };
 
     const onMove = (ev: MouseEvent) => {
       if (!dragStart.current) return;
       const dx = ev.clientX - dragStart.current.mx;
       const dy = ev.clientY - dragStart.current.my;
-      const snap = ev.shiftKey ? 10 : 1;
+      const fine = snapStepPx ?? 1;
+      const snap = ev.shiftKey ? 10 : fine;
       const sx = Math.round((dragStart.current.ox + dx) / snap) * snap;
       const sy = Math.round((dragStart.current.oy + dy) / snap) * snap;
       const newX = Math.max(0, Math.min(canvasW - px.width, sx));
@@ -65,7 +68,7 @@ export function DraggableAsset({
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-  }, [asset, px, canvasW, canvasH, onSelect, onUpdate]);
+  }, [asset, px, canvasW, canvasH, onSelect, onUpdate, snapStepPx]);
 
   // ── 리사이즈 ─────────────────────────────────────────────────────
   const resizeStart = useRef<{
@@ -78,7 +81,7 @@ export function DraggableAsset({
     if (asset.locked) return;
     e.stopPropagation();
     e.preventDefault();
-    onSelect(asset.id, { toggle: e.shiftKey });
+    onSelect(asset.id, { additive: e.shiftKey });
     resizeStart.current = {
       mx: e.clientX, my: e.clientY,
       ox: px.x, oy: px.y, ow: px.width, oh: px.height,
@@ -91,7 +94,8 @@ export function DraggableAsset({
       const dx = ev.clientX - mx;
       const dy = ev.clientY - my;
       const MIN = 20;
-      const snap = ev.shiftKey ? 10 : 1;
+      const fine = snapStepPx ?? 1;
+      const snap = ev.shiftKey ? 10 : fine;
 
       let nx = ox, ny = oy, nw = ow, nh = oh;
 
@@ -127,7 +131,7 @@ export function DraggableAsset({
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-  }, [asset, px, canvasW, canvasH, onUpdate]);
+  }, [asset, px, canvasW, canvasH, onUpdate, snapStepPx]);
 
   // ── 리사이즈 핸들 위치 ──────────────────────────────────────────
   const handles: { key: ResizeHandle; style: React.CSSProperties }[] = [
@@ -162,7 +166,7 @@ export function DraggableAsset({
         boxSizing: 'border-box',
       }}
       onMouseDown={onMouseDownMove}
-      onClick={(e) => { e.stopPropagation(); onSelect(asset.id, { toggle: e.shiftKey }); }}
+      onClick={(e) => { e.stopPropagation(); onSelect(asset.id, { additive: e.shiftKey }); }}
     >
       {/* 에셋 이미지 */}
       <img
