@@ -44,6 +44,10 @@ import {
   type AlignMode,
 } from "@/design/designCanvasAlign";
 import { migrateBoldMarkdownToRanges, sanitizeBoldRanges } from "@/design/bodyBoldRanges";
+import {
+  resolvePosterBodyBlocksForRender,
+  applyBodyBlockTextEdit,
+} from "@/design/posterBodyDisplay";
 import { ViAlignmentGrid } from "./ViAlignmentGrid";
 import {
   bodyTextStyle,
@@ -54,6 +58,50 @@ import {
   titleTextStyle,
   type CanvasTextEditTarget,
 } from "@/design/canvasTextTypography";
+
+/** 캔버스 빈 타이틀 플레이스홀더 — 높이 자동 계산·표시 문구와 동일해야 함 */
+const TITLE_PLACEHOLDER_TEXT = "메인 타이틀을 입력하세요";
+
+/** 선택한 본문 블록 id들을 제거한 콘텐츠(마지막 블록이면 본문 영역 전체 숨김) */
+function applyRemoveBodyBlockIds(c: DesignContent, ids: Set<string>): DesignContent {
+  if (ids.size === 0) return c;
+  const blocksSource = c.posterBodies?.length
+    ? [...c.posterBodies]
+    : [{ id: "body-1", text: c.bodyText ?? "" }];
+  const nextBlocks = blocksSource.filter((b) => !ids.has(b.id));
+  if (nextBlocks.length === 0) {
+    return { ...c, posterBodyOnCanvas: false };
+  }
+  const restRects = { ...(c.posterBodyRects ?? {}) };
+  const restBold = { ...(c.posterBodyBoldRanges ?? {}) };
+  const restItal = { ...(c.posterBodyItalicRanges ?? {}) };
+  const restUnd = { ...(c.posterBodyUnderlineRanges ?? {}) };
+  const restTypo = { ...(c.posterBodyTypography ?? {}) };
+  const restLocked = { ...(c.posterBodyRectLocked ?? {}) };
+  for (const id of ids) {
+    delete restRects[id];
+    delete restBold[id];
+    delete restItal[id];
+    delete restUnd[id];
+    delete restTypo[id];
+    delete restLocked[id];
+  }
+  const first = nextBlocks[0];
+  const nextBt = first?.id === "body-1" ? (first.text ?? "") : c.bodyText;
+  const pr = first?.id === "body-1" ? restRects["body-1"] ?? c.posterBodyRect : c.posterBodyRect;
+  return {
+    ...c,
+    posterBodies: nextBlocks,
+    posterBodyRects: restRects,
+    posterBodyBoldRanges: restBold,
+    posterBodyItalicRanges: restItal,
+    posterBodyUnderlineRanges: restUnd,
+    posterBodyTypography: restTypo,
+    posterBodyRectLocked: restLocked,
+    bodyText: nextBt,
+    posterBodyRect: pr,
+  };
+}
 
 function normalizeLogoPosition(pos: string | undefined): LogoPosition {
   const allowed: LogoPosition[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
@@ -133,6 +181,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const canvasRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef(content);
   contentRef.current = content;
+  /** Alt+드래그로 이미지 object-position 조정 시 드래그 시작 시점의 % 기준 */
+  const imagePanSessionRef = useRef<{ startX: number; startY: number } | null>(null);
   const [containerW, setContainerW] = useState(800);
   const [containerH, setContainerH] = useState(600);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -141,6 +191,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const selectedKeysRef = useRef<string[]>([]);
   selectedKeysRef.current = selectedKeys;
+  /** 이미지 박스 더블클릭 후: 드래그 = 박스 이동이 아니라 안쪽 이미지 위치(object-position) */
+  const [imageInnerPosAdjust, setImageInnerPosAdjust] = useState(false);
 
   /** 더블클릭 시에만 텍스트 내용 편집(textarea) */
   const [inlineEditTarget, setInlineEditTarget] = useState<CanvasTextEditTarget | null>(null);
@@ -344,6 +396,22 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     });
   }, []);
 
+  useEffect(() => {
+    if (!selectedKeys.includes("image")) setImageInnerPosAdjust(false);
+  }, [selectedKeys]);
+
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") return;
+      const ae = document.activeElement;
+      if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement) return;
+      if ((ae as HTMLElement | null)?.isContentEditable) return;
+      setImageInnerPosAdjust(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const handleAssetUpdate = useCallback(
     (id: string, patch: Partial<AssetLayer>) => {
       if (!onContentChange) return;
@@ -393,6 +461,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       if (el.closest("[data-canvas-inline-edit]")) return;
       setSelectedKeys([]);
       setInlineEditTarget(null);
+      setImageInnerPosAdjust(false);
       onFocusChange?.(null);
     },
     [onFocusChange]
@@ -418,18 +487,45 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     setInlineEditTarget((cur) => (cur?.kind === "title" ? null : cur));
   }, [onContentChange]);
 
-  const removeBodyBlocksFromCanvas = useCallback(() => {
-    if (!onContentChange) return;
-    onContentChange({ ...contentRef.current, posterBodyOnCanvas: false });
-    setSelectedKeys((prev) => prev.filter((k) => k !== "body" && !k.startsWith("body:")));
-    setInlineEditTarget((cur) => (cur?.kind === "body" ? null : cur));
-  }, [onContentChange]);
+  const removeOneBodyBlockFromCanvas = useCallback(
+    (id: string) => {
+      if (!onContentChange) return;
+      const c = contentRef.current;
+      const next = applyRemoveBodyBlockIds(c, new Set([id]));
+      onContentChange(next);
+      setSelectedKeys((prev) =>
+        prev.filter((k) => {
+          if (k === "body" && id === "body-1") return false;
+          if (k === `body:${id}`) return false;
+          return true;
+        })
+      );
+      setInlineEditTarget((cur) => (cur?.kind === "body" && cur.id === id ? null : cur));
+    },
+    [onContentChange]
+  );
 
   const removeFooterFromCanvas = useCallback(() => {
     if (!onContentChange) return;
     onContentChange({ ...contentRef.current, posterFooterOnCanvas: false });
     setSelectedKeys((prev) => prev.filter((k) => k !== "footer"));
     setInlineEditTarget((cur) => (cur?.kind === "footer" ? null : cur));
+  }, [onContentChange]);
+
+  const removeImageFromCanvas = useCallback(() => {
+    if (!onContentChange) return;
+    const c = contentRef.current;
+    imagePanSessionRef.current = null;
+    setImageInnerPosAdjust(false);
+    onContentChange({
+      ...c,
+      image: undefined,
+      posterBackgroundImageRect: undefined,
+      posterImageOpacity: 0,
+      posterImagePosX: undefined,
+      posterImagePosY: undefined,
+    });
+    setSelectedKeys((prev) => prev.filter((k) => k !== "image"));
   }, [onContentChange]);
 
   useEffect(() => {
@@ -442,20 +538,37 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       const keys = selectedKeysRef.current;
       const removeTitle = keys.includes("title");
       const removeFooter = keys.includes("footer");
-      const removeBody = keys.some((k) => k === "body" || k.startsWith("body:"));
-      if (!removeTitle && !removeFooter && !removeBody) return;
+      const removeImage = keys.includes("image");
+      const bodyIds = new Set<string>();
+      for (const k of keys) {
+        if (k === "body") bodyIds.add("body-1");
+        else if (k.startsWith("body:")) bodyIds.add(k.slice(5));
+      }
+      if (!removeTitle && !removeFooter && !removeImage && bodyIds.size === 0) return;
       e.preventDefault();
+      if (removeImage) imagePanSessionRef.current = null;
       const c = contentRef.current;
-      const next: DesignContent = { ...c };
+      let next: DesignContent = { ...c };
       if (removeTitle) next.posterTitleOnCanvas = false;
       if (removeFooter) next.posterFooterOnCanvas = false;
-      if (removeBody) next.posterBodyOnCanvas = false;
+      if (removeImage) {
+        next.image = undefined;
+        next.posterBackgroundImageRect = undefined;
+        next.posterImageOpacity = 0;
+        next.posterImagePosX = undefined;
+        next.posterImagePosY = undefined;
+      }
+      if (bodyIds.size > 0) next = applyRemoveBodyBlockIds(next, bodyIds);
       onContentChange(next);
       setSelectedKeys((prev) =>
         prev.filter((k) => {
           if (removeTitle && k === "title") return false;
           if (removeFooter && k === "footer") return false;
-          if (removeBody && (k === "body" || k.startsWith("body:"))) return false;
+          if (removeImage && k === "image") return false;
+          if (k === "body" || k.startsWith("body:")) {
+            const id = k === "body" ? "body-1" : k.slice(5);
+            return !bodyIds.has(id);
+          }
           return true;
         })
       );
@@ -463,7 +576,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         if (!cur) return null;
         if (removeTitle && cur.kind === "title") return null;
         if (removeFooter && cur.kind === "footer") return null;
-        if (removeBody && cur.kind === "body") return null;
+        if (cur.kind === "body" && bodyIds.has(cur.id)) return null;
         return cur;
       });
     };
@@ -615,10 +728,10 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const titleRect = content.posterTitleRect ?? DEFAULT_POSTER_TITLE_RECT;
   const footerRect = content.posterFooterRect ?? DEFAULT_POSTER_FOOTER_RECT;
 
-  const posterBodiesSafe =
-    content.posterBodies && content.posterBodies.length > 0
-      ? content.posterBodies
-      : [{ id: "body-1", text: content.bodyText ?? "" }];
+  const posterBodiesSafe = useMemo(
+    () => resolvePosterBodyBlocksForRender(content),
+    [content.posterBodies, content.bodyText]
+  );
 
   const normBodyRect = (id: string) =>
     content.posterBodyRects?.[id] ??
@@ -840,12 +953,12 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     if (!draft) return;
     if (content.posterTitleOnCanvas === false) return;
     if (content.posterTitleRectLocked) return;
-    if (!content.title?.trim()) return;
     const tr = content.posterTitleRect ?? DEFAULT_POSTER_TITLE_RECT;
     const wPx = tr.width * displayW;
     const charW = titleFontSize * 0.52;
     const charsPerLine = Math.max(4, wPx / Math.max(1, charW));
-    const lines = content.title.split("\n").reduce(
+    const raw = content.title?.trim() ? content.title : TITLE_PLACEHOLDER_TEXT;
+    const lines = raw.split("\n").reduce(
       (acc, line) => acc + Math.max(1, Math.ceil(line.length / charsPerLine)),
       0
     );
@@ -896,10 +1009,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     const draft = onContentDraftChange;
     if (!draft) return;
     if (content.posterBodyOnCanvas === false) return;
-    const bodies =
-      content.posterBodies && content.posterBodies.length > 0
-        ? content.posterBodies
-        : [{ id: "body-1", text: content.bodyText ?? "" }];
+    const bodies = resolvePosterBodyBlocksForRender(content);
     let next = content;
     let touched = false;
     for (const b of bodies) {
@@ -1058,31 +1168,58 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               onFocusChange?.("image");
             }}
             zIndex={4}
-            label="이미지"
+            label={imageInnerPosAdjust ? "이미지 · 안쪽 위치 조절" : "이미지"}
             borderRadiusScale={2.5}
             snapStepPx={snapPx}
+            panDragInsteadOfMove={imageInnerPosAdjust}
+            onOverlayDoubleClick={() => {
+              setImageInnerPosAdjust(true);
+              pickKey("image", false);
+              onFocusChange?.("image");
+            }}
             onPan={(d, ev) => {
               if (!onContentChange) return;
-              // Alt+드래그: 이미지 내부 위치 조정 (object-position)
-              const curX = Number(content.posterImagePosX ?? 50);
-              const curY = Number(content.posterImagePosY ?? 50);
-              const nextX = Math.max(0, Math.min(100, curX + (d.dx / Math.max(1, imageRect.width * displayW)) * 50));
-              const nextY = Math.max(0, Math.min(100, curY + (d.dy / Math.max(1, imageRect.height * displayH)) * 50));
-              onContentChange({ ...content, posterImagePosX: nextX, posterImagePosY: nextY });
-              // reset start to make panning incremental
+              const wPx = Math.max(1, imageRect.width * displayW);
+              const hPx = Math.max(1, imageRect.height * displayH);
+              if (!imagePanSessionRef.current) {
+                const c0 = contentRef.current;
+                imagePanSessionRef.current = {
+                  startX: Number(c0.posterImagePosX ?? 50),
+                  startY: Number(c0.posterImagePosY ?? 50),
+                };
+              }
+              const { startX, startY } = imagePanSessionRef.current;
+              // 드래그 방향 = 이미지가 따라오도록(마우스 위로 → 위쪽으로, 아래로 → 아래로)
+              const nextX = Math.max(0, Math.min(100, startX - (d.dx / wPx) * 100));
+              const nextY = Math.max(0, Math.min(100, startY - (d.dy / hPx) * 100));
+              onContentChange({
+                ...contentRef.current,
+                posterImagePosX: nextX,
+                posterImagePosY: nextY,
+              });
               ev.stopPropagation?.();
             }}
+            onPanEnd={() => {
+              imagePanSessionRef.current = null;
+            }}
+            onRequestDelete={onContentChange ? removeImageFromCanvas : undefined}
           >
             <img
               src={imageUrl}
               alt=""
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
               style={{
                 width: "100%",
                 height: "100%",
                 objectFit: "cover",
                 objectPosition: `${content.posterImagePosX ?? 50}% ${content.posterImagePosY ?? 50}%`,
-                opacity: Math.min(1, Math.max(0, Number(content.posterImageOpacity ?? 0) / 100)),
+                opacity: Math.min(
+                  1,
+                  Math.max(0, Number(content.posterImageOpacity ?? 100) / 100)
+                ),
                 display: "block",
+                userSelect: "none",
               }}
             />
           </DraggableCanvasOverlay>
@@ -1114,13 +1251,15 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               style={{
                 width: "100%",
                 height: "100%",
+                minWidth: 0,
+                minHeight: 0,
                 display: "flex",
                 alignItems: "flex-start",
                 justifyContent: titleFlex.justifyContent,
                 textAlign: titleFlex.textAlign,
               }}
             >
-              <div style={{ width: "100%" }}>
+              <div style={{ width: "100%", minWidth: 0, maxHeight: "100%" }}>
                 <h1
                   style={{
                     ...titleTextStyle(content, titleFontSize, titleColor),
@@ -1138,7 +1277,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                     if (!content.title?.trim() && !hasTri) {
                       return (
                         <span style={{ ...tw, color: "#C4C4C4", textShadow: "none" }}>
-                          메인 타이틀을 입력하세요
+                          {TITLE_PLACEHOLDER_TEXT}
                         </span>
                       );
                     }
@@ -1295,7 +1434,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                 onBeginCanvasTextEdit?.();
                 setInlineEditTarget({ kind: "body", id: b.id });
               }}
-              onRequestDelete={onContentChange ? removeBodyBlocksFromCanvas : undefined}
+              onRequestDelete={onContentChange ? () => removeOneBodyBlockFromCanvas(b.id) : undefined}
             >
               <div
                 style={{
@@ -1409,11 +1548,14 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             <img
               src={logoUrl || brandLogoSrc}
               alt="Brand Logo"
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
               style={{
                 height: `${logoHeight}px`,
                 width: "auto",
                 objectFit: "contain",
                 display: "block",
+                userSelect: "none",
               }}
             />
           </div>
@@ -1567,20 +1709,10 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                 onChange={(e) => {
                   const text = e.target.value;
                   const ranges = sanitizeBoldRanges(text.length, content.posterBodyBoldRanges?.[b.id]);
-                  const lockedMap = { ...(content.posterBodyRectLocked ?? {}), [b.id]: false };
-                  const baseBodies =
-                    content.posterBodies && content.posterBodies.length > 0
-                      ? [...content.posterBodies]
-                      : [{ id: "body-1" as const, text: content.bodyText ?? "" }];
-                  const nextBodies = baseBodies.map((bb) =>
-                    bb.id === b.id ? { ...bb, text } : bb
-                  );
+                  const merged = applyBodyBlockTextEdit(content, b.id, text);
                   onContentDraftChange({
-                    ...content,
-                    posterBodies: nextBodies,
-                    bodyText: b.id === "body-1" ? text : content.bodyText,
+                    ...merged,
                     posterBodyBoldRanges: { ...content.posterBodyBoldRanges, [b.id]: ranges },
-                    posterBodyRectLocked: lockedMap,
                   });
                 }}
                 onBlur={endTextEditIfBlurOutside}

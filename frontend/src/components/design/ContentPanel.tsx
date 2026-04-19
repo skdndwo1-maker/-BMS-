@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, type SetStateAction } from "react";
 import { useDropzone } from "react-dropzone";
 import type { DesignContent, DesignStyle, LogoPosition, PosterCategory, AssetLayer, AssetType } from "@/design/types";
 import { Input } from "@/components/ui/input";
@@ -23,36 +23,37 @@ import {
 import { adjustBoldRangesOnPlainReplace } from "@/design/bodyBoldRanges";
 import { PICTOGRAM_PRESETS, filterAssetPresets } from "@/design/assetPresets";
 import { AssetPresetPickerDialog } from "@/components/design/AssetPresetPickerDialog";
+import { templates as allDesignTemplates } from "@/design/templates";
+import { resolvePosterBodyBlocksForRender, applyBodyBlockTextEdit } from "@/design/posterBodyDisplay";
 
 interface ContentPanelProps {
   content: DesignContent;
-  onContentChange: (content: DesignContent) => void;
+  onContentChange: (next: SetStateAction<DesignContent>) => void;
   onShowQuickStart?: () => void;
   templateId?: string;
   focusTarget?: import("./DesignCanvas").DesignFocusTarget;
 }
 
-const POSTER_IDS = [
-  'poster-a4','poster-a3','poster-a2','poster-a1','poster-a5',
-  'a1-poster','a2-poster','a3-poster',
-  'notice-a4','notice-a1','notice-half',
-];
-
+/** 현수막·X배너 등 — 우측 패널 배경·날짜·장소 필드 표시 */
 const PLACARD_IDS = [
-  'placard-wide-landscape','placard-1000x600','placard-2000x1000','placard-600x1800',
+  "placard-wide-landscape",
+  "placard-1000x600",
+  "placard-2000x1000",
+  "placard-600x1800",
+  "placard-vertical",
+  "xbanner",
 ];
 
 function PosterBodyTextarea({
   value,
   onChange,
   boldRanges,
-  onBoldRangesChange,
   rows = 5,
 }: {
   value: string;
-  onChange: (v: string) => void;
+  /** 텍스트 + 조정된 굵게 범위를 한 번에 반영해야 함(연속 setState 시 stale content로 덮어쓰기 방지) */
+  onChange: (v: string, nextBoldRanges: Array<{ start: number; end: number }>) => void;
   boldRanges?: Array<{ start: number; end: number }>;
-  onBoldRangesChange: (ranges: Array<{ start: number; end: number }>) => void;
   rows?: number;
 }) {
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -70,8 +71,7 @@ function PosterBodyTextarea({
           const newPlain = e.target.value;
           const nextRanges = adjustBoldRangesOnPlainReplace(prevPlain.current, newPlain, boldRanges ?? []);
           prevPlain.current = newPlain;
-          onChange(newPlain);
-          onBoldRangesChange(nextRanges);
+          onChange(newPlain, nextRanges);
         }}
         placeholder={"줄바꿈(Enter)으로 문단 구분\n예)\n5G 초고속 네트워크\n캔버스에서 본문을 선택한 뒤 좌측 「텍스트 옵션」에서 굵게 등을 적용할 수 있습니다"}
         rows={rows}
@@ -136,9 +136,13 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     else if (focusTarget === "logo") scroll(refLogo.current);
   }, [focusTarget]);
 
+  /** 캔버스 등에서 배경 이미지 제거 시 로컬 미리보기와 동기화 */
+  useEffect(() => {
+    if (content.image == null) setImagePreview(null);
+  }, [content.image]);
+
   /** posterBodies.body-1 텍스트가 비어 있는데 bodyText만 남아 있으면(레거시 불일치) 본문 입력란이 비어 보이는 문제 방지 */
   useEffect(() => {
-    if (!POSTER_IDS.includes(templateId ?? "")) return;
     const blocks = content.posterBodies;
     if (!blocks?.length) return;
     const b1 = blocks.find((x) => x.id === "body-1");
@@ -149,11 +153,13 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
       ...content,
       posterBodies: blocks.map((x) => (x.id === "body-1" ? { ...x, text: leg } : x)),
     });
-  }, [templateId, content, onContentChange]);
+  }, [content, onContentChange]);
 
-  const isPlacard     = PLACARD_IDS.includes(templateId ?? '');
-  const isPoster      = POSTER_IDS.includes(templateId ?? '');
+  const isPlacard = PLACARD_IDS.includes(templateId ?? "");
+  /** 템플릿 갤러리에 등록된 모든 온·오프라인 템플릿: A1 포스터와 동일 편집 패널 */
+  const useBrandGraphicPanel = allDesignTemplates.some((t) => t.id === templateId);
   const isContentEmpty = !content.title && !content.subtitle && !content.bodyText;
+  const templateMeta = allDesignTemplates.find((t) => t.id === templateId);
   const assetLayers   = content.assetLayers ?? [];
 
   const onAssetDrop = useCallback((files: File[], type: AssetType) => {
@@ -166,7 +172,9 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
       ...content,
       image:f[0],
       posterBackgroundImageRect: content.posterBackgroundImageRect ?? DEFAULT_POSTER_BG_RECT,
-      posterImageOpacity: content.posterImageOpacity ?? 100,
+      posterImageOpacity: 100,
+      posterImagePosX: 50,
+      posterImagePosY: 50,
     });
     setImagePreview(URL.createObjectURL(f[0]));
   }}, accept:{"image/*":[".png",".jpg",".jpeg",".webp"]}, multiple:false });
@@ -302,117 +310,9 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   );
 
   // ════════════════════════════════════════════════════════════════════
-  // ── 현수막 패널
+  // ── 브랜드 그래픽 패널 (갤러리의 모든 온·오프라인 템플릿 — A1과 동일 기능)
   // ════════════════════════════════════════════════════════════════════
-  if (isPlacard) {
-    return (
-      <div data-design-content-panel className="h-full overflow-y-auto p-6 space-y-6">
-        <div>
-          <h2 className="font-semibold text-gray-900 mb-1">현수막 콘텐츠</h2>
-          <p className="text-sm text-gray-500">LG U+ 브랜드 가이드 기반 현수막 서식</p>
-        </div>
-        <div className="bg-[#F43182]/8 border border-[#F43182]/25 rounded-lg p-3 flex items-start gap-2">
-          <Sparkles className="w-4 h-4 text-[#F43182] mt-0.5 shrink-0"/>
-          <div className="text-xs text-gray-700">
-            <p className="font-medium text-[#F43182] mb-0.5">LG U+ Brand Guideline 적용</p>
-            <p>{templateId==='placard-wide-landscape'?'4700×700mm · 1X 그리드 · 좌측 CI/정보 · 우측 타이틀 중앙 정렬':templateId==='placard-1000x600'?'1000×600mm · 좌측 CI/정보 · 우측 타이틀 중앙 정렬':templateId==='placard-2000x1000'?'2000×1000mm · 좌측 CI/정보 · 우측 타이틀 중앙 정렬':'600×1800mm · 세로형 · 상단 CI · 중앙 타이틀'}</p>
-          </div>
-        </div>
-        <div className="space-y-3">
-          <div className="space-y-0.5">
-            <Label className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">좌측 패널 — 로고 종류 선택</Label>
-            <p className="text-xs text-gray-400">클릭 시 지정 위치에 자동 배치됩니다</p>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {(
-              [
-                { key: "CI", title: "CI", desc: "Corporate Identity" },
-                { key: "BI", title: "BI", desc: "Brand Identity" },
-                { key: "SLOGAN", title: "SLOGAN", desc: "슬로건 로고" },
-              ] as const
-            ).map((opt) => {
-              const active = (content.logoOption ?? "CI") === opt.key;
-              return (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => onContentChange({ ...content, logoOption: opt.key })}
-                  className={`rounded-xl border-2 px-2 py-3 text-center transition-all ${
-                    active ? "border-[#F43182] bg-[#F43182]/6" : "border-gray-200 hover:border-gray-300 bg-white"
-                  }`}
-                >
-                  <p className={`text-sm font-bold leading-tight ${active ? "text-[#F43182]" : "text-gray-800"}`}>{opt.title}</p>
-                  <p className="mt-1 text-[9px] text-gray-400 leading-tight">{opt.desc}</p>
-                </button>
-              );
-            })}
-          </div>
-          <div {...getLogoRP()} className={`border border-dashed rounded-lg p-3 text-center cursor-pointer transition-colors ${isLogoDrag?"border-[#F43182] bg-[#F43182]/5":"border-gray-300 hover:border-gray-400"}`}>
-            <input {...getLogoIP()}/>
-            {logoPreview?(<div className="flex items-center justify-center gap-3"><img src={logoPreview} alt="Logo" className="max-h-10"/><p className="text-xs text-gray-500">클릭하여 교체</p></div>):(<div className="flex items-center justify-center gap-2 text-gray-400"><Upload className="w-4 h-4"/><p className="text-xs">직접 업로드 (위 옵션 덮어씌움)</p></div>)}
-          </div>
-        </div>
-        <div className="space-y-3 border-t border-gray-100 pt-4">
-          <Label className="text-sm font-semibold text-gray-700">우측 패널 배경색</Label>
-          <div className="grid grid-cols-2 gap-2">
-            {([{key:"white",label:"백지",hex:"#FFFFFF",border:"#D4D4D4"},{key:"light-grey",label:"라이트 그레이",hex:"#F2F2F2",border:"#D4D4D4"},{key:"ivory",label:"아이보리",hex:"#FDFAF0",border:"#D9D5C0"},{key:"light-pink",label:"연핑크",hex:"#FFF0F5",border:"#F4B8D0"}] as const).map((opt)=>{
-              const active=(content.rightPanelBg??"white")===opt.key;
-              return (
-                <button key={opt.key} onClick={()=>onContentChange({...content,rightPanelBg:opt.key})}
-                  className={`flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 text-left transition-all ${active?"border-[#F43182] shadow-sm":"border-gray-200 hover:border-gray-300"}`}>
-                  <span className="shrink-0 rounded-md" style={{width:22,height:22,background:opt.hex,border:`1.5px solid ${opt.border}`,display:"inline-block"}}/>
-                  <span className={`text-xs font-medium ${active?"text-[#F43182]":"text-gray-700"}`}>{opt.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div className="space-y-3 border-t border-gray-100 pt-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">우측 패널 — 메인 타이틀</p>
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5"><Type className="w-3.5 h-3.5 text-gray-500"/>메인 타이틀 (일반)</Label>
-            <Input value={content.title} onChange={(e)=>onContentChange({...content,title:e.target.value})} placeholder="예) LG유플러스 AI경영시스템" className="font-medium"/>
-          </div>
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5"><Type className="w-3.5 h-3.5 text-[#F43182]"/>메인 타이틀 강조 (마젠타)</Label>
-            <Input value={content.emphasizedTitle||""} onChange={(e)=>onContentChange({...content,emphasizedTitle:e.target.value})} placeholder="예) 국제인증 획득" className="border-[#F43182]/40 focus:border-[#F43182] font-semibold"/>
-          </div>
-          <div className="space-y-2">
-            <Label>본문 (우측 패널 하단 영역)</Label>
-            <Textarea
-              value={content.bodyText ?? ""}
-              onChange={(e) => onContentChange({ ...content, bodyText: e.target.value })}
-              placeholder="예) IEC 42001 인증 수여식"
-              rows={5}
-              className="resize-none min-h-[100px]"
-            />
-          </div>
-        </div>
-        <div className="border-t border-gray-100 pt-4 space-y-3">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">좌측 패널 — 날짜 · 장소</p>
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-gray-500"/>날짜</Label>
-            <Input value={content.date||""} onChange={(e)=>onContentChange({...content,date:e.target.value})} placeholder="예) 2025.07.02(수)"/>
-          </div>
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-gray-500"/>장소</Label>
-            <Input value={content.venue||""} onChange={(e)=>onContentChange({...content,venue:e.target.value})} placeholder="예) LG유플러스 울산 컨버전스 홀"/>
-          </div>
-        </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-start gap-2">
-            <Sparkles className="w-4 h-4 text-blue-600 mt-0.5 shrink-0"/>
-            <div className="text-xs text-blue-900"><p className="font-medium mb-1">현수막 제작 가이드</p><ul className="space-y-1 text-blue-800"><li>• 메인 타이틀은 짧고 강렬하게 작성하세요</li><li>• 강조 텍스트는 2~4단어가 최적입니다</li><li>• 인쇄 시 300 DPI · CMYK 변환을 확인하세요</li></ul></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ════════════════════════════════════════════════════════════════════
-  // ── 포스터 패널
-  // ════════════════════════════════════════════════════════════════════
-  if (isPoster) {
+  if (useBrandGraphicPanel) {
     const currentCat=POSTER_CATEGORIES.find(c=>c.key===normalizePosterCategory(content.posterCategory))??POSTER_CATEGORIES[0];
     return (
       <div data-design-content-panel className="h-full overflow-y-auto p-6 space-y-6">
@@ -431,9 +331,13 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           onDropFiles={(files) => onAssetDrop(files, "pictogram")}
         />
         <div>
-          <h2 className="font-semibold text-gray-900 mb-1">포스터 콘텐츠</h2>
+          <h2 className="font-semibold text-gray-900 mb-1">브랜드 그래픽 콘텐츠</h2>
           <div className="flex flex-col gap-1 mt-1">
-            <p className="text-sm text-gray-500">LG U+ 브랜드 가이드 기반 포스터 서식</p>
+            <p className="text-sm text-gray-500">
+              {templateMeta
+                ? `${templateMeta.name} · ${templateMeta.size.width}×${templateMeta.size.height} ${templateMeta.size.unit}`
+                : "LG U+ 브랜드 가이드 기반 서식"}
+            </p>
             <span className="inline-flex items-center gap-1 bg-[#F43182]/10 border border-[#F43182]/25 rounded-full px-2 py-0.5 w-fit">
               <Sparkles className="w-3 h-3 text-[#F43182]"/><span className="text-[10px] font-medium text-[#F43182]">LG U+ Brand Guideline</span>
             </span>
@@ -441,10 +345,87 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           <div className="mt-3 rounded-lg border border-gray-200 bg-slate-50 p-3 text-[11px] text-gray-700 leading-snug">
             <span className="font-semibold text-gray-900">우측 패널 텍스트 편집</span>
             <p className="mt-1">
-              메인 타이틀·부제(최대 3)·본문(최대 3)·뱃지 문구·하단 유의사항을 이곳에서 모두 수정할 수 있습니다. 글꼴·크기·색 등 서식은 캔버스에서 텍스트를 선택한 뒤 좌측 하단 「텍스트 옵션」에서 조절합니다.
+              메인 타이틀·부제(최대 3)·본문(최대 3)·뱃지 문구·하단 유의사항을 이곳에서 모두 수정할 수 있습니다. 글꼴·크기·색 등 서식은 캔버스에서 텍스트를 선택한 뒤 좌측 하단 「텍스트 옵션」에서 조절합니다. 캔버스는 각 템플릿 프레임 비율에 맞게 표시되며, 요소 위치·크기는 비율(0~1)로 저장됩니다.
             </p>
           </div>
         </div>
+
+        {isPlacard && templateMeta && (
+          <div className="space-y-4 border border-[#F43182]/20 rounded-xl p-4 bg-[#F43182]/5">
+            <div className="bg-white/80 border border-[#F43182]/25 rounded-lg p-3 flex items-start gap-2">
+              <Sparkles className="w-4 h-4 text-[#F43182] mt-0.5 shrink-0" />
+              <div className="text-xs text-gray-700">
+                <p className="font-medium text-[#F43182] mb-0.5">현수막 / 배널 규격</p>
+                <p>
+                  {templateMeta.size.width}×{templateMeta.size.height}
+                  {templateMeta.size.unit} · VI 12분할은 짧은 변 기준입니다. 날짜·장소·분할 배경은 콘텐츠 필드로 유지됩니다.
+                </p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold text-gray-700">분할 영역 배경(우측 패널 톤)</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    { key: "white" as const, label: "백지", hex: "#FFFFFF", border: "#D4D4D4" },
+                    { key: "light-grey" as const, label: "라이트 그레이", hex: "#F2F2F2", border: "#D4D4D4" },
+                    { key: "ivory" as const, label: "아이보리", hex: "#FDFAF0", border: "#D9D5C0" },
+                    { key: "light-pink" as const, label: "연핑크", hex: "#FFF0F5", border: "#F4B8D0" },
+                  ] as const
+                ).map((opt) => {
+                  const active = (content.rightPanelBg ?? "white") === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => onContentChange({ ...content, rightPanelBg: opt.key })}
+                      className={`flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 text-left transition-all ${
+                        active ? "border-[#F43182] shadow-sm" : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <span
+                        className="shrink-0 rounded-md"
+                        style={{
+                          width: 22,
+                          height: 22,
+                          background: opt.hex,
+                          border: `1.5px solid ${opt.border}`,
+                          display: "inline-block",
+                        }}
+                      />
+                      <span className={`text-xs font-medium ${active ? "text-[#F43182]" : "text-gray-700"}`}>{opt.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="space-y-3 border-t border-[#F43182]/15 pt-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">행사 정보</p>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-gray-500" />
+                  날짜
+                </Label>
+                <Input
+                  value={content.date || ""}
+                  onChange={(e) => onContentChange({ ...content, date: e.target.value })}
+                  placeholder="예) 2025.07.02(수)"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-gray-500" />
+                  장소
+                </Label>
+                <Input
+                  value={content.venue || ""}
+                  onChange={(e) => onContentChange({ ...content, venue: e.target.value })}
+                  placeholder="예) LG유플러스 울산 컨버전스 홀"
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 카테고리 */}
         <div className="space-y-2">
@@ -707,10 +688,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               </Button>
             </div>
           )}
-          {(content.posterBodies?.length
-            ? content.posterBodies
-            : [{ id: "body-1", text: content.bodyText ?? "" }]
-          ).map((b, bi) => (
+          {resolvePosterBodyBlocksForRender(content).map((b, bi) => (
             <div key={b.id} className="space-y-1.5 rounded-lg border border-gray-100 bg-gray-50/80 p-3">
               <div className="flex items-center justify-between gap-2">
                 <Label className="text-xs font-semibold text-gray-600">본문 블록 {bi + 1}</Label>
@@ -742,25 +720,18 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               <PosterBodyTextarea
                 value={b.text}
                 boldRanges={content.posterBodyBoldRanges?.[b.id]}
-                onBoldRangesChange={(ranges) =>
-                  onContentChange({
-                    ...content,
-                    posterBodyBoldRanges: { ...(content.posterBodyBoldRanges ?? {}), [b.id]: ranges },
+                onChange={(v, ranges) =>
+                  onContentChange((prev) => {
+                    const next = applyBodyBlockTextEdit(prev, b.id, v);
+                    return {
+                      ...next,
+                      posterBodyBoldRanges: {
+                        ...(next.posterBodyBoldRanges ?? {}),
+                        [b.id]: ranges,
+                      },
+                    };
                   })
                 }
-                onChange={(v) => {
-                  const blocks = (content.posterBodies?.length
-                    ? [...content.posterBodies]
-                    : [{ id: "body-1", text: content.bodyText ?? "" }]
-                  ).map((x) => (x.id === b.id ? { ...x, text: v } : x));
-                  const lockedMap = { ...(content.posterBodyRectLocked ?? {}), [b.id]: false };
-                  onContentChange({
-                    ...content,
-                    posterBodies: blocks,
-                    bodyText: blocks[0]?.id === "body-1" ? v : content.bodyText,
-                    posterBodyRectLocked: lockedMap,
-                  });
-                }}
               />
             </div>
           ))}
@@ -827,6 +798,8 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                     image: undefined,
                     posterBackgroundImageRect: undefined,
                     posterImageOpacity: 0,
+                    posterImagePosX: undefined,
+                    posterImagePosY: undefined,
                   });
                   setImagePreview(null);
                 }}
@@ -841,15 +814,33 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               min={0}
               max={100}
               step={5}
-              value={content.posterImageOpacity ?? 0}
+              value={content.image != null ? (content.posterImageOpacity ?? 100) : (content.posterImageOpacity ?? 0)}
               onChange={(e) => onContentChange({ ...content, posterImageOpacity: Number(e.target.value) })}
               className="h-2 w-full cursor-pointer accent-[#F43182]"
             />
             <p className="text-xs text-gray-500">
               투명도 · <span className="font-mono tabular-nums">{content.posterImageOpacity ?? 100}%</span> (기본 100%)
             </p>
-            <p className="mt-1 text-xs text-gray-400">팁: 캔버스에서 <span className="font-semibold">Alt</span>를 누른 채 드래그하면 이미지 내부 위치를 조정할 수 있습니다</p>
           </div>
+          {content.image ? (
+            <div className="flex flex-col gap-2 rounded-lg border border-gray-100 bg-gray-50/80 p-3">
+              <p className="text-xs font-semibold text-gray-700">박스 안 이미지 위치</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 w-full text-[12px]"
+                onClick={() =>
+                  onContentChange({ ...content, posterImagePosX: 50, posterImagePosY: 50 })
+                }
+              >
+                위치 초기화 (중앙)
+              </Button>
+            </div>
+          ) : null}
+          <p className="text-xs text-gray-400">
+            캔버스에서 이미지 박스를 <span className="font-semibold">더블클릭</span>한 뒤 드래그하면 안쪽 이미지 위치를 조절할 수 있습니다. 빈 캔버스 클릭 또는 Esc로 종료합니다.
+          </p>
         </div>
 
         <AssetSection/>
@@ -940,7 +931,19 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         <p className="text-xs text-gray-500">{content.title.length} characters</p>
       </div>
       <div className="space-y-3"><Label className="text-sm font-medium">Subtitle</Label><Textarea value={content.subtitle} onChange={(e)=>onContentChange({...content,subtitle:e.target.value})} placeholder="Add a supporting subtitle" rows={2} className="resize-none"/></div>
-      <div className="space-y-3"><Label className="text-sm font-medium">Body Text</Label><Textarea value={content.bodyText} onChange={(e)=>onContentChange({...content,bodyText:e.target.value})} placeholder="Add detailed information or key points" rows={5} className="resize-none"/></div>
+      <div className="space-y-3">
+        <Label className="text-sm font-medium">Body Text</Label>
+        <Textarea
+          value={content.bodyText ?? ""}
+          onChange={(e) => {
+            const v = e.target.value;
+            onContentChange((prev) => applyBodyBlockTextEdit(prev, "body-1", v));
+          }}
+          placeholder="Add detailed information or key points"
+          rows={5}
+          className="resize-none"
+        />
+      </div>
       <div className="border-t border-gray-200 pt-6 space-y-6">
         <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Sparkles className="w-4 h-4 text-[#F43182]"/>Brand Assets</h3>
         <LogoSelector/><LogoPositionSelector/>

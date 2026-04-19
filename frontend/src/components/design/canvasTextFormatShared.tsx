@@ -2,6 +2,9 @@ import type { DesignContent } from "@/design/types";
 import type { CanvasTextAlign, PosterElementTypography, PosterTextCase } from "@/design/types";
 import {
   CANVAS_FONT_OPTIONS,
+  FONT_FAMILY_GEIST,
+  FONT_FAMILY_PRETENDARD,
+  resolveFontFamily,
   type CanvasTextEditTarget,
 } from "@/design/canvasTextTypography";
 import {
@@ -225,6 +228,9 @@ export function CanvasTextFormatControls({
     applyTypo({ fontFamily: fam.trim() ? fam : undefined });
   };
 
+  const fontSelectValue =
+    resolveFontFamily(fontValue) === FONT_FAMILY_GEIST ? FONT_FAMILY_GEIST : FONT_FAMILY_PRETENDARD;
+
   const setCase = (c: PosterTextCase) => applyTypo({ textTransform: c });
 
   const iconBtn =
@@ -237,9 +243,9 @@ export function CanvasTextFormatControls({
     <>
       <select
         className="h-8 w-full max-w-full rounded-md border border-gray-200 bg-white px-1 text-[11px] text-gray-800"
-        value={CANVAS_FONT_OPTIONS.some((o) => o.value === fontValue) ? fontValue : ""}
+        value={fontSelectValue}
         onChange={(e) => setFont(e.target.value)}
-        title="글꼴"
+        title="글꼴 (Pretendard · Geist만 선택)"
       >
         {CANVAS_FONT_OPTIONS.map((o) => (
           <option key={o.label + o.value} value={o.value}>

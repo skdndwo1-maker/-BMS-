@@ -2,14 +2,15 @@
  * 포스터 캔버스용: 정규화 rect(0~1) 기준 드래그·리사이즈, 네 모서리 동일 r값
  */
 
-import { useRef, useCallback, type ReactNode } from "react";
+import { useRef, useCallback, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 
 export type NormalizedRect = { x: number; y: number; width: number; height: number };
 
 type ResizeHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 
-const HANDLE = 8;
+/** 모서리 4 + 변 중앙 4 = 8방향 리사이즈 (박스 바깥으로 살짝 돌출) */
+const HANDLE = 10;
 
 interface Props {
   rect: NormalizedRect;
@@ -28,6 +29,10 @@ interface Props {
   borderRadiusScale?: number;
   /** Alt+드래그로 내부 패닝 */
   onPan?: (deltaPx: { dx: number; dy: number }, ev: MouseEvent) => void;
+  /** true면 Alt 없이 드래그 = 박스 이동 대신 내부 패닝(이미지 object-position 등) */
+  panDragInsteadOfMove?: boolean;
+  /** Alt+패닝 드래그 종료(세션 초기화용) */
+  onPanEnd?: () => void;
   /** VI 격자 스냅(px). 미지정 시 1px */
   snapStepPx?: number;
   /** 리사이즈 최소 너비(px). 미지정 시 24 */
@@ -57,7 +62,10 @@ export function DraggableCanvasOverlay({
   minHeightPx,
   onOverlayDoubleClick,
   onRequestDelete,
+  onPanEnd,
+  panDragInsteadOfMove = false,
 }: Props) {
+  const [hover, setHover] = useState(false);
   const minW = minWidthPx ?? 24;
   const minH = minHeightPx ?? 24;
   const px = {
@@ -79,11 +87,13 @@ export function DraggableCanvasOverlay({
       e.stopPropagation();
       onSelect({ additive: e.shiftKey });
       dragStart.current = { mx: e.clientX, my: e.clientY, ox: px.x, oy: px.y };
+      let didInnerPan = false;
       const onMove = (ev: MouseEvent) => {
         if (!dragStart.current) return;
         const dx = ev.clientX - dragStart.current.mx;
         const dy = ev.clientY - dragStart.current.my;
-        if (ev.altKey && onPan) {
+        if (onPan && (ev.altKey || panDragInsteadOfMove)) {
+          didInnerPan = true;
           onPan({ dx, dy }, ev);
           return;
         }
@@ -101,6 +111,7 @@ export function DraggableCanvasOverlay({
         });
       };
       const onUp = () => {
+        if (didInnerPan) onPanEnd?.();
         dragStart.current = null;
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
@@ -108,7 +119,7 @@ export function DraggableCanvasOverlay({
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     },
-    [rect, px, canvasW, canvasH, onRectChange, onSelect, snapStepPx, onPan, minW, minH]
+    [rect, px, canvasW, canvasH, onRectChange, onSelect, snapStepPx, onPan, onPanEnd, panDragInsteadOfMove, minW, minH]
   );
 
   const resizeStart = useRef<{
@@ -212,15 +223,18 @@ export function DraggableCanvasOverlay({
         width: `${px.width}px`,
         height: `${px.height}px`,
         borderRadius: `${rPx}px`,
-        overflow: "hidden",
+        overflow: "visible",
         zIndex,
         outline: isSelected ? "2px solid #F43182" : "2px solid transparent",
         outlineOffset: "1px",
         boxSizing: "border-box",
-        cursor: "move",
+        cursor: panDragInsteadOfMove ? "grab" : "move",
         userSelect: "none",
         WebkitUserSelect: "none",
       }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onDragStart={(e) => e.preventDefault()}
       onMouseDown={(e) => {
         e.stopPropagation();
         onMouseDownMove(e);
@@ -243,76 +257,73 @@ export function DraggableCanvasOverlay({
       >
         {children}
       </div>
-      {isSelected && (
-        <>
-          {handles.map((h) => (
+      {isSelected &&
+        handles.map((h) => (
+          <div
+            key={h.key}
+            style={{
+              position: "absolute",
+              width: `${HANDLE}px`,
+              height: `${HANDLE}px`,
+              background: "#F43182",
+              border: "1.5px solid #fff",
+              borderRadius: "2px",
+              ...h.style,
+              zIndex: zIndex + 1,
+              pointerEvents: "auto",
+            }}
+            onMouseDown={(e) => onMouseDownResize(e, h.key)}
+          />
+        ))}
+      {(isSelected || hover) && (label || onRequestDelete) ? (
+        <div
+          style={{
+            position: "absolute",
+            top: "-28px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: zIndex + 2,
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            pointerEvents: "auto",
+          }}
+        >
+          {label ? (
             <div
-              key={h.key}
               style={{
-                position: "absolute",
-                width: `${HANDLE}px`,
-                height: `${HANDLE}px`,
-                background: "#F43182",
-                border: "1.5px solid #fff",
-                borderRadius: "2px",
-                ...h.style,
-                zIndex: zIndex + 1,
-                pointerEvents: "auto",
-              }}
-              onMouseDown={(e) => onMouseDownResize(e, h.key)}
-            />
-          ))}
-          {label || onRequestDelete ? (
-            <div
-              style={{
-                position: "absolute",
-                top: "-28px",
-                left: "50%",
-                transform: "translateX(-50%)",
-                zIndex: zIndex + 2,
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-                pointerEvents: "auto",
+                background: "#1A1A1A",
+                color: "#fff",
+                fontSize: "10px",
+                padding: "2px 8px",
+                borderRadius: "4px",
+                whiteSpace: "nowrap",
+                pointerEvents: "none",
               }}
             >
-              {label ? (
-                <div
-                  style={{
-                    background: "#1A1A1A",
-                    color: "#fff",
-                    fontSize: "10px",
-                    padding: "2px 8px",
-                    borderRadius: "4px",
-                    whiteSpace: "nowrap",
-                    pointerEvents: "none",
-                  }}
-                >
-                  {label}
-                </div>
-              ) : null}
-              {onRequestDelete ? (
-                <button
-                  type="button"
-                  aria-label="캔버스에서 제거"
-                  title="캔버스에서 제거"
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-white bg-[#1A1A1A] text-white shadow hover:bg-[#F43182]"
-                  onMouseDown={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    onRequestDelete();
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                  }}
-                >
-                  <X className="h-3.5 w-3.5" strokeWidth={2.5} />
-                </button>
-              ) : null}
+              {label}
             </div>
           ) : null}
-        </>
-      )}
+          {onRequestDelete ? (
+            <button
+              type="button"
+              aria-label="캔버스에서 제거"
+              title="캔버스에서 제거"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-white bg-[#1A1A1A] text-white shadow hover:bg-[#F43182]"
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onRequestDelete();
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

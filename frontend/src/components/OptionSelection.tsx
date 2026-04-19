@@ -182,7 +182,7 @@ export function OptionSelection() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 min-[640px]:grid-cols-2 min-[1024px]:grid-cols-4">
             {mainOptions.map((option) => {
               const Icon = option.icon;
               return (

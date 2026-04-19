@@ -191,7 +191,7 @@ export function TemplateGallery() {
           </div>
         </div>
 
-        <div className="grid min-w-0 grid-cols-1 gap-6 md:grid-cols-4">
+        <div className="grid min-w-0 grid-cols-1 gap-5 min-[768px]:grid-cols-4 min-[768px]:gap-6">
           {filteredTemplates.map((template) => {
             const isPlacard = template.category === "placard";
             return (

@@ -25,7 +25,8 @@ interface Props {
 // 리사이즈 핸들 방향
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
-const HANDLE_SIZE = 8;
+/** 모서리 4 + 변 중앙 4 */
+const HANDLE_SIZE = 10;
 
 export function DraggableAsset({
   asset, canvasW, canvasH, snapStepPx, isSelected, onSelect, onUpdate, onDelete,
@@ -164,7 +165,9 @@ export function DraggableAsset({
         userSelect: 'none',
         zIndex:    isSelected ? 100 : 10,
         boxSizing: 'border-box',
+        overflow:  'visible',
       }}
+      onDragStart={(e) => e.preventDefault()}
       onMouseDown={onMouseDownMove}
       onClick={(e) => { e.stopPropagation(); onSelect(asset.id, { additive: e.shiftKey }); }}
     >

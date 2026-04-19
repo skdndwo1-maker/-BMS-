@@ -5,10 +5,6 @@ import type { DesignContent } from "@/design/types";
 import { DesignCanvas, type DesignCanvasHandle, type DesignFocusTarget } from './DesignCanvas';
 import type { CanvasTextEditTarget } from '@/design/canvasTextTypography';
 import { CanvasTextFormatPanel } from './CanvasTextFormatPanel';
-import { PlacardWideCanvas }      from './PlacardWideCanvas';
-import { Placard1000x600Canvas }  from './Placard1000x600Canvas';
-import { Placard2000x1000Canvas } from './Placard2000x1000Canvas';
-import { Placard600x1800Canvas }  from './Placard600x1800Canvas';
 import { ContentPanel }           from './ContentPanel';
 import { LayersPanel }            from './LayersPanel';
 import { ExportDialog }           from './ExportDialog';
@@ -114,12 +110,6 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     });
   };
 
-  // ── Template type flags ──────────────────────────────────────────────
-  const isPlacardWide      = actualTemplateId === 'placard-wide-landscape';
-  const isPlacard1000x600  = actualTemplateId === 'placard-1000x600';
-  const isPlacard2000x1000 = actualTemplateId === 'placard-2000x1000';
-  const isPlacard600x1800  = actualTemplateId === 'placard-600x1800';
-
   if (!template) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -146,86 +136,40 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     setContentWithHistory(() => demoContent);
   };
 
-  // ── Canvas renderer ──────────────────────────────────────────────────
-  const renderCanvas = () => {
-    const grid = showViGrid;
-    if (isPlacardWide)
-      return (
-        <PlacardWideCanvas content={content} canvasSize={template.size} zoom={zoom} showViGrid={grid} />
-      );
-    if (isPlacard1000x600)
-      return (
-        <Placard1000x600Canvas content={content} canvasSize={template.size} zoom={zoom} showViGrid={grid} />
-      );
-    if (isPlacard2000x1000)
-      return (
-        <Placard2000x1000Canvas content={content} canvasSize={template.size} zoom={zoom} showViGrid={grid} />
-      );
-    if (isPlacard600x1800)
-      return (
-        <Placard600x1800Canvas content={content} canvasSize={template.size} zoom={zoom} showViGrid={grid} />
-      );
-    return (
-      <DesignCanvas
-        ref={designCanvasRef}
-        content={content}
-        canvasSize={template.size}
-        zoom={zoom}
-        onContentChange={setContentWithHistory}
-        onContentDraftChange={setContent}
-        onBeginCanvasTextEdit={pushUndoSnapshot}
-        onFocusChange={setFocusTarget}
-        showViGrid={grid}
-        layoutSnapEnabled={layoutSnapEnabled}
-        onTextFormatTargetChange={setTextFormatTarget}
-        onCanvasTextSelectionChanged={() => setTextFormatSelectionTick((n) => n + 1)}
-      />
-    );
-  };
+  // ── Canvas: 모든 템플릿에 동일 에디터(정규화 좌표 0~1 · 프레임 비율은 template.size로 반영) ──
+  const renderCanvas = () => (
+    <DesignCanvas
+      ref={designCanvasRef}
+      content={content}
+      canvasSize={template.size}
+      zoom={zoom}
+      onContentChange={setContentWithHistory}
+      onContentDraftChange={setContent}
+      onBeginCanvasTextEdit={pushUndoSnapshot}
+      onFocusChange={setFocusTarget}
+      showViGrid={showViGrid}
+      layoutSnapEnabled={layoutSnapEnabled}
+      onTextFormatTargetChange={setTextFormatTarget}
+      onCanvasTextSelectionChanged={() => setTextFormatSelectionTick((n) => n + 1)}
+    />
+  );
 
-  // ── Status bar text ──────────────────────────────────────────────────
   const renderStatusBar = () => {
-    if (isPlacardWide) return (
-      <>
-        <span>1X = {Math.round(700 / 12)}mm</span>
-        <Separator orientation="vertical" className="h-3" />
-        <span>현수막 대형(가로) · 4700×700mm</span>
-        <Separator orientation="vertical" className="h-3" />
-        <span className="text-[#F43182]">LG U+ Brand Guideline</span>
-      </>
-    );
-    if (isPlacard1000x600) return (
-      <>
-        <span>1X = {Math.round(600 / 12)}mm</span>
-        <Separator orientation="vertical" className="h-3" />
-        <span>현수막 · 1000×600mm</span>
-        <Separator orientation="vertical" className="h-3" />
-        <span className="text-[#F43182]">LG U+ Brand Guideline</span>
-      </>
-    );
-    if (isPlacard2000x1000) return (
-      <>
-        <span>1X = {Math.round(1000 / 12)}mm</span>
-        <Separator orientation="vertical" className="h-3" />
-        <span>현수막 · 2000×1000mm</span>
-        <Separator orientation="vertical" className="h-3" />
-        <span className="text-[#F43182]">LG U+ Brand Guideline</span>
-      </>
-    );
-    if (isPlacard600x1800) return (
-      <>
-        <span>1X = {Math.round(600 / 12)}mm</span>
-        <Separator orientation="vertical" className="h-3" />
-        <span>현수막 세로 · 600×1800mm</span>
-        <Separator orientation="vertical" className="h-3" />
-        <span className="text-[#F43182]">LG U+ Brand Guideline</span>
-      </>
-    );
+    const { width: sw, height: sh, unit } = template.size;
+    const shortSide = Math.min(sw, sh);
+    const oneX =
+      unit === "mm"
+        ? `1X ≈ ${Math.round(shortSide / 12)}mm`
+        : unit === "in"
+          ? `1X ≈ ${(shortSide / 12).toFixed(2)}in`
+          : `1X ≈ ${Math.round(shortSide / 12)}px`;
     return (
       <>
-        <span>{template.size.width} × {template.size.height} {template.size.unit}</span>
+        <span>{oneX}</span>
         <Separator orientation="vertical" className="h-3" />
-        <span>Template: {template.category}</span>
+        <span>
+          {sw} × {sh} {unit} · {template.name}
+        </span>
         <Separator orientation="vertical" className="h-3" />
         <span className="text-[#F43182]">LG U+ Brand Guideline</span>
       </>
@@ -331,7 +275,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                   />
                 ) : null}
                 <p className="text-[9px] text-gray-500 leading-snug px-0.5">
-                  텍스트 상자를 연속으로 클릭하면 여러 개를 선택해 함께 이동할 수 있습니다. Shift/Ctrl+클릭으로 토글할 수도 있습니다. 빈 배경을 클릭하면 선택이 해제됩니다.
+                  Shift+클릭으로 여러 요소를 추가·해제해 함께 이동·정렬할 수 있습니다. 빈 배경을 클릭하면 선택이 해제됩니다.
                 </p>
               </div>
             </div>

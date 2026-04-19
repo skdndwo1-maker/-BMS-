@@ -1,7 +1,6 @@
 import type { CSSProperties } from "react";
 import type { DesignContent } from "./types";
 import type { CanvasTextAlign } from "./types";
-import { VI_FONT_STACK } from "./viCanvasConstants";
 
 export type CanvasTextEditTarget =
   | { kind: "title" }
@@ -9,17 +8,32 @@ export type CanvasTextEditTarget =
   | { kind: "body"; id: string }
   | { kind: "subtitle"; id: string };
 
+/** 텍스트 옵션에서 선택 가능한 서체 — 한글 Pretendard, 영문 Geist만 허용 */
+export const FONT_FAMILY_PRETENDARD = '"Pretendard Variable", Pretendard, system-ui, sans-serif';
+export const FONT_FAMILY_GEIST = 'Geist, system-ui, sans-serif';
+
 export const CANVAS_FONT_OPTIONS: { value: string; label: string }[] = [
-  { value: "", label: "VI 기본" },
-  { value: '"Pretendard Variable", Pretendard, sans-serif', label: "Pretendard" },
-  { value: '"Noto Sans KR", sans-serif', label: "Noto Sans KR" },
-  { value: 'Georgia, "Times New Roman", serif', label: "Serif" },
-  { value: "ui-monospace, monospace", label: "Monospace" },
+  { value: FONT_FAMILY_PRETENDARD, label: "Pretendard (한글)" },
+  { value: FONT_FAMILY_GEIST, label: "Geist (영문)" },
 ];
 
 export function resolveFontFamily(family: string | undefined): string {
-  if (!family?.trim()) return VI_FONT_STACK;
-  return family;
+  const f = family?.trim() ?? "";
+  if (!f) return FONT_FAMILY_PRETENDARD;
+  const lower = f.toLowerCase();
+  if (f === FONT_FAMILY_GEIST || lower.includes("geist")) return FONT_FAMILY_GEIST;
+  if (
+    f === FONT_FAMILY_PRETENDARD ||
+    lower.includes("pretendard") ||
+    lower.includes("noto sans") ||
+    lower.includes("apple sd gothic") ||
+    lower.includes("serif") ||
+    lower.includes("monospace") ||
+    lower.includes("ui-monospace")
+  ) {
+    return FONT_FAMILY_PRETENDARD;
+  }
+  return FONT_FAMILY_PRETENDARD;
 }
 
 export function flexAlignFromCanvasAlign(align: CanvasTextAlign): {
@@ -51,8 +65,12 @@ export function titleTextStyle(c: DesignContent, titleFontSizePx: number, titleC
     lineHeight: t.lineHeight ?? 1.15,
     color: titleColor,
     wordBreak: "keep-all",
+    /** keep-all만으로는 공백 없는 한글 한 줄이 박스보다 길 때 줄바꿈이 안 되어 잘릴 수 있음 */
+    overflowWrap: "anywhere",
     margin: 0,
     width: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
   };
 }
 

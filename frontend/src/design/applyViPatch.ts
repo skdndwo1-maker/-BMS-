@@ -95,5 +95,11 @@ export function applyImageDataUrl(
       ),
     };
   }
-  return { ...content, image: dataUrl };
+  return {
+    ...content,
+    image: dataUrl,
+    posterImageOpacity: 100,
+    posterImagePosX: 50,
+    posterImagePosY: 50,
+  };
 }

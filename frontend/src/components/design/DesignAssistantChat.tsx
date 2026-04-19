@@ -370,6 +370,8 @@ export function DesignAssistantChat({
       image: correctPreviewUrl,
       posterBackgroundImageRect: { x: 0, y: 0, width: 1, height: 1 },
       posterImageOpacity: 100,
+      posterImagePosX: 50,
+      posterImagePosY: 50,
     });
     setCorrectPreviewUrl(null);
     setCorrectCaption("");
