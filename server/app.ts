@@ -27,6 +27,7 @@ import {
 import { copyFixedGuidelineToSlot, FIXED_GUIDELINE_SOURCES } from "./fixedGuidelines.js";
 import { buildExternalNamingReferences } from "./namingExternalContext.js";
 import { resolveLawApiOc, searchLawsJson } from "./lawApi.js";
+import { getPublicApiBaseUrl } from "./publicApiUrl.js";
 import {
   ensureDataDirs,
   getGuideline,
@@ -163,7 +164,8 @@ app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     gemini: Boolean(process.env.GEMINI_API_KEY?.trim()),
-    law: Boolean(resolveLawApiOc())
+    law: Boolean(resolveLawApiOc()),
+    publicBase: getPublicApiBaseUrl()
   });
 });
 
