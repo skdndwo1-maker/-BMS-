@@ -1,7 +1,6 @@
 import "./load-env.js";
 import { GoogleGenerativeAI, SchemaType, type Schema } from "@google/generative-ai";
 import { existsSync, readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 
 import type { GuidelineRecord } from "./store.js";
 import { resolveStoredPath } from "./store.js";
@@ -14,15 +13,23 @@ import {
   buildNamingGenerationRuleBlockFromAuditRaw
 } from "../shared/categoryNamingRules.js";
 
-const require = createRequire(import.meta.url);
-const { PDFParse } = require("pdf-parse") as {
-  PDFParse: new (opts: { data: Buffer }) => {
-    getText: () => Promise<{ text: string }>;
-    destroy: () => Promise<void>;
-  };
+/** pdf-parse → pdfjs-dist 로딩이 무겁고 Vercel Serverless cold start에서 실패할 수 있어, PDF 처리 시에만 동적 import */
+type PDFParseInstance = {
+  getText: () => Promise<{ text: string }>;
+  destroy: () => Promise<void>;
 };
+type PDFParseCtor = new (opts: { data: Buffer }) => PDFParseInstance;
+
+let pdfParseCtorPromise: Promise<PDFParseCtor> | null = null;
+async function getPDFParseCtor(): Promise<PDFParseCtor> {
+  if (!pdfParseCtorPromise) {
+    pdfParseCtorPromise = import("pdf-parse").then((m) => m.PDFParse as PDFParseCtor);
+  }
+  return pdfParseCtorPromise;
+}
 
 async function parsePdfBufferToText(buf: Buffer): Promise<string> {
+  const PDFParse = await getPDFParseCtor();
   const parser = new PDFParse({ data: buf });
   try {
     const r = await parser.getText();

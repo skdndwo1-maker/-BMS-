@@ -15,12 +15,16 @@ const localPath = join(PROJECT_ROOT_ENV, ".env.local");
 /** `npm run server` 실행 위치와 무관하게, 서버 폴더 전용 키(예: LAW_API_OC)도 읽음 — 기존 변수는 덮어쓰지 않음 */
 const serverEnvPath = join(serverDir, ".env");
 
-if (existsSync(envPath)) {
-  config({ path: envPath });
-}
-if (existsSync(localPath)) {
-  config({ path: localPath, override: true });
-}
-if (existsSync(serverEnvPath)) {
-  config({ path: serverEnvPath, override: false });
+try {
+  if (existsSync(envPath)) {
+    config({ path: envPath });
+  }
+  if (existsSync(localPath)) {
+    config({ path: localPath, override: true });
+  }
+  if (existsSync(serverEnvPath)) {
+    config({ path: serverEnvPath, override: false });
+  }
+} catch {
+  /* Vercel 등 .env 없음·경로 이슈 시에도 프로세스 env로 계속 */
 }
