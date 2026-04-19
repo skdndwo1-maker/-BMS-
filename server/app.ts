@@ -39,7 +39,33 @@ import {
 
 const app = express();
 
-app.use(cors({ origin: true }));
+/** 프로덕션 Vercel 프론트 등 (명시 허용). 그 외 출처·로컬은 아래 콜백에서 계속 허용 */
+const CORS_ALLOWED_ORIGINS: readonly string[] = ["https://bms-sage-one.vercel.app"];
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (CORS_ALLOWED_ORIGINS.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      try {
+        const host = new URL(origin).hostname;
+        if (host === "localhost" || host === "127.0.0.1") {
+          callback(null, true);
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
+      callback(null, true);
+    }
+  })
+);
 /** 검수 follow-up·대용량 base64 본문 대응 (2mb면 이미지 포함 요청이 잘림) */
 app.use(express.json({ limit: "50mb" }));
 
