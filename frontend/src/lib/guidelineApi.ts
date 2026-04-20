@@ -72,12 +72,24 @@ export async function runInspection(opts: {
   additionalNotes?: string;
   /** 고정 참조 옵션 외 보완용 — 검수 시에만 서버로 전달(슬롯을 덮어쓰지 않음) */
   supplementaryReference?: File | null;
+  businessCategory?: string;
+  designGroup?: "online" | "offline";
+  designType?: string;
 }): Promise<InspectionRunResult> {
   const fd = new FormData();
   fd.append("design", opts.design);
   fd.append("guidelineId", opts.guidelineId);
   if (opts.additionalNotes?.trim()) {
     fd.append("additionalNotes", opts.additionalNotes.trim());
+  }
+  if (opts.businessCategory?.trim()) {
+    fd.append("businessCategory", opts.businessCategory.trim());
+  }
+  if (opts.designGroup) {
+    fd.append("designGroup", opts.designGroup);
+  }
+  if (opts.designType?.trim()) {
+    fd.append("designType", opts.designType.trim());
   }
   if (opts.supplementaryReference) {
     fd.append("supplementaryReference", opts.supplementaryReference);

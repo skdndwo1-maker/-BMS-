@@ -457,6 +457,12 @@ app.post(
   ]),
   async (req, res) => {
     const guidelineId = (req.body?.guidelineId as string) || "uplus-brand-guideline";
+    const businessCategory =
+      typeof req.body?.businessCategory === "string" ? req.body.businessCategory.trim() : "";
+    const designGroupRaw = typeof req.body?.designGroup === "string" ? req.body.designGroup.trim() : "";
+    const designGroup = designGroupRaw === "online" || designGroupRaw === "offline" ? designGroupRaw : "";
+    const designType = typeof req.body?.designType === "string" ? req.body.designType.trim() : "";
+
     const files = req.files as Record<string, Express.Multer.File[]> | undefined;
     const file = files?.design?.[0];
     const supplementary = files?.supplementaryReference?.[0];
@@ -494,6 +500,15 @@ app.post(
     }
 
     let guidelineSummary = `[참조 가이드라인 — 우선 적용 (${g?.displayName ?? guidelineId})]\n${primaryBlock}`;
+
+    /** 0) 카테고리 선택 맥락(추가 검수 원칙 확장 가능) */
+    const categoryLines: string[] = [];
+    if (businessCategory) categoryLines.push(`- 사업 영역: ${businessCategory}`);
+    if (designGroup) categoryLines.push(`- 디자인 그룹: ${designGroup === "online" ? "온라인" : "오프라인"}`);
+    if (designType) categoryLines.push(`- 디자인 유형: ${designType}`);
+    if (categoryLines.length > 0) {
+      guidelineSummary = `${guidelineSummary}\n\n[검수 카테고리]\n${categoryLines.join("\n")}`;
+    }
 
     /** 2) 검수 참조 파일 업로드(선택) — 고정 옵션 자료에 덧붙이는 보조 맥락 */
     if (supplementary?.buffer?.length) {

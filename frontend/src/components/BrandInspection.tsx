@@ -36,6 +36,23 @@ import { Button } from "@/components/ui/button";
 
 type InspectionStep = "idle" | "uploading" | "analyzing" | "reviewing" | "complete";
 
+type BusinessCategory = "Personal" | "Enterprise" | "AI" | "ETC";
+type DesignGroup = "online" | "offline";
+type DesignType = "사내공지" | "프로모션" | "신제품 홍보" | "매장 제작물" | "안전";
+
+const BUSINESS_CATEGORIES: readonly BusinessCategory[] = ["Personal", "Enterprise", "AI", "ETC"];
+const DESIGN_GROUPS: ReadonlyArray<{ id: DesignGroup; label: string }> = [
+  { id: "online", label: "온라인" },
+  { id: "offline", label: "오프라인" },
+];
+const DESIGN_TYPES: readonly DesignType[] = ["사내공지", "프로모션", "신제품 홍보", "매장 제작물", "안전"];
+
+// 네이밍 검수 카테고리 탭과 동일 스타일
+const categoryTabBase =
+  "inline-flex items-center justify-center rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F43182]/40";
+const categoryTabIdle = "border-gray-200 bg-white text-gray-700 hover:border-gray-300";
+const categoryTabActive = "border-[#F43182] bg-[#F43182]/10 text-[#F43182]";
+
 interface Violation {
   category: string;
   issue: string;
@@ -87,6 +104,10 @@ export function BrandInspection() {
   const [additionalRevisionError, setAdditionalRevisionError] = useState<string | null>(null);
   const [reportExportFormat, setReportExportFormat] = useState<ExportFormat>("png");
   const [revisedExportFormat, setRevisedExportFormat] = useState<ExportFormat>("png");
+
+  const [selectedBusinessCategory, setSelectedBusinessCategory] = useState<BusinessCategory>("Personal");
+  const [selectedDesignGroup, setSelectedDesignGroup] = useState<DesignGroup>("online");
+  const [selectedDesignType, setSelectedDesignType] = useState<DesignType | null>(null);
 
   const designInputRef = useRef<HTMLInputElement>(null);
   const guidelineInputRef = useRef<HTMLInputElement>(null);
@@ -226,6 +247,9 @@ export function BrandInspection() {
           guidelineId: selectedGuidelineLibrary,
           additionalNotes: guidelineText,
           supplementaryReference: guidelineFile ?? undefined,
+          businessCategory: selectedBusinessCategory,
+          designGroup: selectedDesignGroup,
+          designType: selectedDesignType ?? undefined,
         });
         if (epoch !== inspectionEpochRef.current) return;
         setBrandScore(res.score);
@@ -402,6 +426,65 @@ export function BrandInspection() {
               <div className="mb-2 flex items-center gap-2">
                 <ImageIcon className="h-5 w-5 text-[#F43182]" />
                 <h2 className="font-semibold text-gray-900">검수할 디자인 업로드</h2>
+              </div>
+
+              {/* ── 카테고리 선택 (네이밍 검수와 동일 패턴) ── */}
+              <div className="mb-4 rounded-[12px] border border-gray-200 bg-white px-[20px] pb-3 pt-[16px]">
+                <div className="mb-[12px] flex min-w-0 items-center gap-[8px]">
+                  <ScanSearch className="h-[18px] w-[18px] shrink-0 text-[#F43182]" />
+                  <h3 className="text-[15px] font-semibold text-gray-900">카테고리 선택</h3>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-gray-500">사업 영역</p>
+                    <div className="flex flex-wrap gap-2">
+                      {BUSINESS_CATEGORIES.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setSelectedBusinessCategory(c)}
+                          className={`${categoryTabBase} ${selectedBusinessCategory === c ? categoryTabActive : categoryTabIdle}`}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-gray-500">디자인 유형</p>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {DESIGN_GROUPS.map((g) => (
+                          <button
+                            key={g.id}
+                            type="button"
+                            onClick={() => setSelectedDesignGroup(g.id)}
+                            className={`${categoryTabBase} ${selectedDesignGroup === g.id ? categoryTabActive : categoryTabIdle}`}
+                          >
+                            {g.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {DESIGN_TYPES.map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setSelectedDesignType(t)}
+                            className={`${categoryTabBase} ${selectedDesignType === t ? categoryTabActive : categoryTabIdle}`}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-gray-400">
+                        온라인/오프라인 전환 시에도 세부 유형 선택은 유지됩니다.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div
