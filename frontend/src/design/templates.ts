@@ -3,15 +3,6 @@ import type { Template } from "./types";
 export const templates: Template[] = [
   // Marketing Banners (Online)
   {
-    id: 'marketing-web-1',
-    name: 'Web Banner (Leaderboard)',
-    category: 'marketing-banner',
-    size: { width: 728, height: 90, unit: 'px', name: '728x90' },
-    thumbnail: '',
-    description: '표준 웹 광고 배너',
-    mediaType: 'online',
-  },
-  {
     id: 'marketing-web-2',
     name: 'Web Banner (Large Rectangle)',
     category: 'marketing-banner',
@@ -36,15 +27,6 @@ export const templates: Template[] = [
     size: { width: 820, height: 312, unit: 'px', name: '820x312' },
     thumbnail: '',
     description: 'Facebook 페이지 커버 이미지',
-    mediaType: 'online',
-  },
-  {
-    id: 'marketing-youtube-thumbnail',
-    name: 'YouTube Thumbnail',
-    category: 'marketing-banner',
-    size: { width: 1280, height: 720, unit: 'px', name: '1280x720' },
-    thumbnail: '',
-    description: 'YouTube 비디오 썸네일',
     mediaType: 'online',
   },
   {
