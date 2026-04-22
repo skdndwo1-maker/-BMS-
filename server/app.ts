@@ -1274,6 +1274,11 @@ app.post("/api/design-editor/replace-image", async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 app.get("/api/admin/runs", async (req, res) => {
+  const auth = requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
   try {
     const status = typeof req.query.status === "string" ? req.query.status : "pending_review";
     const limitRaw = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 50;

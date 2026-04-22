@@ -16,11 +16,14 @@ export type AdminRunRow = {
 };
 
 async function adminFetch(adminKey: string, path: string, init?: RequestInit) {
+  if (!adminKey.trim()) {
+    throw new Error("admin_key_required");
+  }
   const r = await fetch(apiUrl(path), {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(adminKey.trim() ? { "X-Admin-Key": adminKey.trim() } : {}),
+      "X-Admin-Key": adminKey.trim(),
       ...(init?.headers ?? {}),
     },
   });
