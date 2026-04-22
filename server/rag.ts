@@ -187,12 +187,14 @@ export async function insertChunksWithEmbeddings(args: {
 
     const vec = await args.embed(content);
     const vecText = `[${vec.join(",")}]`;
-    const { error: embErr } = await sb.from("rag_embeddings").insert({
-      chunk_id: chunkRow.id,
-      model,
-      embedding: vecText,
+    const { error: embErr } = await sb.rpc("insert_rag_embedding", {
+      p_chunk_id: chunkRow.id,
+      p_model: model,
+      p_embedding: vecText,
     });
-    if (embErr) console.error("[supabase] insert embedding failed:", embErr.message);
+    if (embErr) {
+      console.error("[supabase] insert embedding failed:", embErr.message);
+    }
   }
 
   return { chunkCount: args.chunks.length };
