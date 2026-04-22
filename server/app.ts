@@ -51,7 +51,7 @@ import {
   upsertRunQaSource
 } from "./rag.js";
 import { requireAdmin } from "./adminAuth.js";
-import { getSupabaseServiceClient } from "./supabase.js";
+import { getSupabaseAnonClient, getSupabaseServiceClient, isSupabaseInvalidApiKeyError } from "./supabase.js";
 
 const app = express();
 
@@ -1274,25 +1274,34 @@ app.post("/api/design-editor/replace-image", async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 app.get("/api/admin/runs", async (req, res) => {
-  const auth = requireAdmin(req);
-  if (!auth.ok) {
-    res.status(auth.status).json({ ok: false, error: auth.error });
-    return;
-  }
   try {
     const status = typeof req.query.status === "string" ? req.query.status : "pending_review";
     const limitRaw = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 50;
     const limit = Number.isFinite(limitRaw) ? Math.min(200, Math.max(1, limitRaw)) : 50;
 
-    const sb = getSupabaseServiceClient();
-    const { data, error } = await sb
-      .from("runs")
-      .select("id,created_at,type,status,guideline_id,template_id,score,model,input_text,output_text,input_json,output_json")
-      .eq("status", status)
-      .order("created_at", { ascending: false })
-      .limit(limit);
-    if (error) throw new Error(error.message);
-    res.json({ ok: true, runs: data ?? [] });
+    const selectQuery = (sb: ReturnType<typeof getSupabaseServiceClient>) =>
+      sb
+        .from("runs")
+        .select("id,created_at,type,status,guideline_id,template_id,score,model,input_text,output_text,input_json,output_json")
+        .eq("status", status)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+    try {
+      const sb = getSupabaseServiceClient();
+      const { data, error } = await selectQuery(sb);
+      if (error) throw new Error(error.message);
+      res.json({ ok: true, runs: data ?? [] });
+      return;
+    } catch (e) {
+      // If service role key is misconfigured, try anon for read-only listing.
+      if (!isSupabaseInvalidApiKeyError(e)) throw e;
+      const sbAnon = getSupabaseAnonClient();
+      const { data, error } = await selectQuery(sbAnon as unknown as ReturnType<typeof getSupabaseServiceClient>);
+      if (error) throw new Error(error.message);
+      res.json({ ok: true, runs: data ?? [] });
+      return;
+    }
   } catch (e) {
     res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
   }

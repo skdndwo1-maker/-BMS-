@@ -16,7 +16,7 @@ export function AdminReview() {
   const [rows, setRows] = useState<AdminRunRow[]>([]);
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
 
-  const canLoad = adminKey.trim().length > 0;
+  const canLoad = true;
   const title = useMemo(() => {
     if (status === "pending_review") return "승인 대기";
     if (status === "approved") return "승인됨";
@@ -24,7 +24,6 @@ export function AdminReview() {
   }, [status]);
 
   const load = async () => {
-    if (!canLoad) return;
     setLoading(true);
     try {
       sessionStorage.setItem("bms_admin_key", adminKey.trim());

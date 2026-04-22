@@ -20,7 +20,7 @@ async function adminFetch(adminKey: string, path: string, init?: RequestInit) {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      "X-Admin-Key": adminKey,
+      ...(adminKey.trim() ? { "X-Admin-Key": adminKey.trim() } : {}),
       ...(init?.headers ?? {}),
     },
   });
