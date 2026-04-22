@@ -236,42 +236,15 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     setLogoUrl(typeof content.logo === "string" ? content.logo : null);
   }, [content.logo]);
 
-  // 포스터 오버레이 기본 rect 초기화 (텍스트가 생겼는데 rect가 없을 때만)
-  useEffect(() => {
-    if (!onContentChange) return;
-    const patch: Partial<DesignContent> = {};
-    if (content.posterTitleOnCanvas !== false && content.title?.trim() && !content.posterTitleRect)
-      patch.posterTitleRect = DEFAULT_POSTER_TITLE_RECT;
-    if (content.posterBodyOnCanvas !== false && content.bodyText?.trim() && !content.posterBodyRect)
-      patch.posterBodyRect = DEFAULT_POSTER_BODY_RECT;
-    if (content.posterFooterOnCanvas !== false && content.emphasizedTitle?.trim() && !content.posterFooterRect)
-      patch.posterFooterRect = DEFAULT_POSTER_FOOTER_RECT;
-    if (content.subtitle?.trim() && !content.posterBadgeRect) patch.posterBadgeRect = DEFAULT_POSTER_BADGE_RECT;
-    if (Object.keys(patch).length === 0) return;
-    onContentChange({ ...content, ...patch });
-  }, [
-    content,
-    onContentChange,
-    content.title,
-    content.bodyText,
-    content.emphasizedTitle,
-    content.subtitle,
-    content.posterTitleRect,
-    content.posterBodyRect,
-    content.posterFooterRect,
-    content.posterBadgeRect,
-  ]);
-
   /** 본문 블록 배열 마이그레이션 (기존 bodyText / posterBodyRect → posterBodies) */
   useEffect(() => {
     if (!onContentChange) return;
     if (content.posterBodies && content.posterBodies.length > 0) return;
-    const r0 = content.posterBodyRect ?? DEFAULT_POSTER_BODY_RECT;
     onContentChange({
       ...content,
       posterBodies: [{ id: "body-1", text: content.bodyText ?? "" }],
-      posterBodyRects: { ...(content.posterBodyRects ?? {}), "body-1": content.posterBodyRects?.["body-1"] ?? r0 },
-      posterBodyRect: r0,
+      posterBodyRects: { ...(content.posterBodyRects ?? {}) },
+      posterBodyRect: content.posterBodyRect,
     });
   }, [content, onContentChange, content.posterBodies, content.bodyText, content.posterBodyRect, content.posterBodyRects]);
 
@@ -331,11 +304,11 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const displayH = displayW / realAspect;
 
   const W = displayW;
-  /** VI 12분할의 1/2 간격 — 정렬 그리드 표시용 (드래그 스냅에는 사용하지 않음) */
-  const viGridStepPx = Math.max(1, getViGridStepPx(displayH / 12));
+  /** VI 12분할 대비 약 1.8배 더 촘촘한 간격 — 정렬 그리드 표시/스냅 공용 */
+  const viGridStepPx = Math.max(1, getViGridStepPx(displayH / 22));
   const snapPx = layoutSnapEnabled ? viGridStepPx : 1;
-  /** 12분할 1칸(높이·너비 각각) — 뱃지 최소 크기용 */
-  const gridCellH = displayH / 12;
+  /** 위 격자 단위를 기준으로 한 셀 높이 — 뱃지 최소 크기용 */
+  const gridCellH = displayH / 22;
 
   const bgColor = content.backgroundColor || "#FFFFFF";
   const titleColor = content.titleColor || VI_COLORS.textPrimary;
@@ -356,7 +329,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const logoPosition = normalizeLogoPosition(content.logoPosition);
 
   const getLogoPositionStyle = () => {
-    const pad = W * 0.08;
+    const padRatio = realAspect >= 3 ? 0.04 : 0.08;
+    const pad = W * padRatio;
     switch (logoPosition) {
       case "top-right":
         return { top: `${pad}px`, right: `${pad}px` };
@@ -377,10 +351,123 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const titleScale = (content.posterTitleFontScale ?? 100) / 100;
   const bodyScale = (content.posterBodyFontScale ?? 100) / 100;
   const footerScale = (content.posterFooterFontScale ?? 100) / 100;
-  const titleFontSize = W * 0.16 * titleScale;
-  const bodyFontSize = W * 0.04 * bodyScale;
-  const disclaimerSize = W * 0.018 * footerScale;
-  const logoHeight = W * 0.05;
+  // 폰트 크기: 템플릿 너비 비례 + 높이 상한(오버플로우 방지)
+  // - 메인타이틀: 너비의 약 8%
+  // - 본문: 너비의 약 4%
+  // - 유의사항: 너비의 약 1.5~2%(기본 1.8%)
+  const titleFontSize = Math.max(10, Math.min(W * 0.08, displayH * 0.22)) * titleScale;
+  const bodyFontSize = Math.max(8, Math.min(W * 0.04, displayH * 0.16)) * bodyScale;
+  const disclaimerSize = Math.max(7, Math.min(W * 0.018, displayH * 0.10)) * footerScale;
+
+  // 로고: 너비의 15~20%(기본 18%). 가로형(>=3:1)일 때 40% 축소
+  const logoBase = W * 0.18;
+  const logoWidthBase = Math.max(W * 0.15, Math.min(W * 0.20, realAspect >= 3 ? logoBase * 0.6 : logoBase));
+  // BI 시각 보정(기본)
+  const logoOptionScale = content.logoOption === "BI" ? 0.72 : 1.0;
+  const logoWidth = Math.max(24, logoWidthBase * logoOptionScale);
+
+  const padRatio = realAspect >= 3 ? 0.04 : 0.08;
+  const marginX = padRatio;
+  const marginTop = padRatio;
+  const gapPx = realAspect >= 3 ? Math.max(8, Math.min(18, displayH * 0.06)) : displayH * 0.035;
+
+  const computeDefaultTextRects = (titleTextRaw: string) => {
+    const x = W * marginX;
+    const w = Math.max(40, W * (1 - marginX * 2));
+
+    // 로고 높이는 실제 이미지 비율을 모르므로 안전한 근사치로 배치(너비 기준, 상한 적용)
+    const approxLogoH = Math.min(displayH * 0.18, Math.max(18, logoWidth * 0.3));
+    const logoY = displayH * marginTop;
+
+    const titleY = logoY + approxLogoH + gapPx;
+    const titleLineH = Math.max(12, titleFontSize * 1.15);
+    const titleCharsPerLine = Math.max(6, Math.floor(w / Math.max(10, titleFontSize * 0.9)));
+    const titleLen = titleTextRaw.trim().length;
+    const computedTitleLines = titleLen ? Math.ceil(titleLen / titleCharsPerLine) : 2;
+    const titleLines = Math.min(3, Math.max(2, computedTitleLines));
+    const titleH = titleLineH * titleLines + titleLineH * 0.15;
+
+    const bodyY = titleY + titleH + gapPx;
+    const bodyLineH = Math.max(11, bodyFontSize * 1.35);
+    const bodyH = Math.min(displayH * 0.42, Math.max(bodyLineH * 4, displayH * 0.18));
+
+    const footerY = bodyY + bodyH + gapPx;
+    const footerLineH = Math.max(10, disclaimerSize * 1.35);
+    const footerH = Math.min(displayH * 0.22, Math.max(footerLineH * 2, displayH * 0.10));
+
+    const bottomLimit = displayH * (1 - marginTop);
+    let overflow = footerY + footerH - bottomLimit;
+    let shrinkBodyH = bodyH;
+    let shrinkFooterH = footerH;
+    let shrinkTitleH = titleH;
+    if (overflow > 0) {
+      const minFooterH = footerLineH * 1.6;
+      const minBodyH = bodyLineH * 2.4;
+      const minTitleH = titleLineH * 1.8;
+
+      const bodyRoom = Math.max(0, shrinkBodyH - minBodyH);
+      const takeFromBody = Math.min(bodyRoom, overflow);
+      shrinkBodyH -= takeFromBody;
+      overflow -= takeFromBody;
+
+      const titleRoom = Math.max(0, shrinkTitleH - minTitleH);
+      const takeFromTitle = Math.min(titleRoom, overflow);
+      shrinkTitleH -= takeFromTitle;
+      overflow -= takeFromTitle;
+
+      const footerRoom = Math.max(0, shrinkFooterH - minFooterH);
+      const takeFromFooter = Math.min(footerRoom, overflow);
+      shrinkFooterH -= takeFromFooter;
+      overflow -= takeFromFooter;
+    }
+
+    return {
+      titleRect: { x, y: titleY, width: w, height: shrinkTitleH },
+      bodyRect: { x, y: bodyY, width: w, height: shrinkBodyH },
+      footerRect: { x, y: footerY, width: w, height: shrinkFooterH },
+      badgeRect: { x, y: Math.max(displayH * marginTop, titleY - gapPx - displayH * 0.06), width: W * 0.3, height: displayH * 0.06 },
+    };
+  };
+
+  // 텍스트가 생겼는데 rect가 없을 때만: 템플릿 비율 기반으로 초기 rect 자동 계산
+  useLayoutEffect(() => {
+    if (!onContentChange) return;
+    const patch: Partial<DesignContent> = {};
+
+    const showTitle = content.posterTitleOnCanvas !== false;
+    const showBody = content.posterBodyOnCanvas !== false;
+    const showFooter = content.posterFooterOnCanvas !== false;
+
+    const titleTextRaw = typeof content.title === "string" ? content.title : "";
+    const { titleRect, bodyRect, footerRect, badgeRect } = computeDefaultTextRects(titleTextRaw);
+
+    if (showTitle && content.title?.trim() && !content.posterTitleRect) patch.posterTitleRect = titleRect;
+    if (showBody && (content.bodyText?.trim() || content.posterBodies?.some((b) => b.text?.trim())) && !content.posterBodyRect)
+      patch.posterBodyRect = bodyRect;
+    if (showFooter && content.emphasizedTitle?.trim() && !content.posterFooterRect) patch.posterFooterRect = footerRect;
+    if (content.subtitle?.trim() && !content.posterBadgeRect) patch.posterBadgeRect = badgeRect;
+
+    if (Object.keys(patch).length === 0) return;
+    const next = { ...content, ...patch };
+    // 본문 배열이 존재하는 경우, body-1의 rect가 비어있으면 기본 rect를 함께 채움
+    if (next.posterBodies?.length && !(next.posterBodyRects?.["body-1"]) && next.posterBodyRect) {
+      next.posterBodyRects = { ...(next.posterBodyRects ?? {}), "body-1": next.posterBodyRect };
+    }
+    onContentChange(next);
+  }, [
+    W,
+    displayH,
+    realAspect,
+    logoWidth,
+    titleFontSize,
+    bodyFontSize,
+    disclaimerSize,
+    gapPx,
+    marginX,
+    marginTop,
+    content,
+    onContentChange,
+  ]);
 
   const assetLayers = content.assetLayers ?? [];
 
@@ -1551,8 +1638,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               draggable={false}
               onDragStart={(e) => e.preventDefault()}
               style={{
-                height: `${logoHeight}px`,
-                width: "auto",
+                width: `${logoWidth}px`,
+                height: "auto",
                 objectFit: "contain",
                 display: "block",
                 userSelect: "none",

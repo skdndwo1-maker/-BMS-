@@ -42,7 +42,7 @@ export const templates: Template[] = [
   // Posters (Offline) ── 기존 id 유지
   {
     id: 'poster-a1',
-    name: 'A1 Poster',
+    name: 'A1',
     category: 'poster',
     size: { width: 594, height: 841, unit: 'mm', name: 'A1' },
     thumbnail: '',
@@ -51,7 +51,7 @@ export const templates: Template[] = [
   },
   {
     id: 'poster-a4',
-    name: 'A4 Poster',
+    name: 'A4',
     category: 'poster',
     size: { width: 210, height: 297, unit: 'mm', name: 'A4' },
     thumbnail: '',
@@ -129,7 +129,7 @@ export const templates: Template[] = [
   // Placard (Offline) ── 기존 id 유지
   {
     id: 'placard-wide-landscape',
-    name: '현수막 가로형 (4700×700)',
+    name: '현수막',
     category: 'placard',
     size: { width: 4700, height: 700, unit: 'mm', name: '4700×700mm' },
     thumbnail: '',
@@ -140,7 +140,7 @@ export const templates: Template[] = [
   {
     id: 'xbanner',
     name: 'X배너',
-    category: 'placard',
+    category: 'xbanner',
     size: { width: 600, height: 1800, unit: 'mm', name: '600×1800mm' },
     thumbnail: '',
     description: 'X배너 스탠드형 (규격 수정 가능)',
@@ -156,5 +156,5 @@ export const templateCategories = [
   { id: 'internal-notice',  label: '사내 공지',     icon: 'Bell' },
   { id: 'presentation',     label: '프레젠테이션',  icon: 'Presentation' },
   { id: 'placard',          label: '현수막',        icon: 'RectangleHorizontal' },
+  { id: 'xbanner',          label: 'X배너',         icon: 'RectangleHorizontal' },
 ];
- 

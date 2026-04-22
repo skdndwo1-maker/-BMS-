@@ -39,19 +39,25 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   const actualTemplateId = templateId || params.templateId;
 
   const template = templates.find(t => t.id === actualTemplateId);
+  const defaultLogoPosition: DesignContent["logoPosition"] =
+    // 가로형 템플릿(예: LinkedIn Post, 16:9 슬라이드 등)은 타이틀과 로고가 겹치기 쉬워 기본값을 우하단으로 둠
+    template?.size?.width && template?.size?.height && template.size.width / template.size.height >= 1.7
+      ? "bottom-right"
+      : "top-left";
 
-  const [content, setContent] = useState<DesignContent>({
-    title:          '',
-    subtitle:       '',
-    bodyText:       '',
-    style:          'basic',
-    emphasizedTitle: '',
-    date:           '',
-    venue:          '',
-    rightPanelBg:   'white',
-    logoOption:     'CI',
-    logoPosition:   'top-left',  // ← 기본값 좌상단
-  });
+  const [content, setContent] = useState<DesignContent>(() => ({
+    title: "",
+    subtitle: "",
+    bodyText: "",
+    style: "basic",
+    emphasizedTitle: "",
+    date: "",
+    venue: "",
+    rightPanelBg: "white",
+    logoOption: "CI",
+    // 가로형(높이 낮은) 템플릿은 로고/타이틀 겹침이 잦아 기본값을 우하단으로 둠
+    logoPosition: defaultLogoPosition,
+  }));
   const [focusTarget, setFocusTarget] = useState<DesignFocusTarget>(null);
 
   // Undo stack (Ctrl/Cmd+Z)

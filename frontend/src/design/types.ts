@@ -6,7 +6,8 @@ export type TemplateCategory =
   | 'social-media'
   | 'internal-notice'
   | 'presentation'
-  | 'placard';
+  | 'placard'
+  | 'xbanner';
 
 export type DesignStyle = 'basic' | 'informational' | 'no-limit';
 

@@ -8,6 +8,7 @@ import {
   LayoutTemplate,
   Share2,
   Bell,
+  Signpost,
   Presentation,
   Layers,
 } from "lucide-react";
@@ -22,6 +23,7 @@ const categoryIconMap: Record<string, React.ComponentType<{ className?: string }
   FileImage,
   Share2,
   Bell,
+  Signpost,
   Presentation,
   RectangleHorizontal,
 };
@@ -189,7 +191,10 @@ export function TemplateGallery() {
           </div>
         </div>
 
-        <div className="grid min-w-0 grid-cols-1 gap-5 min-[768px]:grid-cols-4 min-[768px]:gap-6">
+        <div
+          className="grid w-full min-w-0 grid-cols-4 gap-2 min-[768px]:gap-4 [grid-template-columns:repeat(4,minmax(0,1fr))]"
+          style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
+        >
           {filteredTemplates.map((template) => {
             const isPlacard = template.category === "placard";
             return (
@@ -203,62 +208,37 @@ export function TemplateGallery() {
                     handleSelectTemplate(template.id);
                   }
                 }}
-                className={`group cursor-pointer overflow-hidden rounded-lg border bg-white transition-all hover:shadow-lg ${
+                className={`group min-w-0 cursor-pointer overflow-hidden rounded-lg border bg-white transition-all hover:shadow-lg ${
                   isPlacard ? "border-gray-200 hover:border-[#F43182]/40" : "border-gray-200"
                 }`}
                 onClick={() => handleSelectTemplate(template.id)}
               >
-                <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100">
+                <div className="relative flex h-20 items-center justify-center overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 sm:h-24">
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-indigo-600/10 opacity-0 transition-opacity group-hover:opacity-100" />
-                  {template.id === "placard-wide-landscape" ? (
-                    <div className="z-10 flex h-full w-full items-center justify-center p-3">
-                      <div
-                        className="flex w-full overflow-hidden rounded-sm border border-gray-300 bg-white shadow-sm"
-                        style={{ height: "52px" }}
-                      >
-                        <div className="flex w-[24%] shrink-0 items-center justify-center border-r border-gray-200 px-2">
-                          <div className="flex items-center gap-1">
-                            <div className="h-3 w-3 shrink-0 rounded-full bg-[#E30613]" />
-                            <span style={{ fontSize: "6px", fontWeight: 700, color: "#1A1A1A", whiteSpace: "nowrap" }}>
-                              LG U+
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex flex-1 flex-col justify-center gap-0.5 px-3">
-                          <div className="flex flex-wrap items-baseline gap-1">
-                            <span style={{ fontSize: "7px", fontWeight: 700, color: "#1A1A1A", lineHeight: 1.1 }}>메인 타이틀</span>
-                            <span style={{ fontSize: "7px", fontWeight: 800, color: "#F43182", lineHeight: 1.1 }}>강조 텍스트</span>
-                          </div>
-                          <span style={{ fontSize: "5px", color: "#777", lineHeight: 1 }}>서브 타이틀</span>
-                        </div>
-                      </div>
+                  <div className="z-10 text-center">
+                    <div className="mx-auto mb-1 flex h-10 w-10 items-center justify-center rounded-md bg-white shadow-sm sm:h-12 sm:w-12">
+                      {isPlacard ? (
+                        <RectangleHorizontal className="h-6 w-6 text-gray-400 sm:h-7 sm:w-7" />
+                      ) : (
+                        <LayoutTemplate className="h-6 w-6 text-gray-400 sm:h-7 sm:w-7" />
+                      )}
                     </div>
-                  ) : (
-                    <div className="z-10 text-center">
-                      <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-lg bg-white shadow-sm">
-                        {isPlacard ? (
-                          <RectangleHorizontal className="h-8 w-8 text-gray-400" />
-                        ) : (
-                          <LayoutTemplate className="h-8 w-8 text-gray-400" />
-                        )}
-                      </div>
-                      <div className="text-xs font-medium text-gray-500">{template.size.name}</div>
-                    </div>
-                  )}
+                    <div className="text-[11px] font-medium text-gray-500">{template.size.name}</div>
+                  </div>
                 </div>
 
-                <div className="p-4">
-                  <h3 className="mb-1 font-medium text-gray-900">{template.name}</h3>
-                  <p className="mb-3 text-sm text-gray-500">{template.description}</p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-400">
+                <div className="min-w-0 p-2 sm:p-3">
+                  <h3 className="mb-0.5 truncate text-[13px] font-medium text-gray-900">{template.name}</h3>
+                  <p className="mb-2 hidden truncate text-[12px] text-gray-500 sm:block">{template.description}</p>
+                  <div className="flex min-w-0 items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-[11px] text-gray-400">
                       {template.size.width} × {template.size.height} {template.size.unit}
                     </span>
                     <Button
                       size="sm"
                       variant="ghost"
                       type="button"
-                      className={`opacity-0 transition-opacity group-hover:opacity-100 ${
+                      className={`h-7 px-2 text-[12px] opacity-0 transition-opacity group-hover:opacity-100 ${
                         isPlacard ? "text-[#F43182] hover:bg-[#F43182]/10 hover:text-[#F43182]" : ""
                       }`}
                       onClick={(e) => {
