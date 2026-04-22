@@ -38,6 +38,20 @@ import {
   resolveStoredPath,
   loadMeta
 } from "./store.js";
+import { persistRun, persistRunArtifact } from "./runPersistence.js";
+import { extractGuidelineText } from "./guidelineExtract.js";
+import { embedTextWithGemini } from "./geminiEmbeddings.js";
+import {
+  deleteChunksForSource,
+  fileSha256Hex,
+  insertChunksWithEmbeddings,
+  matchRagChunks,
+  splitIntoChunks,
+  upsertGuidelineSource,
+  upsertRunQaSource
+} from "./rag.js";
+import { requireAdmin } from "./adminAuth.js";
+import { getSupabaseServiceClient } from "./supabase.js";
 
 const app = express();
 
@@ -74,7 +88,7 @@ app.use(
   cors({
     origin: corsAllowOrigin,
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "X-Admin-Key", "X-Session-Id"],
     maxAge: 86_400
   })
 );
@@ -84,7 +98,7 @@ app.use(express.json({ limit: "50mb" }));
 ensureDataDirs();
 
 /** 검수·에이전트 채팅용: 선택된 참조 가이드라인 슬롯의 본문(요약/발췌) */
-async function buildPrimaryGuidelineBlock(guidelineId: string): Promise<string> {
+async function buildPrimaryGuidelineBlock(guidelineId: string, queryText?: string): Promise<string> {
   let g = getGuideline(guidelineId);
   if (g && !g.aiSummary?.trim() && process.env.GEMINI_API_KEY?.trim()) {
     try {
@@ -107,7 +121,29 @@ async function buildPrimaryGuidelineBlock(guidelineId: string): Promise<string> 
     primaryBlock =
       "등록된 참조 가이드라인이 없습니다. 브랜드 검수 화면에서 참조 가이드라인 옵션을 선택하거나 동기화하세요.";
   }
-  return `[참조 가이드라인 — 우선 적용 (${g?.displayName ?? guidelineId})]\n${primaryBlock}`;
+
+  let out = `[참조 가이드라인 — 우선 적용 (${g?.displayName ?? guidelineId})]\n${primaryBlock}`;
+
+  // RAG: retrieve guideline chunks relevant to queryText and attach as context.
+  if (queryText?.trim() && process.env.GEMINI_API_KEY?.trim() && process.env.SUPABASE_URL?.trim()) {
+    try {
+      const q = queryText.trim().slice(0, 6000);
+      const qEmb = await embedTextWithGemini(q, { model: "text-embedding-004" });
+      const matches = await matchRagChunks({ queryEmbedding: qEmb, guidelineId, sourceType: "guideline", topK: 8 });
+      const picked = matches.filter((m) => typeof m.similarity === "number" && m.similarity >= 0.2).slice(0, 6);
+      if (picked.length > 0) {
+        const lines = picked.map(
+          (m, i) =>
+            `(${i + 1}) [${m.source_title}] (sim=${m.similarity.toFixed(3)})\n${String(m.content).trim()}`
+        );
+        out += `\n\n[관련 참고자료 — RAG 발췌]\n${lines.join("\n\n---\n")}`;
+      }
+    } catch (e) {
+      console.error("[rag] buildPrimaryGuidelineBlock retrieval failed:", e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  return out;
 }
 
 const storage = multer.diskStorage({
@@ -443,6 +479,36 @@ app.post("/api/guidelines/:id/analyze", async (req, res) => {
     rec.aiSummary = summary;
     rec.aiAnalyzedAt = new Date().toISOString();
     setGuideline(rec);
+
+    // RAG indexing (text extract -> chunk -> embedding -> store)
+    // - PDF: extract text via pdf-parse
+    // - Others: skip (no OCR) but still keep summary in local store
+    if (process.env.GEMINI_API_KEY?.trim()) {
+      try {
+        const checksum = fileSha256Hex(abs);
+        const src = await upsertGuidelineSource({
+          guidelineId: rec.id,
+          title: rec.displayName || rec.originalName || rec.id,
+          storedRelativePath: rec.storedRelativePath || null,
+          mimeType: rec.mimeType || null,
+          checksum,
+        });
+        if (src?.sourceId) {
+          const fullText = await extractGuidelineText(abs, rec.mimeType);
+          const chunks = splitIntoChunks(fullText, { chunkChars: 1200, overlapChars: 160 });
+          await deleteChunksForSource(src.sourceId);
+          await insertChunksWithEmbeddings({
+            sourceId: src.sourceId,
+            chunks,
+            embeddingModel: "text-embedding-004",
+            embed: (t) => embedTextWithGemini(t, { model: "text-embedding-004" }),
+          });
+        }
+      } catch (e) {
+        console.error("[rag] guideline analyze indexing failed:", e instanceof Error ? e.message : String(e));
+      }
+    }
+
     res.json({ ok: true, aiSummary: summary, aiAnalyzedAt: rec.aiAnalyzedAt });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -488,18 +554,16 @@ app.post(
       }
     }
 
-    /** 1) 참조 가이드라인 옵션에 연동된 서버 저장본(우선) */
-    let primaryBlock: string;
-    if (g?.aiSummary?.trim()) {
-      primaryBlock = g.aiSummary;
-    } else if (g) {
-      primaryBlock = await excerptGuidelineForInspection(g);
-    } else {
-      primaryBlock =
-        "등록된 참조 가이드라인이 없습니다. 브랜드 검수 화면에서 참조 가이드라인 옵션을 선택하거나 동기화하세요.";
-    }
-
-    let guidelineSummary = `[참조 가이드라인 — 우선 적용 (${g?.displayName ?? guidelineId})]\n${primaryBlock}`;
+    // 참조 가이드라인(요약/발췌) + RAG 발췌(가능하면)
+    const ragQuerySeed = [
+      businessCategory ? `사업 영역: ${businessCategory}` : "",
+      designGroup ? `디자인 그룹: ${designGroup}` : "",
+      designType ? `디자인 유형: ${designType}` : "",
+      extra ? `추가 검수 요청: ${extra}` : ""
+    ]
+      .filter(Boolean)
+      .join("\n");
+    let guidelineSummary = await buildPrimaryGuidelineBlock(guidelineId, ragQuerySeed);
 
     /** 0) 카테고리 선택 맥락(추가 검수 원칙 확장 가능) */
     const categoryLines: string[] = [];
@@ -530,6 +594,7 @@ app.post(
     const designMime = file.mimetype;
 
     try {
+      const t0 = Date.now();
       const result = await runInspectionWithGemini({
         designBase64,
         designMime,
@@ -557,6 +622,54 @@ app.post(
         } else {
           revisionNote =
             "수정 이미지 생성에 실패했습니다. GEMINI_IMAGE_MODEL 또는 사용 가능한 이미지 모델(gemini-3.1-flash-image-preview 등)을 확인하세요.";
+        }
+      }
+
+      // Auto-save run (non-blocking if Supabase env missing or insert fails)
+      const runSaved = await persistRun({
+        req,
+        type: "inspection",
+        status: "pending_review",
+        guidelineId,
+        mediaType: designGroup || null,
+        inputJson: {
+          guidelineId,
+          businessCategory,
+          designGroup,
+          designType,
+          additionalNotes: extra || null,
+          supplementaryUploaded: Boolean(supplementary?.buffer?.length),
+          designMime,
+          designBytes: buf.length,
+        },
+        outputJson: {
+          score: result.score,
+          overallSummary: result.overallSummary,
+          violations: result.violations,
+          revisedImage: revisedImage ? { mimeType: revisedImage.mimeType } : null,
+          revisionCaption,
+          revisionNote,
+        },
+        inputText: guidelineSummary,
+        outputText: result.overallSummary,
+        score: result.score,
+        model: process.env.GEMINI_MODEL?.trim() || null,
+        latencyMs: Date.now() - t0,
+      });
+      if (runSaved?.runId) {
+        await persistRunArtifact({
+          runId: runSaved.runId,
+          kind: "inspection_input",
+          mimeType: designMime,
+          dataJson: { designMime, designBytes: buf.length },
+        });
+        if (revisedImage) {
+          await persistRunArtifact({
+            runId: runSaved.runId,
+            kind: "revised_image_inline_base64",
+            mimeType: revisedImage.mimeType,
+            dataJson: { note: "base64 returned to client; not stored in DB by default" },
+          });
         }
       }
 
@@ -645,7 +758,10 @@ app.post(
           res.status(500).json({ error: String(e) });
           return;
         }
-        guidelineBlock = await buildPrimaryGuidelineBlock(guidelineId);
+        guidelineBlock = await buildPrimaryGuidelineBlock(
+          guidelineId,
+          [auditCategory, auditName, namingIntent, requestText, referenceText].filter(Boolean).join("\n\n")
+        );
       } else {
         guidelineBlock =
           "[참조 가이드라인]\n사용자가 라이브러리 참조를 끈 상태입니다. 아래 직접 입력·업로드만 반영하세요.";
@@ -689,6 +805,36 @@ app.post(
             : mode === "generate"
               ? { kind: "general" as const }
               : undefined
+      });
+
+      // Auto-save naming run
+      await persistRun({
+        req,
+        type: mode === "generate" ? "naming_generate" : "naming_audit",
+        status: "pending_review",
+        guidelineId: useLibrary && guidelineId ? guidelineId : null,
+        inputJson: {
+          mode,
+          auditName,
+          namingIntent,
+          auditCategory,
+          requestText,
+          referenceText: referenceText || null,
+          supplementIncluded: Boolean(supplement),
+          useGuidelineLibrary: useLibrary,
+          guidelineId: useLibrary && guidelineId ? guidelineId : null,
+          generateMeta:
+            mode === "generate"
+              ? {
+                  style: generateStyle,
+                  ...(generateStyle === "tiered" ? { tierStepCount, tierLabels: tierLabelsEffective } : {}),
+                }
+              : null,
+        },
+        outputJson: result as unknown as Record<string, unknown>,
+        inputText: `${guidelineBlock}\n\n${referenceNotes}\n\n${requestText}`.trim(),
+        outputText: JSON.stringify(result),
+        model: process.env.GEMINI_MODEL?.trim() || null,
       });
 
       res.json({
@@ -745,7 +891,7 @@ app.post("/api/inspection/followup", async (req, res) => {
       return;
     }
 
-    let guidelineContext = await buildPrimaryGuidelineBlock(guidelineId);
+    let guidelineContext = await buildPrimaryGuidelineBlock(guidelineId, message);
     if (additionalNotes) {
       guidelineContext += `\n\n[사용자 직접 입력 검수 사항]\n${additionalNotes}`;
     }
@@ -827,7 +973,7 @@ app.post("/api/inspection/additional-revision", async (req, res) => {
       return;
     }
 
-    let guidelineContext = await buildPrimaryGuidelineBlock(guidelineId);
+    let guidelineContext = await buildPrimaryGuidelineBlock(guidelineId, [additionalNotes, overallSummary].filter(Boolean).join("\n\n"));
     if (additionalNotes) {
       guidelineContext += `\n\n[사용자 직접 입력 검수 사항]\n${additionalNotes}`;
     }
@@ -882,6 +1028,26 @@ app.post("/api/inspection/additional-revision", async (req, res) => {
       return;
     }
 
+    await persistRun({
+      req,
+      type: "inspection_additional_revision",
+      status: "pending_review",
+      guidelineId,
+      inputJson: {
+        guidelineId,
+        designMime,
+        revisionMime: revisionMime || null,
+        supplementaryMime: supMime || null,
+        hasSupplementary: Boolean(supBase64),
+        additionalNotes: additionalNotes || null,
+        violationsCount: violations.length,
+      },
+      outputJson: { ok: true, mimeType: out.mimeType, imageUpdated: true },
+      inputText: guidelineContext,
+      outputText: null,
+      model: process.env.GEMINI_IMAGE_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || null,
+    });
+
     res.json({
       ok: true,
       revisedImage: { mimeType: out.mimeType, data: out.base64 },
@@ -919,13 +1085,26 @@ app.post("/api/design-editor/suggest-text", async (req, res) => {
     }
     const creativeTopic =
       typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
-    const guidelineSummary = await buildPrimaryGuidelineBlock(guidelineId);
+    const guidelineSummary = await buildPrimaryGuidelineBlock(guidelineId, [templateLabel, creativeTopic].filter(Boolean).join("\n\n"));
     const out = await runDesignEditorTextSuggestion({
       guidelineSummary,
       contentJson,
       targets,
       templateLabel,
       creativeTopic: creativeTopic || undefined
+    });
+
+    await persistRun({
+      req,
+      type: "design_editor_text_suggestion",
+      status: "pending_review",
+      guidelineId,
+      templateId: templateLabel || null,
+      inputJson: { guidelineId, templateLabel, targets, creativeTopic: creativeTopic || null, contentJsonBytes: contentJson.length },
+      outputJson: out as unknown as Record<string, unknown>,
+      inputText: guidelineSummary,
+      outputText: JSON.stringify(out),
+      model: process.env.GEMINI_MODEL?.trim() || null,
     });
     res.json(out);
   } catch (e) {
@@ -961,7 +1140,7 @@ app.post("/api/design-editor/correct-canvas", async (req, res) => {
 
     const creativeTopic =
       typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
-    const guidelineContext = await buildPrimaryGuidelineBlock(guidelineId);
+    const guidelineContext = await buildPrimaryGuidelineBlock(guidelineId, [overallSummary, creativeTopic].filter(Boolean).join("\n\n"));
     const out = await runDesignEditorCanvasVisualCorrection({
       designBase64,
       designMime,
@@ -976,6 +1155,25 @@ app.post("/api/design-editor/correct-canvas", async (req, res) => {
       res.status(503).json({ error: "correction_failed" });
       return;
     }
+
+    await persistRun({
+      req,
+      type: "design_editor_visual_correction",
+      status: "pending_review",
+      guidelineId,
+      inputJson: {
+        guidelineId,
+        designMime,
+        mode,
+        creativeTopic: creativeTopic || null,
+        violationsCount: violations.length,
+        overallSummary: overallSummary || null,
+      },
+      outputJson: { ok: true, mimeType: out.mimeType, caption: out.caption },
+      inputText: guidelineContext,
+      outputText: out.caption ?? null,
+      model: process.env.GEMINI_IMAGE_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || null,
+    });
 
     res.json({ ok: true, mimeType: out.mimeType, data: out.base64, caption: out.caption });
   } catch (e) {
@@ -998,7 +1196,7 @@ app.post("/api/design-editor/inspect", async (req, res) => {
 
     const creativeTopic =
       typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
-    const guidelineSummary = await buildPrimaryGuidelineBlock(guidelineId);
+    const guidelineSummary = await buildPrimaryGuidelineBlock(guidelineId, [templateId, creativeTopic].filter(Boolean).join("\n\n"));
     const result = await runDesignEditorCanvasInspection({
       designBase64: imageBase64,
       designMime: imageMime,
@@ -1006,6 +1204,20 @@ app.post("/api/design-editor/inspect", async (req, res) => {
       designContentJson: JSON.stringify(designContent ?? {}),
       templateLabel: templateId || "template",
       creativeTopic: creativeTopic || undefined
+    });
+
+    await persistRun({
+      req,
+      type: "design_editor_inspection",
+      status: "pending_review",
+      guidelineId,
+      templateId: templateId || null,
+      inputJson: { guidelineId, templateId: templateId || null, imageMime, creativeTopic: creativeTopic || null },
+      outputJson: { score: result.score, overallSummary: result.overallSummary, violations: result.violations },
+      inputText: guidelineSummary,
+      outputText: result.overallSummary,
+      score: result.score,
+      model: process.env.GEMINI_MODEL?.trim() || null,
     });
 
     res.json({
@@ -1037,7 +1249,7 @@ app.post("/api/design-editor/replace-image", async (req, res) => {
 
     const creativeTopic =
       typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
-    const guidelineContext = await buildPrimaryGuidelineBlock(guidelineId);
+    const guidelineContext = await buildPrimaryGuidelineBlock(guidelineId, [imageBrief, creativeTopic].filter(Boolean).join("\n\n"));
     const out = await generateDesignEditorReplacementImage({
       designBase64,
       designMime,
@@ -1054,6 +1266,134 @@ app.post("/api/design-editor/replace-image", async (req, res) => {
     res.json({ ok: true, mimeType: out.mimeType, data: out.base64 });
   } catch (e) {
     res.status(500).json({ error: String(e) });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin: approve/reject + review queue (stored in Supabase)
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.get("/api/admin/runs", async (req, res) => {
+  const auth = requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : "pending_review";
+    const limitRaw = typeof req.query.limit === "string" ? parseInt(req.query.limit, 10) : 50;
+    const limit = Number.isFinite(limitRaw) ? Math.min(200, Math.max(1, limitRaw)) : 50;
+
+    const sb = getSupabaseServiceClient();
+    const { data, error } = await sb
+      .from("runs")
+      .select("id,created_at,type,status,guideline_id,template_id,score,model,input_text,output_text,input_json,output_json")
+      .eq("status", status)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) throw new Error(error.message);
+    res.json({ ok: true, runs: data ?? [] });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+app.post("/api/admin/runs/:id/approve", async (req, res) => {
+  const auth = requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  try {
+    const id = String((req.params as { id?: string }).id ?? "").trim();
+    if (!id) {
+      res.status(400).json({ ok: false, error: "id_required" });
+      return;
+    }
+    const reviewer = typeof req.body?.reviewer === "string" ? req.body.reviewer.trim() : "";
+
+    const sb = getSupabaseServiceClient();
+    const { data: run, error: runErr } = await sb
+      .from("runs")
+      .select("id,type,guideline_id,input_text,output_text,input_json,output_json")
+      .eq("id", id)
+      .single();
+    if (runErr) throw new Error(runErr.message);
+
+    const { error: upErr } = await sb
+      .from("runs")
+      .update({ status: "approved", updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (upErr) throw new Error(upErr.message);
+
+    const { error: revErr } = await sb.from("reviews").insert({
+      run_id: id,
+      decision: "approved",
+      reason: null,
+      reviewer: reviewer || null,
+    });
+    if (revErr) console.error("[supabase] insert review failed:", revErr.message);
+
+    // Approved run -> optional RAG run_qa indexing (output_text preferred)
+    if (process.env.GEMINI_API_KEY?.trim()) {
+      try {
+        const title = `Approved ${String(run.type)} — ${id.slice(0, 8)}`;
+        const src = await upsertRunQaSource({ runId: id, title, guidelineId: run.guideline_id ?? null });
+        if (src?.sourceId) {
+          const corpus = String(run.output_text ?? "").trim() || JSON.stringify(run.output_json ?? {});
+          const chunks = splitIntoChunks(corpus, { chunkChars: 1000, overlapChars: 140 });
+          await deleteChunksForSource(src.sourceId);
+          await insertChunksWithEmbeddings({
+            sourceId: src.sourceId,
+            chunks,
+            embeddingModel: "text-embedding-004",
+            embed: (t) => embedTextWithGemini(t, { model: "text-embedding-004" }),
+          });
+        }
+      } catch (e) {
+        console.error("[rag] run approve indexing failed:", e instanceof Error ? e.message : String(e));
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+app.post("/api/admin/runs/:id/reject", async (req, res) => {
+  const auth = requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  try {
+    const id = String((req.params as { id?: string }).id ?? "").trim();
+    if (!id) {
+      res.status(400).json({ ok: false, error: "id_required" });
+      return;
+    }
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    const reviewer = typeof req.body?.reviewer === "string" ? req.body.reviewer.trim() : "";
+
+    const sb = getSupabaseServiceClient();
+    const { error: upErr } = await sb
+      .from("runs")
+      .update({ status: "rejected", updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (upErr) throw new Error(upErr.message);
+
+    const { error: revErr } = await sb.from("reviews").insert({
+      run_id: id,
+      decision: "rejected",
+      reason: reason || null,
+      reviewer: reviewer || null,
+    });
+    if (revErr) console.error("[supabase] insert review failed:", revErr.message);
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
   }
 });
 

@@ -8,6 +8,7 @@ import { BrandNaming } from "@/components/BrandNaming";
 import { FeaturePlaceholder } from "@/components/FeaturePlaceholder";
 import { TemplateGallery } from "@/components/TemplateGallery";
 import { DesignEditor } from "@/components/design/DesignEditor";
+import { AdminReview } from "@/components/AdminReview";
 import { ImportViewer } from "./ImportViewer";
 import { apiUrl } from "@/lib/apiUrl.ts";
 
@@ -66,6 +67,7 @@ export default function AppGate() {
       <Route path="/naming" element={<BrandNaming />} />
       <Route path="/library" element={<FeaturePlaceholder />} />
       <Route path="/import" element={<ImportViewer />} />
+      <Route path="/admin/review" element={<AdminReview />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
