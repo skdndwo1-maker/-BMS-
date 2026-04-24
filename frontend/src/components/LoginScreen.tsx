@@ -1,26 +1,59 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
+import { toast } from "sonner";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 
 export function LoginScreen() {
   const navigate = useNavigate();
+  const sb = useMemo(() => {
+    try {
+      return getSupabaseClient();
+    } catch {
+      return null;
+    }
+  }, []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  useEffect(() => {
+    if (!sb) return;
+    (async () => {
+      const { data } = await sb.auth.getSession();
+      if (data.session?.user) navigate("/options");
+    })();
+  }, [sb, navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      if (!sb) {
+        toast.error("Supabase 설정이 필요합니다. (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)");
+        return;
+      }
+      const { data, error } = await sb.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error) throw error;
+      if (!data.session?.user) throw new Error("로그인에 실패했습니다.");
+      toast.success("로그인 완료");
       navigate("/options");
-    }, 1000);
+    } catch (err) {
+      console.error(err);
+      const msg = err instanceof Error ? err.message : "로그인에 실패했습니다.";
+      toast.error(msg);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

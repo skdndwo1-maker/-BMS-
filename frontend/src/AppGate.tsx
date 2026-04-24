@@ -11,6 +11,7 @@ import { DesignEditor } from "@/components/design/DesignEditor";
 import { AdminReview } from "@/components/AdminReview";
 import { ImportViewer } from "./ImportViewer";
 import { apiUrl } from "@/lib/apiUrl.ts";
+import { MyDesignsDashboard } from "@/components/MyDesignsDashboard";
 
 export default function AppGate() {
   const [phase, setPhase] = useState<"loading" | "invite" | "app">("loading");
@@ -62,7 +63,7 @@ export default function AppGate() {
       <Route path="/options" element={<OptionSelection />} />
       <Route path="/brand-graphics" element={<TemplateGallery />} />
       <Route path="/create/:templateId" element={<DesignEditor />} />
-      <Route path="/dashboard" element={<FeaturePlaceholder />} />
+      <Route path="/dashboard" element={<MyDesignsDashboard />} />
       <Route path="/inspection" element={<BrandInspection />} />
       <Route path="/naming" element={<BrandNaming />} />
       <Route path="/library" element={<FeaturePlaceholder />} />

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { templates } from "@/design/templates";
 import type { DesignContent } from "@/design/types";
 import { DesignCanvas, type DesignCanvasHandle, type DesignFocusTarget } from './DesignCanvas';
@@ -12,9 +12,13 @@ import { QuickStartDialog }       from './QuickStartDialog';
 import { DesignAssistantChat }    from './DesignAssistantChat';
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   ArrowLeft,
   Download,
+  Loader2,
   ZoomIn,
   ZoomOut,
   Maximize2,
@@ -24,6 +28,18 @@ import {
   Magnet,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import html2canvas from "html2canvas";
+import { toast } from "sonner";
+import { buildDesignCanvasCaptureOptions } from "@/lib/html2canvasDesignCapture";
+import { getSupabaseClient } from "@/lib/supabaseClient";
+import {
+  createDesign,
+  getDesignById,
+  listDesignsForUser,
+  requireAuthedUserId,
+  updateDesign,
+  type DesignListItem,
+} from "@/lib/designsApi";
 interface DesignEditorProps {
   templateId?: string;
 }
@@ -32,21 +48,43 @@ function getInitialZoom(): number {
   return 1.0;
 }
 
-function getOrCreateSessionId(): string {
-  const key = "bms_session_id";
-  const existing = localStorage.getItem(key);
-  if (existing?.trim()) return existing.trim();
-  const id = `sess_${Math.random().toString(36).slice(2)}_${Date.now()}`;
-  localStorage.setItem(key, id);
-  return id;
-}
-
 export function DesignEditor({ templateId }: DesignEditorProps) {
   const navigate = useNavigate();
   const params = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const actualTemplateId = templateId || params.templateId;
 
   const template = templates.find(t => t.id === actualTemplateId);
+  const sb = useMemo(() => {
+    try {
+      return getSupabaseClient();
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const [designId, setDesignId] = useState<string | null>(null);
+  const [designName, setDesignName] = useState<string>("");
+
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [overwriteChoiceOpen, setOverwriteChoiceOpen] = useState(false);
+
+  const [loadDialogOpen, setLoadDialogOpen] = useState(false);
+  const [loadBusy, setLoadBusy] = useState(false);
+  const [loadItems, setLoadItems] = useState<DesignListItem[]>([]);
+
+  const [bootBusy, setBootBusy] = useState(false);
+
+  function formatDefaultDesignName(): string {
+    const base = template?.name?.trim() || (actualTemplateId ?? "디자인");
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${base} ${yyyy}-${mm}-${dd}`;
+  }
   const defaultLogoPosition: DesignContent["logoPosition"] =
     // 가로형 템플릿(예: LinkedIn Post, 16:9 슬라이드 등)은 타이틀과 로고가 겹치기 쉬워 기본값을 우하단으로 둠
     template?.size?.width && template?.size?.height && template.size.width / template.size.height >= 1.7
@@ -162,6 +200,51 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     if (textFormatTarget) setTextOptionsPanelOpen(true);
   }, [textFormatTarget]);
 
+  // designId로 진입 시 Supabase에서 자동 복원
+  useEffect(() => {
+    const id = searchParams.get("designId")?.trim() || "";
+    if (!id) return;
+    if (!sb) return;
+    let cancelled = false;
+    (async () => {
+      setBootBusy(true);
+      try {
+        const userId = await requireAuthedUserId(sb);
+        const row = await getDesignById(sb, { userId, id });
+        if (!row) {
+          toast.error("저장된 디자인을 찾을 수 없습니다.");
+          return;
+        }
+        // 다른 템플릿이면 해당 템플릿 편집으로 이동
+        if (row.template_id && row.template_id !== actualTemplateId) {
+          navigate(`/create/${row.template_id}?designId=${encodeURIComponent(row.id)}`, { replace: true });
+          return;
+        }
+        if (cancelled) return;
+        setDesignId(row.id);
+        setDesignName(row.name || "");
+        setContentWithHistory(() => row.canvas_data as DesignContent);
+        toast.success("불러오기 완료");
+      } catch (e) {
+        console.error(e);
+        const msg =
+          e instanceof Error && e.message === "not_logged_in"
+            ? "로그인이 필요합니다."
+            : e instanceof Error
+              ? e.message
+              : "불러오기에 실패했습니다.";
+        toast.error(msg);
+        if (msg.includes("로그인")) navigate("/", { replace: false });
+      } finally {
+        if (!cancelled) setBootBusy(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sb, actualTemplateId, searchParams]);
+
   const pushUndoSnapshot = () => {
     setContent((prev) => {
       const u = undoRef.current;
@@ -196,6 +279,112 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
 
   const handleLoadDemo = (demoContent: DesignContent) => {
     setContentWithHistory(() => demoContent);
+  };
+
+  const captureThumbnailDataUrl = async (): Promise<string | null> => {
+    try {
+      const el = document.getElementById("design-canvas");
+      if (!el) return null;
+      const canvas = await html2canvas(
+        el,
+        buildDesignCanvasCaptureOptions({
+          scale: 1,
+          logging: false,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+        }) as Parameters<typeof html2canvas>[1]
+      );
+      // 너무 큰 dataUrl이 되는 것을 방지(간단 썸네일 용도)
+      return canvas.toDataURL("image/jpeg", 0.72);
+    } catch (e) {
+      console.warn("thumbnail_capture_failed", e);
+      return null;
+    }
+  };
+
+  const ensureUserId = async (): Promise<string> => {
+    if (!sb) throw new Error("supabase_not_configured");
+    return await requireAuthedUserId(sb);
+  };
+
+  const openSave = () => {
+    setSaveName(designName?.trim() || formatDefaultDesignName());
+    setSaveDialogOpen(true);
+  };
+
+  const openLoad = async () => {
+    if (!sb) {
+      toast.error("Supabase 설정이 필요합니다. (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)");
+      return;
+    }
+    setLoadDialogOpen(true);
+    setLoadBusy(true);
+    try {
+      const userId = await ensureUserId();
+      const items = await listDesignsForUser(sb, { userId, templateId: actualTemplateId ?? undefined });
+      setLoadItems(items);
+    } catch (e) {
+      console.error(e);
+      const msg =
+        e instanceof Error && e.message === "not_logged_in"
+          ? "로그인이 필요합니다."
+          : e instanceof Error
+            ? e.message
+            : "불러오기 목록 조회에 실패했습니다.";
+      toast.error(msg);
+      if (msg.includes("로그인")) navigate("/", { replace: false });
+      setLoadDialogOpen(false);
+    } finally {
+      setLoadBusy(false);
+    }
+  };
+
+  const doSaveNew = async (name: string) => {
+    if (!sb) throw new Error("supabase_not_configured");
+    setSaveBusy(true);
+    try {
+      const userId = await ensureUserId();
+      const thumbnailUrl = await captureThumbnailDataUrl();
+      const row = await createDesign(sb, {
+        userId,
+        templateId: actualTemplateId ?? "",
+        name,
+        content,
+        thumbnailUrl,
+      });
+      setDesignId(row.id);
+      setDesignName(row.name || name);
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("designId", row.id);
+        return next;
+      });
+      toast.success("저장 완료");
+    } finally {
+      setSaveBusy(false);
+    }
+  };
+
+  const doSaveOverwrite = async (name: string) => {
+    if (!sb) throw new Error("supabase_not_configured");
+    if (!designId) throw new Error("design_id_missing");
+    setSaveBusy(true);
+    try {
+      const userId = await ensureUserId();
+      const thumbnailUrl = await captureThumbnailDataUrl();
+      const row = await updateDesign(sb, {
+        userId,
+        id: designId,
+        templateId: actualTemplateId ?? "",
+        name,
+        content,
+        thumbnailUrl,
+      });
+      setDesignName(row.name || name);
+      toast.success("덮어쓰기 완료");
+    } finally {
+      setSaveBusy(false);
+    }
   };
 
   // ── Canvas: 모든 템플릿에 동일 에디터(정규화 좌표 0~1 · 프레임 비율은 template.size로 반영) ──
@@ -299,51 +488,12 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                 {showPreview ? '편집' : '미리보기'}
               </Button>
 
-              {/* 임시 저장/불러오기(세션별) */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const name = window.prompt("저장 이름을 입력하세요");
-                  if (!name?.trim()) return;
-                  const sid = getOrCreateSessionId();
-                  const k = `design_save:${sid}:${actualTemplateId}:${name.trim()}`;
-                  const payload = { templateId: actualTemplateId, content };
-                  localStorage.setItem(k, JSON.stringify(payload));
-                  window.alert("저장되었습니다.");
-                }}
-              >
+              <Button variant="outline" size="sm" onClick={openSave} disabled={saveBusy || bootBusy}>
+                {saveBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 저장
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const sid = getOrCreateSessionId();
-                  const prefix = `design_save:${sid}:${actualTemplateId}:`;
-                  const keys = Object.keys(localStorage).filter((k) => k.startsWith(prefix));
-                  if (keys.length === 0) {
-                    window.alert("저장된 항목이 없습니다.");
-                    return;
-                  }
-                  const names = keys.map((k) => k.slice(prefix.length)).sort();
-                  const pick = window.prompt(`불러올 이름을 입력하세요:\n- ${names.join("\n- ")}`);
-                  if (!pick?.trim()) return;
-                  const raw = localStorage.getItem(`${prefix}${pick.trim()}`);
-                  if (!raw) {
-                    window.alert("해당 이름의 저장본을 찾을 수 없습니다.");
-                    return;
-                  }
-                  try {
-                    const parsed = JSON.parse(raw) as { content?: DesignContent };
-                    if (!parsed?.content) throw new Error("invalid");
-                    setContentWithHistory(() => parsed.content as DesignContent);
-                    window.alert("불러오기 완료");
-                  } catch {
-                    window.alert("저장본을 읽을 수 없습니다.");
-                  }
-                }}
-              >
+              <Button variant="outline" size="sm" onClick={openLoad} disabled={loadBusy || bootBusy}>
+                {loadBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 불러오기
               </Button>
 
@@ -463,6 +613,224 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
             </div>
           )}
         </div>
+
+        {/* ── Save: 이름 입력 ───────────────────────────────────────── */}
+        <Dialog open={saveDialogOpen} onOpenChange={(o) => (saveBusy ? null : setSaveDialogOpen(o))}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>저장하기</DialogTitle>
+              <DialogDescription>디자인 이름을 입력해 저장합니다.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label htmlFor="design-save-name">이름</Label>
+              <Input
+                id="design-save-name"
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                placeholder={formatDefaultDesignName()}
+                disabled={saveBusy}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSaveDialogOpen(false)}
+                disabled={saveBusy}
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  const name = saveName.trim() || formatDefaultDesignName();
+                  setSaveName(name);
+                  setSaveDialogOpen(false);
+                  if (!sb) {
+                    toast.error("Supabase 설정이 필요합니다. (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)");
+                    return;
+                  }
+                  if (designId) {
+                    setOverwriteChoiceOpen(true);
+                  } else {
+                    void (async () => {
+                      try {
+                        await doSaveNew(name);
+                      } catch (e) {
+                        console.error(e);
+                        const msg =
+                          e instanceof Error && e.message === "not_logged_in"
+                            ? "로그인이 필요합니다."
+                            : e instanceof Error
+                              ? e.message
+                              : "저장에 실패했습니다.";
+                        toast.error(msg);
+                        if (msg.includes("로그인")) navigate("/", { replace: false });
+                      }
+                    })();
+                  }
+                }}
+                disabled={saveBusy}
+              >
+                {saveBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                저장
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Save: 새로 저장 / 덮어쓰기 선택 ───────────────────────── */}
+        <Dialog open={overwriteChoiceOpen} onOpenChange={(o) => (saveBusy ? null : setOverwriteChoiceOpen(o))}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>이미 저장된 디자인입니다</DialogTitle>
+              <DialogDescription>새로 저장하거나 기존 저장본에 덮어쓸 수 있습니다.</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOverwriteChoiceOpen(false)}
+                disabled={saveBusy}
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  const name = saveName.trim() || formatDefaultDesignName();
+                  void (async () => {
+                    try {
+                      setOverwriteChoiceOpen(false);
+                      await doSaveNew(name);
+                    } catch (e) {
+                      console.error(e);
+                      toast.error(e instanceof Error ? e.message : "저장에 실패했습니다.");
+                    }
+                  })();
+                }}
+                disabled={saveBusy}
+              >
+                {saveBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                새로 저장
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  const name = saveName.trim() || formatDefaultDesignName();
+                  void (async () => {
+                    try {
+                      setOverwriteChoiceOpen(false);
+                      await doSaveOverwrite(name);
+                    } catch (e) {
+                      console.error(e);
+                      const msg =
+                        e instanceof Error && e.message === "not_logged_in"
+                          ? "로그인이 필요합니다."
+                          : e instanceof Error
+                            ? e.message
+                            : "덮어쓰기에 실패했습니다.";
+                      toast.error(msg);
+                      if (msg.includes("로그인")) navigate("/", { replace: false });
+                    }
+                  })();
+                }}
+                disabled={saveBusy}
+              >
+                {saveBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                덮어쓰기
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Load: 목록 ───────────────────────────────────────────── */}
+        <Dialog open={loadDialogOpen} onOpenChange={(o) => (loadBusy ? null : setLoadDialogOpen(o))}>
+          <DialogContent className="sm:max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>불러오기</DialogTitle>
+              <DialogDescription>저장된 디자인을 선택해 현재 캔버스에 복원합니다.</DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[60vh] overflow-y-auto">
+              {loadBusy ? (
+                <div className="flex items-center justify-center py-10 text-sm text-gray-500">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  불러오는 중…
+                </div>
+              ) : loadItems.length === 0 ? (
+                <div className="py-10 text-center text-sm text-gray-500">저장된 항목이 없습니다.</div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {loadItems.map((it) => (
+                    <button
+                      key={it.id}
+                      type="button"
+                      className="group flex w-full items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 text-left hover:border-[#F43182] hover:bg-pink-50/20 transition"
+                      onClick={() => {
+                        if (!sb) return;
+                        void (async () => {
+                          setLoadBusy(true);
+                          try {
+                            const userId = await ensureUserId();
+                            const row = await getDesignById(sb, { userId, id: it.id });
+                            if (!row) {
+                              toast.error("저장된 디자인을 찾을 수 없습니다.");
+                              return;
+                            }
+                            setDesignId(row.id);
+                            setDesignName(row.name || "");
+                            setSearchParams((prev) => {
+                              const next = new URLSearchParams(prev);
+                              next.set("designId", row.id);
+                              return next;
+                            });
+                            setContentWithHistory(() => row.canvas_data as DesignContent);
+                            toast.success("불러오기 완료");
+                            setLoadDialogOpen(false);
+                          } catch (e) {
+                            console.error(e);
+                            const msg =
+                              e instanceof Error && e.message === "not_logged_in"
+                                ? "로그인이 필요합니다."
+                                : e instanceof Error
+                                  ? e.message
+                                  : "불러오기에 실패했습니다.";
+                            toast.error(msg);
+                            if (msg.includes("로그인")) navigate("/", { replace: false });
+                          } finally {
+                            setLoadBusy(false);
+                          }
+                        })();
+                      }}
+                    >
+                      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
+                        {it.thumbnail_url ? (
+                          <img src={it.thumbnail_url} alt={it.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[10px] text-gray-400">
+                            NO THUMB
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold text-gray-900">{it.name}</div>
+                        <div className="mt-0.5 text-xs text-gray-500">
+                          {new Date(it.updated_at || it.created_at).toLocaleString()}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setLoadDialogOpen(false)} disabled={loadBusy}>
+                닫기
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <ExportDialog
           open={showExportDialog}
