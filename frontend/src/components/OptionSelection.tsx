@@ -108,6 +108,8 @@ export function OptionSelection() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
+  const canOpenAdmin = (sessionStorage.getItem("bms_admin_key") || "").trim().length > 0;
+
   const [chatMessages, setChatMessages] = useState<
     Array<{ id: string; role: "user" | "assistant"; content: string }>
   >([]);
@@ -194,12 +196,31 @@ export function OptionSelection() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <div className="w-8 h-7 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center">
-                <Crown className="w-3.5 h-3.5 text-gray-500" />
+            <button
+              type="button"
+              onClick={() => {
+                if (!canOpenAdmin) return;
+                navigate("/admin/review");
+              }}
+              disabled={!canOpenAdmin}
+              title={
+                canOpenAdmin
+                  ? "관리자 모드로 이동"
+                  : "권한이 없습니다. 관리자 검토 페이지에서 Admin Key를 입력한 사용자만 접근할 수 있습니다."
+              }
+              className={`flex items-center gap-2 text-sm transition-colors ${
+                canOpenAdmin ? "text-gray-600 hover:text-gray-900" : "text-gray-300 cursor-not-allowed"
+              }`}
+            >
+              <div
+                className={`w-8 h-7 rounded-full border flex items-center justify-center ${
+                  canOpenAdmin ? "bg-gray-100 border-gray-300" : "bg-gray-50 border-gray-200"
+                }`}
+              >
+                <Crown className={`w-3.5 h-3.5 ${canOpenAdmin ? "text-gray-500" : "text-gray-300"}`} />
               </div>
-              <span className="text-gray-600 text-xs">Admin</span>
-            </div>
+              <span className="text-xs font-medium">Admin</span>
+            </button>
           </div>
         </div>
       </header>
