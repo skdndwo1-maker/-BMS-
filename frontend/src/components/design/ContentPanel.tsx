@@ -370,16 +370,18 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         <p className="text-xs text-gray-400">버튼을 눌러 팝업에서 검색·선택하세요</p>
       </div>
 
-      {/* 픽토그램 */}
-      <div className="space-y-1.5">
-        <div className="flex items-end justify-between gap-2">
-          <Label className="text-xs font-semibold text-gray-600 flex items-center gap-1.5"><Shapes className="w-3.5 h-3.5"/>픽토그램</Label>
-          <Button type="button" variant="outline" size="sm" className="h-8 text-[12px]" onClick={() => setPictoDialogOpen(true)}>
-            픽토그램 선택
-          </Button>
+      {/* 픽토그램 (RCS에서는 옵션 제거) */}
+      {!isRcs ? (
+        <div className="space-y-1.5">
+          <div className="flex items-end justify-between gap-2">
+            <Label className="text-xs font-semibold text-gray-600 flex items-center gap-1.5"><Shapes className="w-3.5 h-3.5"/>픽토그램</Label>
+            <Button type="button" variant="outline" size="sm" className="h-8 text-[12px]" onClick={() => setPictoDialogOpen(true)}>
+              픽토그램 선택
+            </Button>
+          </div>
+          <p className="text-xs text-gray-400">버튼을 눌러 팝업에서 검색·선택하세요</p>
         </div>
-        <p className="text-xs text-gray-400">버튼을 눌러 팝업에서 검색·선택하세요</p>
-      </div>
+      ) : null}
 
       {/* 업로드된 에셋 목록 */}
       {assetLayers.length>0 && (

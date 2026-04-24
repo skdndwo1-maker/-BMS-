@@ -547,15 +547,100 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                   텍스트 옵션
                 </Button>
                 {textOptionsPanelOpen ? (
-                  <CanvasTextFormatPanel
-                    target={textFormatTarget}
-                    content={content}
-                    onDraft={setContentWithHistory}
-                    selectionRenderTick={textFormatSelectionTick}
-                    getSelection={() => designCanvasRef.current?.getInlineTextSelection() ?? null}
-                    onTogglePartialStyle={(w) => designCanvasRef.current?.handleTogglePartialStyle(w)}
-                    onClose={() => setTextOptionsPanelOpen(false)}
-                  />
+                  isRcsTemplate ? (
+                    <div className="border border-gray-200 bg-white shadow-md rounded-lg overflow-hidden flex flex-col max-h-[min(70vh,520px)]">
+                      <div className="flex items-center justify-between gap-2 px-2 py-1.5 border-b border-gray-100 bg-gray-50 shrink-0">
+                        <span className="text-[11px] font-semibold text-gray-800">문자 옵션 (RCS)</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2"
+                          onClick={() => setTextOptionsPanelOpen(false)}
+                        >
+                          닫기
+                        </Button>
+                      </div>
+                      <div className="p-2 overflow-y-auto flex flex-col gap-3 text-left">
+                        <div className="space-y-1.5">
+                          <span className="text-[11px] font-semibold text-gray-700">메인 타이틀 크기</span>
+                          <input
+                            type="range"
+                            min={70}
+                            max={140}
+                            step={5}
+                            value={content.titleSize ?? 100}
+                            onChange={(e) => setContentWithHistory((prev) => ({ ...prev, titleSize: Number(e.target.value) }))}
+                            className="h-2 w-full cursor-pointer accent-[#F43182]"
+                          />
+                          <div className="text-[10px] text-gray-500 font-mono tabular-nums">{content.titleSize ?? 100}%</div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <span className="text-[11px] font-semibold text-gray-700">본문 크기</span>
+                          <input
+                            type="range"
+                            min={70}
+                            max={140}
+                            step={5}
+                            value={content.bodySize ?? 100}
+                            onChange={(e) => setContentWithHistory((prev) => ({ ...prev, bodySize: Number(e.target.value) }))}
+                            className="h-2 w-full cursor-pointer accent-[#F43182]"
+                          />
+                          <div className="text-[10px] text-gray-500 font-mono tabular-nums">{content.bodySize ?? 100}%</div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <span className="text-[11px] font-semibold text-gray-700">굵기</span>
+                          <div className="grid grid-cols-2 gap-2">
+                            {(["light", "standard", "semi-bold", "bold"] as const).map((w) => {
+                              const activeTitle = (content as any).titleWeight === w;
+                              return (
+                                <button
+                                  key={`title-${w}`}
+                                  type="button"
+                                  onClick={() => setContentWithHistory((prev) => ({ ...(prev as any), titleWeight: w }))}
+                                  className={`rounded-lg border px-2 py-2 text-[11px] font-semibold ${
+                                    activeTitle ? "border-[#F43182] bg-[#F43182]/10 text-[#F43182]" : "border-gray-200 bg-white text-gray-700"
+                                  }`}
+                                >
+                                  타이틀 {w}
+                                </button>
+                              );
+                            })}
+                            {(["light", "standard", "semi-bold", "bold"] as const).map((w) => {
+                              const activeBody = (content as any).bodyWeight === w;
+                              return (
+                                <button
+                                  key={`body-${w}`}
+                                  type="button"
+                                  onClick={() => setContentWithHistory((prev) => ({ ...(prev as any), bodyWeight: w }))}
+                                  className={`rounded-lg border px-2 py-2 text-[11px] font-semibold ${
+                                    activeBody ? "border-[#F43182] bg-[#F43182]/10 text-[#F43182]" : "border-gray-200 bg-white text-gray-700"
+                                  }`}
+                                >
+                                  본문 {w}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <p className="text-[10px] text-gray-500 leading-snug">
+                            RCS는 캔버스 텍스트 박스 선택 방식이 아닌, 크기/굵기 옵션으로 조절합니다.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <CanvasTextFormatPanel
+                      target={textFormatTarget}
+                      content={content}
+                      onDraft={setContentWithHistory}
+                      selectionRenderTick={textFormatSelectionTick}
+                      getSelection={() => designCanvasRef.current?.getInlineTextSelection() ?? null}
+                      onTogglePartialStyle={(w) => designCanvasRef.current?.handleTogglePartialStyle(w)}
+                      onClose={() => setTextOptionsPanelOpen(false)}
+                    />
+                  )
                 ) : null}
                 <p className="text-[9px] text-gray-500 leading-snug px-0.5">
                   Shift+클릭으로 여러 요소를 추가·해제해 함께 이동·정렬할 수 있습니다. 빈 배경을 클릭하면 선택이 해제됩니다.

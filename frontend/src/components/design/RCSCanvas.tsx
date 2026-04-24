@@ -53,11 +53,10 @@ export function RCSCanvas({ content, canvasSize, zoom }: RCSCanvasProps) {
 
   const rcsAsset = useMemo((): AssetLayer | null => {
     const layers = content.assetLayers ?? [];
-    // 우선순위: illustration → pictogram (마지막으로 추가된 항목)
+    // RCS: illustration만 사용 (pictogram은 패널에서 제거됨)
     const ill = [...layers].reverse().find((l) => l.type === "illustration" && !!l.src);
     if (ill) return ill;
-    const pic = [...layers].reverse().find((l) => l.type === "pictogram" && !!l.src);
-    return pic ?? null;
+    return null;
   }, [content.assetLayers]);
 
   const realAspect = canvasSize.width / canvasSize.height;
@@ -85,6 +84,9 @@ export function RCSCanvas({ content, canvasSize, zoom }: RCSCanvasProps) {
       : category === "benefit"
         ? { bgColor: "#E8D9F5", accentColor: "#9B6DD6" }
         : { bgColor: "#F5F3ED", accentColor: "#F5F3ED" };
+
+  // 우측 패널의 배경색 선택이 RCS 캔버스에 즉시 반영되도록 연결
+  const canvasBg = (content.backgroundColor || "").trim() || rcsStyle.bgColor;
 
   const baseTitleFontSize = W * 0.078;
   const baseBodyFontSize = W * 0.028;
@@ -189,7 +191,7 @@ export function RCSCanvas({ content, canvasSize, zoom }: RCSCanvasProps) {
           width: `${displayW}px`,
           height: `${displayH}px`,
           position: "relative",
-          backgroundColor: rcsStyle.bgColor,
+          backgroundColor: canvasBg,
           boxShadow: "0 4px 24px rgba(0,0,0,0.08)",
           overflow: "hidden",
         }}
