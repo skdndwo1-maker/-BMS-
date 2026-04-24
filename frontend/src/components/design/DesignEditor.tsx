@@ -10,6 +10,7 @@ import { LayersPanel }            from './LayersPanel';
 import { ExportDialog }           from './ExportDialog';
 import { QuickStartDialog }       from './QuickStartDialog';
 import { DesignAssistantChat }    from './DesignAssistantChat';
+import { RCSCanvas } from "./RCSCanvas";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -401,24 +402,29 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     }
   };
 
-  // ── Canvas: 모든 템플릿에 동일 에디터(정규화 좌표 0~1 · 프레임 비율은 template.size로 반영) ──
-  const renderCanvas = () => (
-    <DesignCanvas
-      ref={designCanvasRef}
-      content={content}
-      templateId={actualTemplateId}
-      canvasSize={template.size}
-      zoom={zoom}
-      onContentChange={setContentWithHistory}
-      onContentDraftChange={setContent}
-      onBeginCanvasTextEdit={pushUndoSnapshot}
-      onFocusChange={setFocusTarget}
-      showViGrid={showViGrid}
-      layoutSnapEnabled={layoutSnapEnabled}
-      onTextFormatTargetChange={setTextFormatTarget}
-      onCanvasTextSelectionChanged={() => setTextFormatSelectionTick((n) => n + 1)}
-    />
-  );
+  const isRcsTemplate = actualTemplateId === "rcs-568x368";
+
+  // ── Canvas ─────────────────────────────────────────────────────
+  const renderCanvas = () =>
+    isRcsTemplate ? (
+      <RCSCanvas content={content} canvasSize={template.size} zoom={zoom} />
+    ) : (
+      <DesignCanvas
+        ref={designCanvasRef}
+        content={content}
+        templateId={actualTemplateId}
+        canvasSize={template.size}
+        zoom={zoom}
+        onContentChange={setContentWithHistory}
+        onContentDraftChange={setContent}
+        onBeginCanvasTextEdit={pushUndoSnapshot}
+        onFocusChange={setFocusTarget}
+        showViGrid={showViGrid}
+        layoutSnapEnabled={layoutSnapEnabled}
+        onTextFormatTargetChange={setTextFormatTarget}
+        onCanvasTextSelectionChanged={() => setTextFormatSelectionTick((n) => n + 1)}
+      />
+    );
 
   const renderStatusBar = () => {
     const { width: sw, height: sh, unit } = template.size;

@@ -38,6 +38,18 @@ export const templates: Template[] = [
     description: '웹 사내 공지 3:4 비율',
     mediaType: 'online',
   },
+
+  // RCS (Online) — MMS/RCS 헤더 카드 이미지 (기본 568×368px)
+  {
+    id: 'rcs-568x368',
+    name: 'RCS (568×368)',
+    category: 'rcs',
+    size: { width: 568, height: 368, unit: 'px', name: '568x368' },
+    thumbnail: '',
+    description: 'MMS/RCS 메시지 상단에 먼저 표시되는 헤더 카드 이미지',
+    mediaType: 'online',
+    customizable: true,
+  },
  
   // Posters (Offline) ── 기존 id 유지
   {
@@ -155,6 +167,7 @@ export const templateCategories = [
   { id: 'social-media',     label: '소셜 미디어',   icon: 'Share2' },
   { id: 'internal-notice',  label: '사내 공지',     icon: 'Bell' },
   { id: 'presentation',     label: '프레젠테이션',  icon: 'Presentation' },
+  { id: 'rcs',              label: 'RCS',           icon: 'LayoutTemplate' },
   { id: 'placard',          label: '현수막',        icon: 'RectangleHorizontal' },
   { id: 'xbanner',          label: 'X배너',         icon: 'RectangleHorizontal' },
 ];

@@ -7,7 +7,8 @@ export type TemplateCategory =
   | 'internal-notice'
   | 'presentation'
   | 'placard'
-  | 'xbanner';
+  | 'xbanner'
+  | 'rcs';
 
 export type DesignStyle = 'basic' | 'informational' | 'no-limit';
 
