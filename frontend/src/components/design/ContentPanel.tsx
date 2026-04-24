@@ -223,7 +223,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const applyRcsTitle = (nextTitle: string) => {
     const t = (nextTitle ?? "").trim();
     if (!t.length) return;
-    onContentChange({ ...content, title: t });
+    onContentChange((prev) => ({ ...prev, title: t }));
   };
 
   const { getRootProps:getImageRP,  getInputProps:getImageIP,  isDragActive:isImageDrag  } = useDropzone({ onDrop:(f)=>{ if(f[0]){
