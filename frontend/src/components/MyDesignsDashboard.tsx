@@ -157,7 +157,7 @@ export function MyDesignsDashboard() {
                           unit: "px",
                           name: "Default",
                         }}
-                        zoom={0.22}
+                        zoom={0.88}
                         onContentChange={() => {}}
                         onContentDraftChange={() => {}}
                         onBeginCanvasTextEdit={() => {}}
