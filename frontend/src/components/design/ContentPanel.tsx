@@ -22,7 +22,7 @@ import {
   DEFAULT_POSTER_BODY_EXTRA_2,
 } from "@/design/posterDefaults";
 import { adjustBoldRangesOnPlainReplace } from "@/design/bodyBoldRanges";
-import { PICTOGRAM_PRESETS, filterAssetPresets } from "@/design/assetPresets";
+import { ILLUSTRATION_PRESETS, PICTOGRAM_PRESETS, filterAssetPresets } from "@/design/assetPresets";
 import { AssetPresetPickerDialog } from "@/components/design/AssetPresetPickerDialog";
 import { templates as allDesignTemplates } from "@/design/templates";
 import { resolvePosterBodyBlocksForRender, applyBodyBlockTextEdit } from "@/design/posterBodyDisplay";
@@ -122,6 +122,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const refLogo = useRef<HTMLDivElement>(null);
 
   const [pictoDialogOpen, setPictoDialogOpen] = useState(false);
+  const [illustDialogOpen, setIllustDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!focusTarget) return;
@@ -161,6 +162,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const isContentEmpty = !content.title && !content.subtitle && !content.bodyText;
   const templateMeta = allDesignTemplates.find((t) => t.id === templateId);
   const isXBanner = (templateId ?? "") === "xbanner" || templateMeta?.category === "xbanner";
+  const isRcs = templateMeta?.category === "rcs";
   const assetLayers   = content.assetLayers ?? [];
 
   const onAssetDrop = useCallback((files: File[], type: AssetType) => {
@@ -293,8 +295,28 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
 
   const AssetSection = () => (
     <div className="border-t border-gray-100 pt-4 space-y-4">
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">에셋 (픽토그램)</p>
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">에셋</p>
       <p className="text-xs text-gray-400">업로드 후 캔버스 위에서 자유롭게 이동 · 리사이즈 가능</p>
+
+      {/* 일러스트 */}
+      <div className="space-y-1.5">
+        <div className="flex items-end justify-between gap-2">
+          <Label className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">
+            <Shapes className="w-3.5 h-3.5" />
+            일러스트
+          </Label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-[12px]"
+            onClick={() => setIllustDialogOpen(true)}
+          >
+            일러스트 선택
+          </Button>
+        </div>
+        <p className="text-xs text-gray-400">버튼을 눌러 팝업에서 검색·선택하세요</p>
+      </div>
 
       {/* 픽토그램 */}
       <div className="space-y-1.5">
@@ -347,6 +369,20 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     const currentCat=POSTER_CATEGORIES.find(c=>c.key===normalizePosterCategory(content.posterCategory))??POSTER_CATEGORIES[0];
     return (
       <div data-design-content-panel className="h-full overflow-y-auto p-6 space-y-6">
+        <AssetPresetPickerDialog
+          open={illustDialogOpen}
+          onOpenChange={setIllustDialogOpen}
+          title="일러스트 선택"
+          presets={ILLUSTRATION_PRESETS}
+          filterPresets={filterAssetPresets}
+          layout="picto"
+          onPick={(p) => {
+            const layer = createAssetLayer(p.src, "illustration", p.name);
+            onContentChange({ ...content, assetLayers: [...assetLayers, layer] });
+            setIllustDialogOpen(false);
+          }}
+          onDropFiles={(files) => onAssetDrop(files, "illustration")}
+        />
         <AssetPresetPickerDialog
           open={pictoDialogOpen}
           onOpenChange={setPictoDialogOpen}
@@ -465,35 +501,89 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           </div>
         ) : null}
 
-        {/* 배경색 */}
+        {/* 배경색 (RCS: 4가지 고정 / 기타: 기존 팔레트 + 커스텀) */}
         {!isPlacard ? (
           <div className="space-y-3 border-t border-gray-100 pt-4">
-          <Label className="text-sm font-semibold text-gray-700">배경색</Label>
-          <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5">
-            {[{label:"White",hex:"#FFFFFF",border:"#E5E5E5"},{label:"Grey",hex:"#F5F5F5",border:"#D1D1D1"},{label:"Ivory",hex:"#FDFAF0",border:"#D9D5C0"},{label:"Pink",hex:"#FFF0F5",border:"#F4B8D0"},{label:"Magenta",hex:"#F43182",border:"#F43182"},{label:"Black",hex:"#000000",border:"#000000"}].map((color)=>{
-              const active=(content.backgroundColor||"#FFFFFF")===color.hex;
-              return (
-                <button key={color.hex} type="button" title={color.label} onClick={()=>onContentChange({...content,backgroundColor:color.hex})}
-                  className={`shrink-0 flex flex-col items-center gap-0.5 rounded-md border-2 py-1 px-1.5 text-center transition-all ${active?"border-[#F43182] bg-[#F43182]/6":"border-gray-200 hover:border-gray-300 bg-white"}`}>
-                  <span className="h-6 w-6 shrink-0 rounded-sm" style={{background:color.hex,border:`1px solid ${color.border}`}}/>
-                  <span className={`max-w-[3.25rem] truncate text-[8px] font-medium leading-tight ${active?"text-[#F43182]":"text-gray-600"}`}>{color.label}</span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex items-center gap-2">
-            <input type="color" value={content.backgroundColor||"#FFFFFF"} onChange={(e)=>onContentChange({...content,backgroundColor:e.target.value})} className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer p-0.5"/>
-            <div className="flex-1 flex items-center gap-1.5 border border-gray-300 rounded-lg px-3 py-2">
-              <span className="text-sm text-gray-400 font-mono">#</span>
-              <input type="text" value={(content.backgroundColor||"#FFFFFF").replace("#","")} onChange={(e)=>{const v=e.target.value.replace(/[^0-9a-fA-F]/g,"").slice(0,6);if(v.length===6)onContentChange({...content,backgroundColor:`#${v}`});}} placeholder="F43182" className="flex-1 text-sm font-mono outline-none bg-transparent" maxLength={6}/>
+            <Label className="text-sm font-semibold text-gray-700">배경색</Label>
+            <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5">
+              {(isRcs
+                ? [
+                    { label: "White", hex: "#FFFFFF", border: "#E5E5E5" },
+                    { label: "Ivory", hex: "#FDFAF0", border: "#D9D5C0" },
+                    { label: "Pink", hex: "#FFF0F5", border: "#F4B8D0" },
+                    { label: "Light Purple", hex: "#E8D9F5", border: "#CDB7E6" },
+                  ]
+                : [
+                    { label: "White", hex: "#FFFFFF", border: "#E5E5E5" },
+                    { label: "Grey", hex: "#F5F5F5", border: "#D1D1D1" },
+                    { label: "Ivory", hex: "#FDFAF0", border: "#D9D5C0" },
+                    { label: "Pink", hex: "#FFF0F5", border: "#F4B8D0" },
+                    { label: "Magenta", hex: "#F43182", border: "#F43182" },
+                    { label: "Black", hex: "#000000", border: "#000000" },
+                  ]
+              ).map((color) => {
+                const active = (content.backgroundColor || "#FFFFFF") === color.hex;
+                return (
+                  <button
+                    key={color.hex}
+                    type="button"
+                    title={color.label}
+                    onClick={() => onContentChange({ ...content, backgroundColor: color.hex })}
+                    className={`shrink-0 flex flex-col items-center gap-0.5 rounded-md border-2 py-1 px-1.5 text-center transition-all ${
+                      active
+                        ? "border-[#F43182] bg-[#F43182]/6"
+                        : "border-gray-200 hover:border-gray-300 bg-white"
+                    }`}
+                  >
+                    <span
+                      className="h-6 w-6 shrink-0 rounded-sm"
+                      style={{ background: color.hex, border: `1px solid ${color.border}` }}
+                    />
+                    <span
+                      className={`max-w-[4.25rem] truncate text-[8px] font-medium leading-tight ${
+                        active ? "text-[#F43182]" : "text-gray-600"
+                      }`}
+                    >
+                      {color.label}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-            <div className="w-10 h-10 rounded-lg border border-gray-300 shrink-0" style={{background:content.backgroundColor||"#FFFFFF"}}/>
-          </div>
+
+            {!isRcs ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={content.backgroundColor || "#FFFFFF"}
+                  onChange={(e) => onContentChange({ ...content, backgroundColor: e.target.value })}
+                  className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer p-0.5"
+                />
+                <div className="flex-1 flex items-center gap-1.5 border border-gray-300 rounded-lg px-3 py-2">
+                  <span className="text-sm text-gray-400 font-mono">#</span>
+                  <input
+                    type="text"
+                    value={(content.backgroundColor || "#FFFFFF").replace("#", "")}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^0-9a-fA-F]/g, "").slice(0, 6);
+                      if (v.length === 6) onContentChange({ ...content, backgroundColor: `#${v}` });
+                    }}
+                    placeholder="F43182"
+                    className="flex-1 text-sm font-mono outline-none bg-transparent"
+                    maxLength={6}
+                  />
+                </div>
+                <div
+                  className="w-10 h-10 rounded-lg border border-gray-300 shrink-0"
+                  style={{ background: content.backgroundColor || "#FFFFFF" }}
+                />
+              </div>
+            ) : null}
           </div>
         ) : null}
 
-        {/* 뱃지 (현수막 제외: 최대 3개) */}
-        {!isPlacard ? (
+        {/* 뱃지 (RCS/현수막 제외: 최대 3개) */}
+        {!isPlacard && !isRcs ? (
           <div ref={refBadge} className="space-y-2 border-t border-gray-100 pt-4">
             <div className="flex items-center justify-between gap-2">
               <Label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
@@ -788,22 +878,24 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           {/* 기능부연설명(점선 박스) 제거 */}
         </div>
 
-        {/* 유의사항 */}
-        <div ref={refFooter} className="space-y-2">
-          <Label className="text-sm font-semibold text-gray-700">하단 유의사항</Label>
-          {/* 기능부연설명(점선 박스) 제거 */}
-          <Textarea
-            value={content.emphasizedTitle || ""}
-            onChange={(e) =>
-              onContentChange({ ...content, emphasizedTitle: e.target.value, posterFooterRectLocked: false })
-            }
-            placeholder="예) ※ 본 이미지는 연출된 것입니다."
-            rows={2}
-            className="resize-none text-sm"
-          />
-          <p className="text-xs text-gray-400">하단 좌측에 작은 회색 글씨로 표시됩니다</p>
-          {/* 기능부연설명(점선 박스) 제거 */}
-        </div>
+        {/* 유의사항 (RCS에서는 제거) */}
+        {!isRcs ? (
+          <div ref={refFooter} className="space-y-2">
+            <Label className="text-sm font-semibold text-gray-700">하단 유의사항</Label>
+            {/* 기능부연설명(점선 박스) 제거 */}
+            <Textarea
+              value={content.emphasizedTitle || ""}
+              onChange={(e) =>
+                onContentChange({ ...content, emphasizedTitle: e.target.value, posterFooterRectLocked: false })
+              }
+              placeholder="예) ※ 본 이미지는 연출된 것입니다."
+              rows={2}
+              className="resize-none text-sm"
+            />
+            <p className="text-xs text-gray-400">하단 좌측에 작은 회색 글씨로 표시됩니다</p>
+            {/* 기능부연설명(점선 박스) 제거 */}
+          </div>
+        ) : null}
 
         {/* 현수막(placard): 장소 및 날짜 */}
         {isPlacard ? (
@@ -822,10 +914,11 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         <div ref={refLogo} className="border-t border-gray-100 pt-4 space-y-4">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">브랜드 로고</p>
           <LogoSelector/>
-          {!isPlacard ? <LogoPositionSelector/> : null}
+          {!isPlacard && !isRcs ? <LogoPositionSelector/> : null}
         </div>
 
-        {/* 이미지 */}
+        {/* 이미지 (RCS: 업로드 옵션 제거) */}
+        {!isRcs ? (
         <div ref={refImage} className="border-t border-gray-100 pt-4 space-y-2">
           <Label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5"><ImageIcon className="w-3.5 h-3.5 text-gray-500"/>이미지</Label>
           <div {...getImageRP()} className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${isImageDrag?"border-[#F43182] bg-[#F43182]/5":"border-gray-300 hover:border-gray-400"}`}>
@@ -889,6 +982,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
             캔버스에서 이미지 박스를 <span className="font-semibold">더블클릭</span>한 뒤 드래그하면 안쪽 이미지 위치를 조절할 수 있습니다. 빈 캔버스 클릭 또는 Esc로 종료합니다.
           </p>
         </div>
+        ) : null}
 
         {/* 모든 템플릿: 이미지 옵션 아래 배경 라운드 박스 */}
         {(

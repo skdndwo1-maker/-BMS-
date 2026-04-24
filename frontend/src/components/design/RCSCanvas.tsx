@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { CanvasSize, DesignContent } from "@/design/types";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { AssetLayer, CanvasSize, DesignContent } from "@/design/types";
 
 const DARK = "#1A1A1A";
 const MAGENTA = "#F43182";
@@ -37,7 +37,6 @@ export function RCSCanvas({ content, canvasSize, zoom }: RCSCanvasProps) {
   const outerRef = useRef<HTMLDivElement>(null);
   const [containerW, setContainerW] = useState(800);
   const [containerH, setContainerH] = useState(600);
-  const [pictogramUrl, setPictogramUrl] = useState<string | null>(null);
 
   const measure = useCallback(() => {
     if (!outerRef.current) return;
@@ -52,14 +51,14 @@ export function RCSCanvas({ content, canvasSize, zoom }: RCSCanvasProps) {
     return () => ro.disconnect();
   }, [measure]);
 
-  useEffect(() => {
-    if (content.image instanceof File) {
-      const url = URL.createObjectURL(content.image);
-      setPictogramUrl(url);
-      return () => URL.revokeObjectURL(url);
-    }
-    setPictogramUrl(typeof content.image === "string" ? content.image : null);
-  }, [content.image]);
+  const rcsAsset = useMemo((): AssetLayer | null => {
+    const layers = content.assetLayers ?? [];
+    // 우선순위: illustration → pictogram (마지막으로 추가된 항목)
+    const ill = [...layers].reverse().find((l) => l.type === "illustration" && !!l.src);
+    if (ill) return ill;
+    const pic = [...layers].reverse().find((l) => l.type === "pictogram" && !!l.src);
+    return pic ?? null;
+  }, [content.assetLayers]);
 
   const realAspect = canvasSize.width / canvasSize.height;
 
@@ -208,7 +207,7 @@ export function RCSCanvas({ content, canvasSize, zoom }: RCSCanvasProps) {
           {body ? renderBody() : null}
         </div>
 
-        {pictogramUrl ? (
+        {rcsAsset?.src ? (
           <div
             style={{
               position: "absolute",
@@ -223,8 +222,8 @@ export function RCSCanvas({ content, canvasSize, zoom }: RCSCanvasProps) {
             }}
           >
             <img
-              src={pictogramUrl}
-              alt="Pictogram"
+              src={rcsAsset.src}
+              alt={rcsAsset.name || "Asset"}
               style={{
                 width: "100%",
                 height: "100%",
