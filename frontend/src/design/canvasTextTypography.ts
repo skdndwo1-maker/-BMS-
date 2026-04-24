@@ -6,7 +6,8 @@ export type CanvasTextEditTarget =
   | { kind: "title" }
   | { kind: "footer" }
   | { kind: "body"; id: string }
-  | { kind: "subtitle"; id: string };
+  | { kind: "subtitle"; id: string }
+  | { kind: "badge"; id: string };
 
 /** 텍스트 옵션에서 선택 가능한 서체 — 한글 Pretendard, 영문 Geist만 허용 */
 export const FONT_FAMILY_PRETENDARD = '"Pretendard Variable", Pretendard, system-ui, sans-serif';

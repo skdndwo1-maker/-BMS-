@@ -13,8 +13,10 @@ export type DesignStyle = 'basic' | 'informational' | 'no-limit';
 
 export type LogoPosition =
   | 'top-left'
+  | 'top-center'
   | 'top-right'
   | 'bottom-left'
+  | 'bottom-center'
   | 'bottom-right';
 
 // ── 포스터 카테고리 ──────────────────────────────────────────────────
@@ -128,6 +130,8 @@ export interface DesignContent {
 
   // ── Placard 전용 필드 ──────────────────────────────────────────
   emphasizedTitle?: string;
+  /** 현수막 좌하단 "장소 및 날짜" (예: 2026.00.00 ㅣ 엘지유플러스 상암사옥 1층) */
+  placardEventInfo?: string;
   date?: string;
   venue?: string;
   rightPanelBg?: 'white' | 'light-grey' | 'ivory' | 'light-pink';
@@ -170,6 +174,17 @@ export interface DesignContent {
   posterBadgeRect?: { x: number; y: number; width: number; height: number };
   /** 뱃지 배경: 마젠타(기본) 또는 블랙 */
   posterBadgeColor?: "magenta" | "black";
+  /** 뱃지(최대 3): 텍스트 + 색상 + rect */
+  posterBadges?: Array<{ id: string; text: string; color?: "magenta" | "black" }>;
+  posterBadgeRects?: Record<string, { x: number; y: number; width: number; height: number }>;
+
+  /** X배너: 현수막처럼 배경 라운드 박스(드래그/리사이즈 가능, 맨 뒤) */
+  xbannerBgOnCanvas?: boolean;
+  xbannerBgRect?: { x: number; y: number; width: number; height: number };
+
+  /** 모든 템플릿: 라운드 배경 박스(드래그/리사이즈 가능, 맨 뒤) */
+  panelBgOnCanvas?: boolean;
+  panelBgRect?: { x: number; y: number; width: number; height: number };
 
   /** 포스터: 메인 타이틀/본문/유의사항 박스 — 드래그·리사이즈 */
   posterTitleRect?: { x: number; y: number; width: number; height: number };

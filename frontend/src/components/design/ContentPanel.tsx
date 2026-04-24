@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  Upload, Image as ImageIcon, Sparkles, Calendar, MapPin, Type,
+  Upload, Image as ImageIcon, Sparkles, Type,
   AlignLeft,
   CornerDownLeft, CornerDownRight, CornerUpLeft, CornerUpRight,
   ChevronDown, ChevronUp, Settings, Shapes, Trash2, Eye, EyeOff, Plus,
@@ -41,7 +42,6 @@ const PLACARD_IDS = [
   "placard-2000x1000",
   "placard-600x1800",
   "placard-vertical",
-  "xbanner",
 ];
 
 function PosterBodyTextarea({
@@ -160,6 +160,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const useBrandGraphicPanel = allDesignTemplates.some((t) => t.id === templateId);
   const isContentEmpty = !content.title && !content.subtitle && !content.bodyText;
   const templateMeta = allDesignTemplates.find((t) => t.id === templateId);
+  const isXBanner = (templateId ?? "") === "xbanner" || templateMeta?.category === "xbanner";
   const assetLayers   = content.assetLayers ?? [];
 
   const onAssetDrop = useCallback((files: File[], type: AssetType) => {
@@ -200,8 +201,12 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const LogoSelector = () => (
     <div className="space-y-3">
       <div className="space-y-0.5">
-        <Label className="text-sm font-semibold text-gray-700">로고 종류 선택</Label>
-        <p className="text-xs text-gray-400">CI / BI / SLOGAN 중 선택</p>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Label className="text-sm font-semibold text-gray-700 cursor-help">로고 종류 선택</Label>
+          </TooltipTrigger>
+          <TooltipContent>CI / BI / SLOGAN 중 선택</TooltipContent>
+        </Tooltip>
       </div>
       <div className="grid grid-cols-4 gap-2">
         {(
@@ -240,17 +245,43 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const LogoPositionSelector = () => (
     <div className="space-y-3">
       <Label className="text-sm font-semibold text-gray-700">로고 배치 위치</Label>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {[
-          { key: "top-left" as LogoPosition, label: "좌상단", icon: CornerUpLeft },
-          { key: "top-right" as LogoPosition, label: "우상단", icon: CornerUpRight },
-          { key: "bottom-left" as LogoPosition, label: "좌하단", icon: CornerDownLeft },
-          { key: "bottom-right" as LogoPosition, label: "우하단", icon: CornerDownRight },
-        ].map((pos) => {
+      <div
+        className={
+          isXBanner
+            ? "grid w-full grid-cols-3 gap-2 [grid-template-columns:repeat(3,minmax(0,1fr))]"
+            : `grid w-full grid-cols-2 gap-2 ${isPlacard ? "" : "sm:grid-cols-4"}`
+        }
+        style={
+          isXBanner
+            ? { gridAutoFlow: "row", gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }
+            : undefined
+        }
+      >
+        {(isPlacard
+          ? [
+              { key: "top-left" as LogoPosition, label: "좌상단", icon: CornerUpLeft },
+              { key: "bottom-left" as LogoPosition, label: "좌하단", icon: CornerDownLeft },
+            ]
+          : isXBanner
+            ? [
+                { key: "top-left" as LogoPosition, label: "좌상단", icon: CornerUpLeft },
+                { key: "top-center" as LogoPosition, label: "상단중앙", icon: CornerUpLeft },
+                { key: "top-right" as LogoPosition, label: "우상단", icon: CornerUpRight },
+                { key: "bottom-left" as LogoPosition, label: "좌하단", icon: CornerDownLeft },
+                { key: "bottom-center" as LogoPosition, label: "하단중앙", icon: CornerDownLeft },
+                { key: "bottom-right" as LogoPosition, label: "우하단", icon: CornerDownRight },
+              ]
+            : [
+                { key: "top-left" as LogoPosition, label: "좌상단", icon: CornerUpLeft },
+                { key: "top-right" as LogoPosition, label: "우상단", icon: CornerUpRight },
+                { key: "bottom-left" as LogoPosition, label: "좌하단", icon: CornerDownLeft },
+                { key: "bottom-right" as LogoPosition, label: "우하단", icon: CornerDownRight },
+              ]
+        ).map((pos) => {
           const Icon=pos.icon; const active=content.logoPosition===pos.key;
           return (
             <button key={pos.key} onClick={()=>onContentChange({...content,logoPosition:pos.key})}
-              className={`flex flex-col items-center gap-1.5 rounded-lg border-2 py-3 px-2 text-center transition-all ${active?"border-[#F43182] bg-[#F43182]/6":"border-gray-200 hover:border-gray-300 bg-white"}`}>
+              className={`min-w-0 flex flex-col items-center gap-1.5 rounded-lg border-2 py-3 px-2 text-center transition-all ${active?"border-[#F43182] bg-[#F43182]/6":"border-gray-200 hover:border-gray-300 bg-white"}`}>
               <Icon className={`w-4 h-4 ${active?"text-[#F43182]":"text-gray-600"}`}/>
               <p className={`text-xs font-medium ${active?"text-[#F43182]":"text-gray-700"}`}>{pos.label}</p>
             </button>
@@ -342,16 +373,11 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               <Sparkles className="w-3 h-3 text-[#F43182]"/><span className="text-[10px] font-medium text-[#F43182]">LG U+ Brand Guideline</span>
             </span>
           </div>
-          <div className="mt-3 rounded-lg border border-gray-200 bg-slate-50 p-3 text-[11px] text-gray-700 leading-snug">
-            <span className="font-semibold text-gray-900">우측 패널 텍스트 편집</span>
-            <p className="mt-1">
-              메인 타이틀·부제(최대 3)·본문(최대 3)·뱃지 문구·하단 유의사항을 이곳에서 모두 수정할 수 있습니다. 글꼴·크기·색 등 서식은 캔버스에서 텍스트를 선택한 뒤 좌측 하단 「텍스트 옵션」에서 조절합니다. 캔버스는 각 템플릿 프레임 비율에 맞게 표시되며, 요소 위치·크기는 비율(0~1)로 저장됩니다.
-            </p>
-          </div>
+          {/* 설명 문구는 각 기능 타이틀 툴팁으로 이동 */}
         </div>
 
         {isPlacard && templateMeta && (
-          <div className="space-y-4 border border-[#F43182]/20 rounded-xl p-4 bg-[#F43182]/5">
+          <div className="space-y-3 border border-[#F43182]/20 rounded-xl p-4 bg-[#F43182]/5">
             <div className="bg-white/80 border border-[#F43182]/25 rounded-lg p-3 flex items-start gap-2">
               <Sparkles className="w-4 h-4 text-[#F43182] mt-0.5 shrink-0" />
               <div className="text-xs text-gray-700">
@@ -360,68 +386,6 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                   {templateMeta.size.width}×{templateMeta.size.height}
                   {templateMeta.size.unit} · VI 12분할은 짧은 변 기준입니다. 날짜·장소·분할 배경은 콘텐츠 필드로 유지됩니다.
                 </p>
-              </div>
-            </div>
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold text-gray-700">분할 영역 배경(우측 패널 톤)</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {(
-                  [
-                    { key: "white" as const, label: "백지", hex: "#FFFFFF", border: "#D4D4D4" },
-                    { key: "light-grey" as const, label: "라이트 그레이", hex: "#F2F2F2", border: "#D4D4D4" },
-                    { key: "ivory" as const, label: "아이보리", hex: "#FDFAF0", border: "#D9D5C0" },
-                    { key: "light-pink" as const, label: "연핑크", hex: "#FFF0F5", border: "#F4B8D0" },
-                  ] as const
-                ).map((opt) => {
-                  const active = (content.rightPanelBg ?? "white") === opt.key;
-                  return (
-                    <button
-                      key={opt.key}
-                      type="button"
-                      onClick={() => onContentChange({ ...content, rightPanelBg: opt.key })}
-                      className={`flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 text-left transition-all ${
-                        active ? "border-[#F43182] shadow-sm" : "border-gray-200 hover:border-gray-300"
-                      }`}
-                    >
-                      <span
-                        className="shrink-0 rounded-md"
-                        style={{
-                          width: 22,
-                          height: 22,
-                          background: opt.hex,
-                          border: `1.5px solid ${opt.border}`,
-                          display: "inline-block",
-                        }}
-                      />
-                      <span className={`text-xs font-medium ${active ? "text-[#F43182]" : "text-gray-700"}`}>{opt.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="space-y-3 border-t border-[#F43182]/15 pt-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">행사 정보</p>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-gray-500" />
-                  날짜
-                </Label>
-                <Input
-                  value={content.date || ""}
-                  onChange={(e) => onContentChange({ ...content, date: e.target.value })}
-                  placeholder="예) 2025.07.02(수)"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-gray-500" />
-                  장소
-                </Label>
-                <Input
-                  value={content.venue || ""}
-                  onChange={(e) => onContentChange({ ...content, venue: e.target.value })}
-                  placeholder="예) LG유플러스 울산 컨버전스 홀"
-                />
               </div>
             </div>
           </div>
@@ -460,8 +424,50 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           )}
         </div>
 
+        {/* 현수막(placard): 분할영역 배경 옵션을 템플릿 카테고리 바로 아래로 이동 */}
+        {isPlacard ? (
+          <div className="space-y-3 border-t border-gray-100 pt-4">
+            <Label className="text-sm font-semibold text-gray-700">분할 영역 배경(우측 패널 톤)</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { key: "white" as const, label: "백지", hex: "#FFFFFF", border: "#D4D4D4" },
+                  { key: "light-grey" as const, label: "라이트 그레이", hex: "#F2F2F2", border: "#D4D4D4" },
+                  { key: "ivory" as const, label: "아이보리", hex: "#FDFAF0", border: "#D9D5C0" },
+                  { key: "light-pink" as const, label: "연핑크", hex: "#FFF0F5", border: "#F4B8D0" },
+                ] as const
+              ).map((opt) => {
+                const active = (content.rightPanelBg ?? "white") === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => onContentChange({ ...content, rightPanelBg: opt.key })}
+                    className={`flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 text-left transition-all ${
+                      active ? "border-[#F43182] shadow-sm" : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <span
+                      className="shrink-0 rounded-md"
+                      style={{
+                        width: 22,
+                        height: 22,
+                        background: opt.hex,
+                        border: `1.5px solid ${opt.border}`,
+                        display: "inline-block",
+                      }}
+                    />
+                    <span className={`text-xs font-medium ${active ? "text-[#F43182]" : "text-gray-700"}`}>{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
         {/* 배경색 */}
-        <div className="space-y-3 border-t border-gray-100 pt-4">
+        {!isPlacard ? (
+          <div className="space-y-3 border-t border-gray-100 pt-4">
           <Label className="text-sm font-semibold text-gray-700">배경색</Label>
           <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5">
             {[{label:"White",hex:"#FFFFFF",border:"#E5E5E5"},{label:"Grey",hex:"#F5F5F5",border:"#D1D1D1"},{label:"Ivory",hex:"#FDFAF0",border:"#D9D5C0"},{label:"Pink",hex:"#FFF0F5",border:"#F4B8D0"},{label:"Magenta",hex:"#F43182",border:"#F43182"},{label:"Black",hex:"#000000",border:"#000000"}].map((color)=>{
@@ -483,57 +489,130 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
             </div>
             <div className="w-10 h-10 rounded-lg border border-gray-300 shrink-0" style={{background:content.backgroundColor||"#FFFFFF"}}/>
           </div>
-        </div>
-
-        {/* 뱃지 */}
-        <div ref={refBadge} className="space-y-2 border-t border-gray-100 pt-4">
-          <Label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-            <span className="inline-block bg-[#F43182] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">뱃지</span>
-            뱃지 텍스트
-          </Label>
-          <Input
-            value={content.subtitle}
-            onChange={(e) => {
-              const v = e.target.value;
-              onContentChange({
-                ...content,
-                subtitle: v,
-                posterBadgeRect:
-                  v.trim() && !content.posterBadgeRect ? DEFAULT_POSTER_BADGE_RECT : content.posterBadgeRect,
-              });
-            }}
-            placeholder="예) 2025 신제품 출시"
-          />
-          <div className="space-y-1.5">
-            <Label className="text-xs text-gray-600">뱃지 색상</Label>
-            <div className="flex flex-wrap gap-2">
-              {(
-                [
-                  { key: "magenta" as const, label: "마젠타", bg: "#F43182" },
-                  { key: "black" as const, label: "블랙", bg: "#000000" },
-                ] as const
-              ).map((opt) => {
-                const active = (content.posterBadgeColor ?? "magenta") === opt.key;
-                return (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => onContentChange({ ...content, posterBadgeColor: opt.key })}
-                    className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-left text-xs font-medium transition-all ${
-                      active ? "border-[#F43182] bg-[#F43182]/6" : "border-gray-200 hover:border-gray-300 bg-white"
-                    }`}
-                  >
-                    <span className="h-6 w-6 rounded-md border border-gray-200" style={{ background: opt.bg }} />
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
           </div>
-          <p className="text-xs text-gray-400">
-            캔버스에서 뱃지 크기·위치를 드래그해 조절할 수 있습니다. 기본은 격자 높이 1칸·가로 3칸이며, 최소는 VI 한 칸 높이의 약 30%까지 줄일 수 있고 글자 크기도 함께 줄어듭니다. 가로를 줄이면 세로와 같아질 때까지(원형) 축소됩니다.
-          </p>
-        </div>
+        ) : null}
+
+        {/* 뱃지 (현수막 제외: 최대 3개) */}
+        {!isPlacard ? (
+          <div ref={refBadge} className="space-y-2 border-t border-gray-100 pt-4">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                <span className="inline-block bg-[#F43182] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">뱃지</span>
+                뱃지 텍스트
+              </Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-[12px] shrink-0"
+                disabled={((content.posterBadges?.length ?? 0) >= 3) && !content.posterBadgeRect}
+                onClick={() => {
+                  const existing = content.posterBadges?.length
+                    ? content.posterBadges
+                    : content.subtitle?.trim() && content.posterBadgeRect
+                      ? [{ id: "badge-1", text: content.subtitle, color: content.posterBadgeColor ?? "magenta" } as const]
+                      : [];
+                  if (existing.length >= 3) return;
+                  const id = `badge-${Date.now()}`;
+                  const rects = { ...(content.posterBadgeRects ?? {}) };
+                  rects[id] = rects[id] ?? { ...DEFAULT_POSTER_BADGE_RECT, y: Math.min(0.92, DEFAULT_POSTER_BADGE_RECT.y + existing.length * 0.07) };
+                  onContentChange({
+                    ...content,
+                    // 레거시 단일 뱃지 필드 정리
+                    subtitle: "",
+                    posterBadgeRect: undefined,
+                    posterBadgeColor: undefined,
+                    posterBadges: [...existing, { id, text: "", color: "magenta" }],
+                    posterBadgeRects: rects,
+                  });
+                }}
+              >
+                +추가
+              </Button>
+            </div>
+
+            {(() => {
+              const badges =
+                content.posterBadges?.length
+                  ? content.posterBadges
+                  : content.subtitle?.trim() && content.posterBadgeRect
+                    ? [{ id: "badge-1", text: content.subtitle, color: content.posterBadgeColor ?? "magenta" } as const]
+                    : [];
+              if (badges.length === 0) {
+                return <p className="text-xs text-gray-400">오른쪽의 +추가로 뱃지를 최대 3개까지 만들 수 있습니다.</p>;
+              }
+              return (
+                <div className="space-y-3">
+                  {badges.slice(0, 3).map((b, idx) => (
+                    <div key={b.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-gray-600">뱃지 {idx + 1}</p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-[11px]"
+                          onClick={() => {
+                            const next = badges.filter((x) => x.id !== b.id);
+                            const rects = { ...(content.posterBadgeRects ?? {}) };
+                            delete rects[b.id];
+                            onContentChange({
+                              ...content,
+                              posterBadges: next,
+                              posterBadgeRects: rects,
+                            });
+                          }}
+                        >
+                          제거
+                        </Button>
+                      </div>
+                      <Input
+                        value={b.text}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          onContentChange({
+                            ...content,
+                            posterBadges: badges.map((x) => (x.id === b.id ? { ...x, text: v } : x)),
+                          });
+                        }}
+                        placeholder="예) 2025 신제품 출시"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        {(
+                          [
+                            { key: "magenta" as const, label: "마젠타", bg: "#F43182" },
+                            { key: "black" as const, label: "블랙", bg: "#000000" },
+                          ] as const
+                        ).map((opt) => {
+                          const active = (b.color ?? "magenta") === opt.key;
+                          return (
+                            <button
+                              key={opt.key}
+                              type="button"
+                              onClick={() =>
+                                onContentChange({
+                                  ...content,
+                                  posterBadges: badges.map((x) => (x.id === b.id ? { ...x, color: opt.key } : x)),
+                                })
+                              }
+                              className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-left text-xs font-medium transition-all ${
+                                active ? "border-[#F43182] bg-[#F43182]/6" : "border-gray-200 hover:border-gray-300 bg-white"
+                              }`}
+                            >
+                              <span className="h-5 w-5 rounded-md border border-gray-200" style={{ background: opt.bg }} />
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  <p className="text-xs text-gray-400">캔버스에서 각 뱃지의 크기·위치를 드래그해 조절할 수 있습니다.</p>
+                </div>
+              );
+            })()}
+          </div>
+        ) : null}
 
         {/* 메인 타이틀 · 부제 */}
         <div ref={refTitle} className="space-y-3">
@@ -573,20 +652,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               부제 추가
             </Button>
           </div>
-          {content.posterTitleOnCanvas === false && (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-[#F43182]/35 bg-[#F43182]/5 px-3 py-2">
-              <span className="text-[11px] text-gray-700">메인 타이틀 박스가 캔버스에서 숨겨져 있습니다.</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 text-[11px] shrink-0"
-                onClick={() => onContentChange({ ...content, posterTitleOnCanvas: true })}
-              >
-                캔버스에 다시 표시
-              </Button>
-            </div>
-          )}
+          {/* 기능부연설명(점선 박스) 제거 */}
           <Textarea
             value={content.title}
             onChange={(e) =>
@@ -636,10 +702,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               />
             </div>
           ))}
-          <p className="text-xs text-gray-500 rounded-md border border-dashed border-gray-200 bg-gray-50/80 px-2 py-1.5">
-            글꼴·크기·색·정렬·자간·행간·대소문자는 캔버스에서 해당 텍스트를 <span className="font-semibold text-gray-700">한 번 클릭</span>해 선택하면 툴바가 뜨고,{" "}
-            <span className="font-semibold text-gray-700">더블클릭</span>하면 내용을 편집할 수 있습니다.
-          </p>
+          {/* 기능부연설명(점선 박스) 제거 */}
         </div>
 
         {/* 본문 (최대 3블록) */}
@@ -674,20 +737,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               추가
             </Button>
           </div>
-          {content.posterBodyOnCanvas === false && (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-[#F43182]/35 bg-[#F43182]/5 px-3 py-2">
-              <span className="text-[11px] text-gray-700">본문 박스가 캔버스에서 숨겨져 있습니다.</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 text-[11px] shrink-0"
-                onClick={() => onContentChange({ ...content, posterBodyOnCanvas: true })}
-              >
-                캔버스에 다시 표시
-              </Button>
-            </div>
-          )}
+          {/* 기능부연설명(점선 박스) 제거 */}
           {resolvePosterBodyBlocksForRender(content).map((b, bi) => (
             <div key={b.id} className="space-y-1.5 rounded-lg border border-gray-100 bg-gray-50/80 p-3">
               <div className="flex items-center justify-between gap-2">
@@ -735,28 +785,13 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               />
             </div>
           ))}
-          <p className="text-xs text-gray-500 rounded-md border border-dashed border-gray-200 bg-gray-50/80 px-2 py-1.5">
-            서체·크기·정렬·부분 굵게 등은 캔버스에서 본문을 클릭해 좌측 「텍스트 옵션」에서 조절합니다. (더블클릭으로 본문 편집)
-          </p>
+          {/* 기능부연설명(점선 박스) 제거 */}
         </div>
 
         {/* 유의사항 */}
         <div ref={refFooter} className="space-y-2">
           <Label className="text-sm font-semibold text-gray-700">하단 유의사항</Label>
-          {content.posterFooterOnCanvas === false && (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-[#F43182]/35 bg-[#F43182]/5 px-3 py-2">
-              <span className="text-[11px] text-gray-700">유의사항 박스가 캔버스에서 숨겨져 있습니다.</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 text-[11px] shrink-0"
-                onClick={() => onContentChange({ ...content, posterFooterOnCanvas: true })}
-              >
-                캔버스에 다시 표시
-              </Button>
-            </div>
-          )}
+          {/* 기능부연설명(점선 박스) 제거 */}
           <Textarea
             value={content.emphasizedTitle || ""}
             onChange={(e) =>
@@ -767,15 +802,27 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
             className="resize-none text-sm"
           />
           <p className="text-xs text-gray-400">하단 좌측에 작은 회색 글씨로 표시됩니다</p>
-          <p className="text-xs text-gray-500 rounded-md border border-dashed border-gray-200 bg-gray-50/80 px-2 py-1.5">
-            유의사항 서식도 캔버스에서 한 번 클릭(툴바)·더블클릭(편집)으로 조절합니다.
-          </p>
+          {/* 기능부연설명(점선 박스) 제거 */}
         </div>
+
+        {/* 현수막(placard): 장소 및 날짜 */}
+        {isPlacard ? (
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold text-gray-700">장소 및 날짜</Label>
+            <Input
+              value={content.placardEventInfo ?? ""}
+              onChange={(e) => onContentChange({ ...content, placardEventInfo: e.target.value })}
+              placeholder="예) 2026.00.00 ㅣ 엘지유플러스 상암사옥 1층"
+            />
+            <p className="text-xs text-gray-400">캔버스 좌하단에 유의사항과 동일한 크기로 표시됩니다</p>
+          </div>
+        ) : null}
 
         {/* 로고 */}
         <div ref={refLogo} className="border-t border-gray-100 pt-4 space-y-4">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">브랜드 로고</p>
-          <LogoSelector/><LogoPositionSelector/>
+          <LogoSelector/>
+          {!isPlacard ? <LogoPositionSelector/> : null}
         </div>
 
         {/* 이미지 */}
@@ -843,6 +890,93 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           </p>
         </div>
 
+        {/* 모든 템플릿: 이미지 옵션 아래 배경 라운드 박스 */}
+        {(
+          <div className="border-t border-gray-100 pt-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                라운드 배경 박스
+                <span
+                  aria-hidden
+                  className="inline-block h-3.5 w-5 rounded-md border border-gray-300 bg-white"
+                />
+              </Label>
+              {content.panelBgOnCanvas ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-[12px] shrink-0"
+                  onClick={() => onContentChange({ ...content, panelBgOnCanvas: false })}
+                >
+                  제거
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-[12px] shrink-0"
+                  onClick={() =>
+                    onContentChange({
+                      ...content,
+                      panelBgOnCanvas: true,
+                      panelBgRect: content.panelBgRect ?? { x: 0.18, y: 0.08, width: 0.70, height: 0.84 },
+                      rightPanelBg: (content.rightPanelBg ?? "white"),
+                    })
+                  }
+                >
+                  +추가
+                </Button>
+              )}
+            </div>
+            {content.panelBgOnCanvas ? (
+              <>
+                <p className="text-xs text-gray-400">
+                  추가 후 캔버스에서 선택해 드래그·리사이즈로 조절할 수 있습니다. (항상 맨 뒤)
+                </p>
+                <Label className="text-xs font-semibold text-gray-600">색상</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      { key: "white" as const, label: "백지", hex: "#FFFFFF", border: "#D4D4D4" },
+                      { key: "light-grey" as const, label: "라이트 그레이", hex: "#F2F2F2", border: "#D4D4D4" },
+                      { key: "ivory" as const, label: "아이보리", hex: "#FDFAF0", border: "#D9D5C0" },
+                      { key: "light-pink" as const, label: "연핑크", hex: "#FFF0F5", border: "#F4B8D0" },
+                    ] as const
+                  ).map((opt) => {
+                    const active = (content.rightPanelBg ?? "white") === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => onContentChange({ ...content, rightPanelBg: opt.key })}
+                        className={`flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 text-left transition-all ${
+                          active ? "border-[#F43182] shadow-sm" : "border-gray-200 hover:border-gray-300"
+                        }`}
+                      >
+                        <span
+                          className="shrink-0 rounded-md"
+                          style={{
+                            width: 22,
+                            height: 22,
+                            background: opt.hex,
+                            border: `1.5px solid ${opt.border}`,
+                            display: "inline-block",
+                          }}
+                        />
+                        <span className={`text-xs font-medium ${active ? "text-[#F43182]" : "text-gray-700"}`}>{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-gray-400">+추가를 눌러 캔버스에 라운드 박스를 생성하세요.</p>
+            )}
+          </div>
+        )}
+
         <AssetSection/>
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -859,7 +993,8 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   // ── 기본 패널
   // ════════════════════════════════════════════════════════════════════
   return (
-    <div data-design-content-panel className="h-full overflow-y-auto p-6 space-y-6">
+    <TooltipProvider>
+      <div data-design-content-panel className="h-full overflow-y-auto p-6 space-y-6">
       <AssetPresetPickerDialog
         open={pictoDialogOpen}
         onOpenChange={setPictoDialogOpen}
@@ -959,6 +1094,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-2"><Sparkles className="w-4 h-4 text-blue-600 mt-0.5 shrink-0"/><div className="text-xs text-blue-900"><p className="font-medium mb-1">Pro Tips:</p><ul className="space-y-1 text-blue-800"><li>• Keep titles concise for maximum impact</li><li>• Use high-resolution images for print formats</li><li>• Text auto-resizes to fit your canvas</li></ul></div></div>
       </div>
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }

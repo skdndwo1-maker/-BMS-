@@ -21,6 +21,8 @@ interface Props {
   onSelect: (opts?: { additive?: boolean }) => void;
   zIndex: number;
   children: ReactNode;
+  /** true면 이동/리사이즈 비활성(선택/더블클릭 편집은 유지) */
+  locked?: boolean;
   /** 선택 시 외곽선 (편집 가능 표시) */
   label?: string;
   /** 모서리 라운드 모드 */
@@ -53,6 +55,7 @@ export function DraggableCanvasOverlay({
   onSelect,
   zIndex,
   children,
+  locked = false,
   label,
   borderRadiusMode = "auto",
   borderRadiusScale = 1,
@@ -85,7 +88,8 @@ export function DraggableCanvasOverlay({
   const onMouseDownMove = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      onSelect({ additive: e.shiftKey });
+      onSelect({ additive: e.shiftKey || (e as unknown as { metaKey?: boolean; ctrlKey?: boolean }).metaKey || (e as unknown as { ctrlKey?: boolean }).ctrlKey });
+      if (locked) return;
       dragStart.current = { mx: e.clientX, my: e.clientY, ox: px.x, oy: px.y };
       let didInnerPan = false;
       const onMove = (ev: MouseEvent) => {
@@ -119,7 +123,7 @@ export function DraggableCanvasOverlay({
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     },
-    [rect, px, canvasW, canvasH, onRectChange, onSelect, snapStepPx, onPan, onPanEnd, panDragInsteadOfMove, minW, minH]
+    [rect, px, canvasW, canvasH, onRectChange, onSelect, snapStepPx, onPan, onPanEnd, panDragInsteadOfMove, minW, minH, locked]
   );
 
   const resizeStart = useRef<{
@@ -136,7 +140,8 @@ export function DraggableCanvasOverlay({
     (e: React.MouseEvent, handle: ResizeHandle) => {
       e.stopPropagation();
       e.preventDefault();
-      onSelect({ additive: e.shiftKey });
+      onSelect({ additive: e.shiftKey || (e as unknown as { metaKey?: boolean; ctrlKey?: boolean }).metaKey || (e as unknown as { ctrlKey?: boolean }).ctrlKey });
+      if (locked) return;
       resizeStart.current = {
         mx: e.clientX,
         my: e.clientY,
@@ -200,7 +205,7 @@ export function DraggableCanvasOverlay({
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     },
-    [rect, px, canvasW, canvasH, onRectChange, onSelect, snapStepPx, minW, minH]
+    [rect, px, canvasW, canvasH, onRectChange, onSelect, snapStepPx, minW, minH, locked]
   );
 
   const handles: { key: ResizeHandle; style: React.CSSProperties }[] = [
@@ -228,7 +233,7 @@ export function DraggableCanvasOverlay({
         outline: isSelected ? "2px solid #F43182" : "2px solid transparent",
         outlineOffset: "1px",
         boxSizing: "border-box",
-        cursor: panDragInsteadOfMove ? "grab" : "move",
+        cursor: locked ? "default" : (panDragInsteadOfMove ? "grab" : "move"),
         userSelect: "none",
         WebkitUserSelect: "none",
       }}
@@ -257,7 +262,7 @@ export function DraggableCanvasOverlay({
       >
         {children}
       </div>
-      {isSelected &&
+      {isSelected && !locked &&
         handles.map((h) => (
           <div
             key={h.key}
@@ -304,7 +309,7 @@ export function DraggableCanvasOverlay({
               {label}
             </div>
           ) : null}
-          {onRequestDelete ? (
+          {onRequestDelete && !locked ? (
             <button
               type="button"
               aria-label="캔버스에서 제거"

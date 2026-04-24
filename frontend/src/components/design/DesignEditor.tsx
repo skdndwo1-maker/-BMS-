@@ -24,13 +24,21 @@ import {
   Magnet,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-
 interface DesignEditorProps {
   templateId?: string;
 }
 
 function getInitialZoom(): number {
   return 1.0;
+}
+
+function getOrCreateSessionId(): string {
+  const key = "bms_session_id";
+  const existing = localStorage.getItem(key);
+  if (existing?.trim()) return existing.trim();
+  const id = `sess_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+  localStorage.setItem(key, id);
+  return id;
 }
 
 export function DesignEditor({ templateId }: DesignEditorProps) {
@@ -59,6 +67,54 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     logoPosition: defaultLogoPosition,
   }));
   const [focusTarget, setFocusTarget] = useState<DesignFocusTarget>(null);
+
+  const isPlacardTemplate =
+    actualTemplateId === "placard-wide-landscape" ||
+    actualTemplateId === "placard-1000x600" ||
+    actualTemplateId === "placard-2000x1000" ||
+    actualTemplateId === "placard-600x1800" ||
+    actualTemplateId === "placard-vertical";
+  const isXBannerTemplate = actualTemplateId === "xbanner";
+
+  // 현수막(placard) 템플릿 전용 기본 텍스트 옵션/로고 위치 제한값
+  useEffect(() => {
+    if (!isPlacardTemplate) return;
+    setContent((prev) => {
+      const next: DesignContent = { ...prev };
+
+      // 정렬: 메인/본문/유의사항 모두 중앙정렬 (현수막에서만)
+      if (!next.posterTitleAlign) next.posterTitleAlign = "center";
+      if (!next.posterBodyAlign) next.posterBodyAlign = "center";
+      if (!next.posterFooterAlign) next.posterFooterAlign = "center";
+
+      // 기본 글자 크기 스케일
+      if (next.posterTitleFontScale == null) next.posterTitleFontScale = 90;
+      if (next.posterBodyFontScale == null) next.posterBodyFontScale = 58;
+      if (next.posterFooterFontScale == null) next.posterFooterFontScale = 85;
+
+      // 현수막에서 우측 로고 배치 옵션은 제거되므로, 기존 값이 우측이면 좌측 상단으로 정규화
+      next.logoPosition = "top-left";
+
+      // 현수막 좌하단 "장소 및 날짜" 기본 텍스트
+      if (!next.placardEventInfo?.trim()) {
+        next.placardEventInfo = "2026.00.00 ㅣ 엘지유플러스 상암사옥 1층";
+      }
+
+      return next;
+    });
+  }, [isPlacardTemplate]);
+
+  // X배너(xbanner) 템플릿 전용 기본 텍스트 스케일
+  useEffect(() => {
+    if (!isXBannerTemplate) return;
+    setContent((prev) => {
+      const next: DesignContent = { ...prev };
+      if (next.posterTitleFontScale == null) next.posterTitleFontScale = 190;
+      if (next.posterBodyFontScale == null) next.posterBodyFontScale = 180;
+      if (next.posterFooterFontScale == null) next.posterFooterFontScale = 230;
+      return next;
+    });
+  }, [isXBannerTemplate]);
 
   // Undo stack (Ctrl/Cmd+Z)
   const undoRef = useRef<{ stack: DesignContent[]; idx: number }>({ stack: [], idx: -1 });
@@ -147,6 +203,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     <DesignCanvas
       ref={designCanvasRef}
       content={content}
+      templateId={actualTemplateId}
       canvasSize={template.size}
       zoom={zoom}
       onContentChange={setContentWithHistory}
@@ -242,6 +299,54 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                 {showPreview ? '편집' : '미리보기'}
               </Button>
 
+              {/* 임시 저장/불러오기(세션별) */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const name = window.prompt("저장 이름을 입력하세요");
+                  if (!name?.trim()) return;
+                  const sid = getOrCreateSessionId();
+                  const k = `design_save:${sid}:${actualTemplateId}:${name.trim()}`;
+                  const payload = { templateId: actualTemplateId, content };
+                  localStorage.setItem(k, JSON.stringify(payload));
+                  window.alert("저장되었습니다.");
+                }}
+              >
+                저장
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const sid = getOrCreateSessionId();
+                  const prefix = `design_save:${sid}:${actualTemplateId}:`;
+                  const keys = Object.keys(localStorage).filter((k) => k.startsWith(prefix));
+                  if (keys.length === 0) {
+                    window.alert("저장된 항목이 없습니다.");
+                    return;
+                  }
+                  const names = keys.map((k) => k.slice(prefix.length)).sort();
+                  const pick = window.prompt(`불러올 이름을 입력하세요:\n- ${names.join("\n- ")}`);
+                  if (!pick?.trim()) return;
+                  const raw = localStorage.getItem(`${prefix}${pick.trim()}`);
+                  if (!raw) {
+                    window.alert("해당 이름의 저장본을 찾을 수 없습니다.");
+                    return;
+                  }
+                  try {
+                    const parsed = JSON.parse(raw) as { content?: DesignContent };
+                    if (!parsed?.content) throw new Error("invalid");
+                    setContentWithHistory(() => parsed.content as DesignContent);
+                    window.alert("불러오기 완료");
+                  } catch {
+                    window.alert("저장본을 읽을 수 없습니다.");
+                  }
+                }}
+              >
+                불러오기
+              </Button>
+
               <Button size="sm" onClick={() => setShowExportDialog(true)}>
                 <Download className="w-4 h-4 mr-2" />
                 내보내기
@@ -273,7 +378,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                   <CanvasTextFormatPanel
                     target={textFormatTarget}
                     content={content}
-                    onDraft={setContent}
+                    onDraft={setContentWithHistory}
                     selectionRenderTick={textFormatSelectionTick}
                     getSelection={() => designCanvasRef.current?.getInlineTextSelection() ?? null}
                     onTogglePartialStyle={(w) => designCanvasRef.current?.handleTogglePartialStyle(w)}

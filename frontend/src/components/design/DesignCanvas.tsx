@@ -104,7 +104,7 @@ function applyRemoveBodyBlockIds(c: DesignContent, ids: Set<string>): DesignCont
 }
 
 function normalizeLogoPosition(pos: string | undefined): LogoPosition {
-  const allowed: LogoPosition[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
+  const allowed: LogoPosition[] = ["top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right"];
   if (pos && allowed.includes(pos as LogoPosition)) return pos as LogoPosition;
   return "top-left";
 }
@@ -117,6 +117,7 @@ function selectedKeyToFormatTarget(key: string | undefined): CanvasTextEditTarge
   if (key === "body") return { kind: "body", id: "body-1" };
   if (key.startsWith("body:")) return { kind: "body", id: key.slice(5) };
   if (key.startsWith("subtitle:")) return { kind: "subtitle", id: key.slice(9) };
+  if (key.startsWith("badge:")) return { kind: "badge", id: key.slice(6) };
   return null;
 }
 
@@ -134,6 +135,7 @@ export type DesignFocusTarget =
 
 interface DesignCanvasProps {
   content: DesignContent;
+  templateId?: string;
   canvasSize: CanvasSize;
   zoom: number;
   onContentChange?: (content: DesignContent) => void;
@@ -163,6 +165,7 @@ export type DesignCanvasHandle = {
 export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function DesignCanvas(
   {
     content,
+    templateId,
     canvasSize,
     zoom,
     onContentChange,
@@ -177,6 +180,27 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   },
   ref
 ) {
+  const isXBanner = (templateId ?? "").trim() === "xbanner";
+  const isPlacard = useMemo(() => {
+    const id = (templateId ?? "").trim();
+    return (
+      id === "placard-wide-landscape" ||
+      id === "placard-1000x600" ||
+      id === "placard-2000x1000" ||
+      id === "placard-600x1800" ||
+      id === "placard-vertical"
+    );
+  }, [templateId]);
+  const RIGHT_BG: Record<NonNullable<DesignContent["rightPanelBg"]>, string> = useMemo(
+    () => ({
+      white: "#FFFFFF",
+      "light-grey": "#F2F2F2",
+      ivory: "#FDFAF0",
+      "light-pink": "#FFF0F5",
+    }),
+    []
+  );
+
   const outerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef(content);
@@ -205,6 +229,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const footerEditRef = useRef<HTMLTextAreaElement>(null);
   const bodyEditRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const subtitleEditRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const badgeEditRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   const measure = useCallback(() => {
     if (!outerRef.current) return;
@@ -304,8 +329,15 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const displayH = displayW / realAspect;
 
   const W = displayW;
-  /** VI 12분할 대비 약 1.8배 더 촘촘한 간격 — 정렬 그리드 표시/스냅 공용 */
-  const viGridStepPx = Math.max(1, getViGridStepPx(displayH / 22));
+  /** VI 12분할 대비 약 1.8배 더 촘촘한 간격 — 정렬 그리드 표시/스냅 공용
+   *  현수막(placard)은 그리드 단위를 추가로 키움
+   */
+  const viBaseStep = Math.max(1, getViGridStepPx(displayH / 22));
+  const viDesired =
+    isPlacard
+      ? viBaseStep * 2 * 1.8
+      : viBaseStep;
+  const viGridStepPx = viDesired;
   const snapPx = layoutSnapEnabled ? viGridStepPx : 1;
   /** 위 격자 단위를 기준으로 한 셀 높이 — 뱃지 최소 크기용 */
   const gridCellH = displayH / 22;
@@ -326,20 +358,27 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     }
   };
 
-  const logoPosition = normalizeLogoPosition(content.logoPosition);
+  const logoPosition = isPlacard ? "top-left" : normalizeLogoPosition(content.logoPosition);
 
   const getLogoPositionStyle = () => {
-    const padRatio = realAspect >= 3 ? 0.04 : 0.08;
+    // 로고 여백: 기존의 약 50% 수준으로 축소
+    const basePadRatio = realAspect >= 3 ? 0.02 : 0.04;
+    // X배너: 로고 여백을 지금의 2배로 확대
+    const padRatio = isXBanner ? basePadRatio * 2 : basePadRatio;
     const pad = W * padRatio;
     switch (logoPosition) {
       case "top-right":
         return { top: `${pad}px`, right: `${pad}px` };
+      case "top-center":
+        return { top: `${pad}px`, left: "50%", transform: "translateX(-50%)" };
       case "top-left":
         return { top: `${pad}px`, left: `${pad}px` };
       case "bottom-left":
         return { bottom: `${pad}px`, left: `${pad}px` };
       case "bottom-right":
         return { bottom: `${pad}px`, right: `${pad}px` };
+      case "bottom-center":
+        return { bottom: `${pad}px`, left: "50%", transform: "translateX(-50%)" };
       default:
         return { top: `${pad}px`, left: `${pad}px` };
     }
@@ -363,10 +402,25 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const logoBase = W * 0.18;
   const logoWidthBase = Math.max(W * 0.15, Math.min(W * 0.20, realAspect >= 3 ? logoBase * 0.6 : logoBase));
   // BI 시각 보정(기본)
-  const logoOptionScale = content.logoOption === "BI" ? 0.72 : 1.0;
+  // 로고 옵션별 크기:
+  // - 현수막(placard): CI -10%, BI -60%, SLOGAN 유지
+  // - 현수막 제외: BI -60%, 그 외 유지
+  const logoOptionScale = isPlacard
+    ? content.logoOption === "CI"
+      ? 0.9 * 0.8
+      : content.logoOption === "BI"
+        ? 0.4 * 0.8
+        : 1.0 * 0.8
+    : content.logoOption === "BI"
+      ? 0.4
+      : 1.0;
   const logoWidth = Math.max(24, logoWidthBase * logoOptionScale);
+  // X배너: 로고 기본 2배, 단 CI는 20% 축소
+  const xbannerCiScale = isXBanner && content.logoOption === "CI" ? 0.8 : 1.0;
+  const effectiveLogoWidth = isXBanner ? logoWidth * 2 * xbannerCiScale : logoWidth;
 
-  const padRatio = realAspect >= 3 ? 0.04 : 0.08;
+  // 로고/텍스트 여백을 기존의 약 50% 수준으로 축소
+  const padRatio = realAspect >= 3 ? 0.02 : 0.04;
   const marginX = padRatio;
   const marginTop = padRatio;
   const gapPx = realAspect >= 3 ? Math.max(8, Math.min(18, displayH * 0.06)) : displayH * 0.035;
@@ -376,7 +430,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     const w = Math.max(40, W * (1 - marginX * 2));
 
     // 로고 높이는 실제 이미지 비율을 모르므로 안전한 근사치로 배치(너비 기준, 상한 적용)
-    const approxLogoH = Math.min(displayH * 0.18, Math.max(18, logoWidth * 0.3));
+    const approxLogoH = Math.min(displayH * 0.18, Math.max(18, effectiveLogoWidth * 0.3));
     const logoY = displayH * marginTop;
 
     const titleY = logoY + approxLogoH + gapPx;
@@ -429,9 +483,101 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     };
   };
 
+  // 현수막(placard)에서는 메인/본문/유의사항 위치를 고정값으로 강제하고, 드래그/리사이즈를 막는다.
+  useLayoutEffect(() => {
+    if (!onContentChange) return;
+    if (!isPlacard) return;
+
+    const shortSide = Math.min(displayW, displayH);
+    const X = shortSide / 12;
+    const leftW = displayW * 0.235;
+    const bgInsetT = X * 1.0;
+    const bgInsetB = X * 1.2;
+    const bgInsetL = X * 0.26;
+    const bgInsetR = X * 1.2;
+    const bgLeftPx = leftW + bgInsetL;
+    const bgTopPx = bgInsetT;
+    const bgWPx = Math.max(10, displayW - bgLeftPx - bgInsetR);
+    const bgHPx = Math.max(10, displayH - bgTopPx - bgInsetB);
+
+    const padPx = X * 0.55;
+    const gapPx = X * 0.57;
+
+    const rectX = (bgLeftPx + padPx) / displayW;
+    const rectW = Math.max(0.05, (bgWPx - padPx * 2) / displayW);
+
+    const titleHPx = Math.max(X * 2.4, bgHPx * 0.22);
+    const bodyHPx = Math.max(X * 1.6, bgHPx * 0.16);
+    const footerHPx = Math.max(X * 1.3, bgHPx * 0.12);
+    const totalHPx = titleHPx + gapPx + bodyHPx + gapPx + footerHPx;
+    const startYPx = bgTopPx + Math.max(0, (bgHPx - totalHPx) / 2);
+
+    const titleRectFixed = {
+      x: rectX,
+      y: startYPx / displayH,
+      width: rectW,
+      height: Math.min(0.6, titleHPx / displayH),
+    };
+    const bodyRectFixed = {
+      x: rectX,
+      y: (startYPx + titleHPx + gapPx) / displayH,
+      width: rectW,
+      height: Math.min(0.6, bodyHPx / displayH),
+    };
+    const footerRectFixed = {
+      x: rectX,
+      y: (startYPx + titleHPx + gapPx + bodyHPx + gapPx) / displayH,
+      width: rectW,
+      height: Math.min(0.6, footerHPx / displayH),
+    };
+
+    // 유의사항 위치: 현재 텍스트 높이의 0.85x 만큼 하단으로 이동
+    const footerDeltaY = footerRectFixed.height * 0.85;
+    const maxFooterY = (bgTopPx + bgHPx - padPx - footerHPx) / displayH;
+    footerRectFixed.y = Math.max(
+      0,
+      Math.min(maxFooterY, footerRectFixed.y + footerDeltaY)
+    );
+
+    const eq = (
+      a?: { x: number; y: number; width: number; height: number },
+      b?: { x: number; y: number; width: number; height: number }
+    ) =>
+      !!a &&
+      !!b &&
+      Math.abs(a.x - b.x) < 1e-4 &&
+      Math.abs(a.y - b.y) < 1e-4 &&
+      Math.abs(a.width - b.width) < 1e-4 &&
+      Math.abs(a.height - b.height) < 1e-4;
+
+    const c = contentRef.current;
+    if (
+      eq(c.posterTitleRect, titleRectFixed) &&
+      eq(c.posterBodyRect, bodyRectFixed) &&
+      eq(c.posterFooterRect, footerRectFixed) &&
+      c.posterTitleRectLocked === true &&
+      c.posterFooterRectLocked === true &&
+      c.posterBodyRectLocked?.["body-1"] === true
+    ) {
+      return;
+    }
+
+    onContentChange({
+      ...c,
+      posterTitleRect: titleRectFixed,
+      posterTitleRectLocked: true,
+      posterBodyRect: bodyRectFixed,
+      posterBodyRects: { ...(c.posterBodyRects ?? {}), "body-1": bodyRectFixed },
+      posterBodyRectLocked: { ...(c.posterBodyRectLocked ?? {}), "body-1": true },
+      posterFooterRect: footerRectFixed,
+      posterFooterRectLocked: true,
+    });
+  }, [displayW, displayH, isPlacard, onContentChange]);
+
   // 텍스트가 생겼는데 rect가 없을 때만: 템플릿 비율 기반으로 초기 rect 자동 계산
   useLayoutEffect(() => {
     if (!onContentChange) return;
+    if (isPlacard) return;
     const patch: Partial<DesignContent> = {};
 
     const showTitle = content.posterTitleOnCanvas !== false;
@@ -458,7 +604,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     W,
     displayH,
     realAspect,
-    logoWidth,
+    effectiveLogoWidth,
     titleFontSize,
     bodyFontSize,
     disclaimerSize,
@@ -686,6 +832,10 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       const el = subtitleEditRefs.current[inlineEditTarget.id];
       el?.focus();
       el?.select();
+    } else if (inlineEditTarget?.kind === "badge") {
+      const el = badgeEditRefs.current[inlineEditTarget.id];
+      el?.focus();
+      el?.select();
     }
   }, [inlineEditTarget]);
 
@@ -704,7 +854,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     if (inlineEditTarget.kind === "title") el = titleEditRef.current;
     else if (inlineEditTarget.kind === "footer") el = footerEditRef.current;
     else if (inlineEditTarget.kind === "body") el = bodyEditRefs.current[inlineEditTarget.id];
-    else el = subtitleEditRefs.current[inlineEditTarget.id];
+    else if (inlineEditTarget.kind === "subtitle") el = subtitleEditRefs.current[inlineEditTarget.id];
+    else el = badgeEditRefs.current[inlineEditTarget.id];
     if (el && el.selectionStart !== el.selectionEnd) return [el.selectionStart, el.selectionEnd];
     return null;
   }, [inlineEditTarget]);
@@ -855,19 +1006,37 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     [onContentChange]
   );
 
-  const updateBadgeRect = useCallback(
-    (next: typeof badgeRect) => {
+  const updatePanelBgRect = useCallback(
+    (next: { x: number; y: number; width: number; height: number }) => {
       if (!onContentChange) return;
       const c = contentRef.current;
-      const prev = c.posterBadgeRect ?? DEFAULT_POSTER_BADGE_RECT;
+      const u = { ...c, panelBgRect: next, panelBgOnCanvas: true };
+      contentRef.current = u;
+      onContentChange(u);
+    },
+    [onContentChange]
+  );
+
+  const updateBadgeItemRect = useCallback(
+    (id: string, next: { x: number; y: number; width: number; height: number }) => {
+      if (!onContentChange) return;
+      const c = contentRef.current;
+      const prev = c.posterBadgeRects?.[id] ?? DEFAULT_POSTER_BADGE_RECT;
+      const key = `badge:${id}`;
+      const keys = selectedKeysRef.current;
       if (next.width !== prev.width || next.height !== prev.height) {
-        const u = { ...c, posterBadgeRect: next };
+        if (keys.length >= 2 && keys.includes(key)) {
+          const merged = applyGroupRectLeaderResize(c, keys, key, prev, next);
+          contentRef.current = merged;
+          onContentChange(merged);
+          return;
+        }
+        const u = { ...c, posterBadgeRects: { ...(c.posterBadgeRects ?? {}), [id]: next } };
         contentRef.current = u;
         onContentChange(u);
         return;
       }
-      const keys = selectedKeysRef.current;
-      if (keys.length >= 2 && keys.includes("badge")) {
+      if (keys.length >= 2 && keys.includes(key)) {
         const dx = next.x - prev.x;
         const dy = next.y - prev.y;
         if (Math.abs(dx) > 1e-9 || Math.abs(dy) > 1e-9) {
@@ -877,7 +1046,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           return;
         }
       }
-      const u = { ...c, posterBadgeRect: next };
+      const u = { ...c, posterBadgeRects: { ...(c.posterBadgeRects ?? {}), [id]: next } };
       contentRef.current = u;
       onContentChange(u);
     },
@@ -1138,24 +1307,27 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     onContentDraftChange,
   ]);
 
-  const badgePxH = badgeRect.height * displayH;
-  const badgePxW = badgeRect.width * displayW;
   /** VI 1칸 높이의 30%까지 축소 허용(높이·폭 동일 기준의 최소 단계) */
   const minBadgeHGrid = gridCellH * 0.3;
-  const badgeMinDimPx = Math.max(4, minBadgeHGrid);
-  /** 가로 축소 시 현재 높이(px) 이하로는 못 줄임(원형까지) */
-  const badgeMinWidthPx = Math.max(4, badgePxH);
-  const padXB = Math.max(1, Math.min(badgePxW * 0.035, badgePxH * 0.12, badgePxW * 0.08));
   const badgeCharsOptimal = 4;
-  const badgeFontPx = Math.max(
-    2.5,
-    Math.min(
-      badgePxH * 0.44,
-      (Math.max(0, badgePxW - padXB * 2) / badgeCharsOptimal) * 1.88
-    )
+  const computeBadgeAutoText = useCallback(
+    (rect: { x: number; y: number; width: number; height: number }) => {
+      const pxH = rect.height * displayH;
+      const pxW = rect.width * displayW;
+      const minDimPx = Math.max(4, minBadgeHGrid);
+      /** 가로 축소 시 현재 높이(px) 이하로는 못 줄임(원형까지) */
+      const minWidthPx = Math.max(4, pxH);
+      const padXB = Math.max(1, Math.min(pxW * 0.035, pxH * 0.12, pxW * 0.08));
+      const fontPx = Math.max(
+        2.5,
+        Math.min(pxH * 0.44, (Math.max(0, pxW - padXB * 2) / badgeCharsOptimal) * 1.88)
+      );
+      const paddingY = Math.max(0, pxH * 0.06);
+      const paddingX = Math.max(0, pxW * 0.00175);
+      return { pxH, pxW, minDimPx, minWidthPx, fontPx, paddingX, paddingY };
+    },
+    [badgeCharsOptimal, displayH, displayW, minBadgeHGrid]
   );
-  const badgeFill =
-    content.posterBadgeColor === "black" ? "#000000" : VI_COLORS.brandMagenta;
   /** 부제 크기는 메인 타이틀 배율과 독립(캔버스 너비·posterSubtitleFontScale만 사용) */
   const subtitleFontSize = W * 0.045 * ((content.posterSubtitleFontScale ?? 100) / 100);
 
@@ -1239,9 +1411,71 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         }}
         onClick={handleCanvasClick}
       >
+        {/* 현수막(placard): 우측 분할영역 배경 */}
+        {isPlacard ? (() => {
+          const shortSide = Math.min(displayW, displayH);
+          const X = shortSide / 12;
+          const leftW = displayW * 0.235;
+          const bgInsetT = X * 1.0;
+          const bgInsetB = X * 1.2;
+          const bgInsetL = X * 0.26;
+          const bgInsetR = X * 1.2;
+          const bgLeft = leftW + bgInsetL;
+          const bgTop = bgInsetT;
+          const bgW = Math.max(10, displayW - bgLeft - bgInsetR);
+          const bgH = Math.max(10, displayH - bgTop - bgInsetB);
+          const bgRadius = X * 1.4;
+          const key = (content.rightPanelBg ?? "white") as NonNullable<DesignContent["rightPanelBg"]>;
+          const fill = RIGHT_BG[key] ?? RIGHT_BG.white;
+          return (
+            <div
+              style={{
+                position: "absolute",
+                left: `${bgLeft}px`,
+                top: `${bgTop}px`,
+                width: `${bgW}px`,
+                height: `${bgH}px`,
+                background: fill,
+                borderRadius: `${bgRadius}px`,
+                zIndex: 1,
+                pointerEvents: "none",
+              }}
+            />
+          );
+        })() : null}
+
         {showViGrid && (
           <ViAlignmentGrid width={displayW} height={displayH} step={viGridStepPx} />
         )}
+
+        {/* 모든 템플릿: 뒤쪽 라운드 배경 박스 (자유 조정, 항상 맨 뒤) */}
+        {content.panelBgOnCanvas && content.panelBgRect ? (
+          <DraggableCanvasOverlay
+            rect={content.panelBgRect}
+            canvasW={displayW}
+            canvasH={displayH}
+            onRectChange={updatePanelBgRect}
+            isSelected={selectedKeys.includes("panelBg")}
+            onSelect={(opts) => {
+              pickKey("panelBg", !!opts?.additive);
+            }}
+            zIndex={2}
+            label="배경 박스"
+            borderRadiusMode="auto"
+            borderRadiusScale={1.2}
+            snapStepPx={snapPx}
+          >
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                background:
+                  RIGHT_BG[(content.rightPanelBg ?? "white") as NonNullable<DesignContent["rightPanelBg"]>] ??
+                  RIGHT_BG.white,
+              }}
+            />
+          </DraggableCanvasOverlay>
+        ) : null}
         {/* 이미지: 드래그·리사이즈, 모서리 라운드 */}
         {imageUrl && (
           <DraggableCanvasOverlay
@@ -1328,6 +1562,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             label="메인 타이틀"
             borderRadiusMode="auto"
             snapStepPx={snapPx}
+            locked={isPlacard}
             onOverlayDoubleClick={() => {
               onBeginCanvasTextEdit?.();
               setInlineEditTarget({ kind: "title" });
@@ -1517,6 +1752,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               label={posterBodiesSafe.length > 1 ? `본문 (${bi + 1})` : "본문"}
               borderRadiusMode="auto"
               snapStepPx={snapPx}
+              locked={isPlacard}
               onOverlayDoubleClick={() => {
                 onBeginCanvasTextEdit?.();
                 setInlineEditTarget({ kind: "body", id: b.id });
@@ -1569,6 +1805,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             label="유의사항"
             borderRadiusMode="auto"
             snapStepPx={snapPx}
+            locked={isPlacard}
             onOverlayDoubleClick={() => {
               onBeginCanvasTextEdit?.();
               setInlineEditTarget({ kind: "footer" });
@@ -1638,7 +1875,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               draggable={false}
               onDragStart={(e) => e.preventDefault()}
               style={{
-                width: `${logoWidth}px`,
+                width: `${effectiveLogoWidth}px`,
                 height: "auto",
                 objectFit: "contain",
                 display: "block",
@@ -1648,46 +1885,76 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           </div>
         )}
 
-        {content.subtitle?.trim() && content.posterBadgeRect && (
-          <DraggableCanvasOverlay
-            rect={badgeRect}
-            canvasW={displayW}
-            canvasH={displayH}
-            onRectChange={updateBadgeRect}
-            isSelected={selectedKeys.includes("badge")}
-            onSelect={(opts) => {
-              pickKey("badge", !!opts?.additive);
-              onFocusChange?.("badge");
-            }}
-            zIndex={16}
-            label="뱃지"
-            borderRadiusMode="pill"
-            snapStepPx={1}
-            minWidthPx={badgeMinWidthPx}
-            minHeightPx={badgeMinDimPx}
-          >
-            <div
-              style={{
-                width: "100%",
-                height: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: badgeFill,
-                color: "#FFFFFF",
-                fontSize: `${badgeFontPx}px`,
-                fontWeight: 600,
-                lineHeight: 1.2,
-                padding: `${Math.max(0, badgePxH * 0.06)}px ${Math.max(0, badgePxW * 0.00175)}px`,
-                boxSizing: "border-box",
-                textAlign: "center",
-                wordBreak: "keep-all",
-              }}
-            >
-              {content.subtitle}
-            </div>
-          </DraggableCanvasOverlay>
-        )}
+        {/* 뱃지: 현수막 제외, 최대 3개 */}
+        {!isPlacard
+          ? (() => {
+              const legacyOne =
+                content.subtitle?.trim() && content.posterBadgeRect
+                  ? [{ id: "legacy-1", text: content.subtitle, color: content.posterBadgeColor ?? "magenta" } as const]
+                  : [];
+              const badges = (content.posterBadges?.length ? content.posterBadges : legacyOne) as Array<{
+                id: string;
+                text: string;
+                color?: "magenta" | "black";
+              }>;
+              const rects = content.posterBadgeRects ?? {};
+              return badges
+                .filter((b) => b.text?.trim())
+                .slice(0, 3)
+                .map((b, idx) => {
+                  const rect = rects[b.id] ?? (idx === 0 ? badgeRect : { ...badgeRect, y: Math.min(0.92, badgeRect.y + idx * 0.07) });
+                  const m = computeBadgeAutoText(rect);
+                  const fill = (b.color ?? "magenta") === "black" ? "#000000" : "#F43182";
+                  return (
+                    <DraggableCanvasOverlay
+                      key={b.id}
+                      rect={rect}
+                      canvasW={displayW}
+                      canvasH={displayH}
+                      onRectChange={(next) => updateBadgeItemRect(b.id, next)}
+                      isSelected={selectedKeys.includes(`badge:${b.id}`) || (b.id === "legacy-1" && selectedKeys.includes("badge"))}
+                      onSelect={(opts) => {
+                        pickKey(`badge:${b.id}`, !!opts?.additive);
+                        onFocusChange?.("badge");
+                      }}
+                      zIndex={16}
+                      label="뱃지"
+                      borderRadiusMode="pill"
+                      snapStepPx={1}
+                      minWidthPx={m.minWidthPx}
+                      minHeightPx={m.minDimPx}
+                      onOverlayDoubleClick={() => {
+                        onBeginCanvasTextEdit?.();
+                        setInlineEditTarget({ kind: "badge", id: b.id });
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: fill,
+                          color: "#FFFFFF",
+                          fontSize: `${m.fontPx}px`,
+                          fontWeight: 600,
+                          lineHeight: 1.2,
+                          padding: `${m.paddingY}px ${m.paddingX}px`,
+                          boxSizing: "border-box",
+                          textAlign: "center",
+                          wordBreak: "keep-all",
+                          opacity:
+                            inlineEditTarget?.kind === "badge" && inlineEditTarget.id === b.id ? 0 : 1,
+                        }}
+                      >
+                        {b.text}
+                      </div>
+                    </DraggableCanvasOverlay>
+                  );
+                });
+            })()
+          : null}
 
         {assetLayers.map((asset) => (
           <DraggableAsset
@@ -1705,6 +1972,41 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             onDelete={handleAssetDelete}
           />
         ))}
+
+        {/* 현수막(placard): 좌하단 "장소 및 날짜" (유의사항과 동일 크기, 좌정렬) */}
+        {isPlacard && (content.placardEventInfo ?? "").trim().length > 0 ? (() => {
+          const shortSide = Math.min(displayW, displayH);
+          const X = shortSide / 12;
+          // 좌/하 여백: 기존 대비 30% 증가
+          const infoLeft = X * 1.2 * 1.3;
+          const infoBottom = X * 0.6 * 1.3;
+          return (
+            <div
+              style={{
+                position: "absolute",
+                left: `${infoLeft}px`,
+                bottom: `${infoBottom}px`,
+                zIndex: 14,
+                maxWidth: `${Math.max(10, displayW * 0.235 - infoLeft + X * 0.5)}px`,
+                ...footerTextStyle(content, disclaimerSize),
+                textAlign: "left",
+                fontWeight: 600,
+                // 기본 색상: 다크 그레이
+                color: "#4A4A4A",
+                // 농도: 30% opacity
+                opacity: 0.3,
+                // 크기: 유의사항 대비 10% 축소
+                fontSize: `${disclaimerSize * 0.9}px`,
+                lineHeight: 1,
+                whiteSpace: "pre-wrap",
+                wordBreak: "keep-all",
+                pointerEvents: "none",
+              }}
+            >
+              {content.placardEventInfo}
+            </div>
+          );
+        })() : null}
 
         {inlineEditTarget?.kind === "title" && onContentDraftChange && showTitleOnCanvas && (
           <textarea
@@ -1879,6 +2181,64 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                   background: "rgba(255,255,255,0.92)",
                   ...subtitleTextStyle(content, s.id, subtitleFontSize, subtitleColor),
                   textAlign: subF.textAlign,
+                }}
+              />
+            );
+          })()}
+
+        {inlineEditTarget?.kind === "badge" &&
+          onContentDraftChange &&
+          !isPlacard &&
+          (() => {
+            const id = inlineEditTarget.id;
+            const badges = content.posterBadges ?? [];
+            const b = badges.find((x) => x.id === id);
+            if (!b) return null;
+            const rect =
+              content.posterBadgeRects?.[id] ??
+              content.posterBadgeRect ??
+              DEFAULT_POSTER_BADGE_RECT;
+            const m = computeBadgeAutoText(rect);
+            return (
+              <textarea
+                key={id}
+                data-canvas-inline-edit
+                ref={(el) => {
+                  badgeEditRefs.current[id] = el;
+                }}
+                value={b.text}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  onContentDraftChange({
+                    ...content,
+                    posterBadges: badges.map((x) => (x.id === id ? { ...x, text: v } : x)),
+                  });
+                }}
+                onBlur={endTextEditIfBlurOutside}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                onSelect={bumpTextSelection}
+                onMouseUp={bumpTextSelection}
+                style={{
+                  position: "absolute",
+                  left: rect.x * displayW,
+                  top: rect.y * displayH,
+                  width: rect.width * displayW,
+                  height: rect.height * displayH,
+                  zIndex: 200,
+                  resize: "none",
+                  padding: 4,
+                  border: "none",
+                  outline: "2px solid #F43182",
+                  boxSizing: "border-box",
+                  background: "rgba(255,255,255,0.92)",
+                  fontFamily: VI_FONT_STACK,
+                  fontSize: `${m.fontPx}px`,
+                  fontWeight: 600,
+                  lineHeight: 1.2,
+                  color: "#111",
+                  textAlign: "center",
+                  whiteSpace: "pre-wrap",
                 }}
               />
             );
