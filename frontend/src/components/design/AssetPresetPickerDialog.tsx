@@ -36,6 +36,7 @@ function AssetPresetPickerDialogOpen({
   layout,
 }: Props) {
   const [q, setQ] = useState("");
+  const [illuGroup, setIlluGroup] = useState<"기능" | "감정">("기능");
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: (accepted) => {
@@ -56,6 +57,13 @@ function AssetPresetPickerDialogOpen({
   }, [onOpenChange]);
 
   const filtered = filterPresets(presets, q);
+  const filteredByGroup =
+    layout === "illu"
+      ? filtered.filter((p) => {
+          const isEmotion = p.keywords.includes("감정");
+          return illuGroup === "감정" ? isEmotion : !isEmotion;
+        })
+      : filtered;
   const gridClass =
     layout === "picto"
       ? "grid max-h-[min(60vh,420px)] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-6"
@@ -79,6 +87,25 @@ function AssetPresetPickerDialogOpen({
           </Button>
         </div>
         <div className="p-4">
+          {layout === "illu" ? (
+            <div className="mb-3 flex items-center gap-1.5 rounded-xl bg-gray-100 p-1">
+              {(["기능", "감정"] as const).map((k) => {
+                const active = illuGroup === k;
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setIlluGroup(k)}
+                    className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-semibold transition-colors ${
+                      active ? "bg-white text-[#F43182] shadow-sm" : "text-gray-600 hover:bg-white/60"
+                    }`}
+                  >
+                    {k}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
             <Input
               value={q}
@@ -100,7 +127,7 @@ function AssetPresetPickerDialogOpen({
             </div>
           </div>
           <div className={gridClass}>
-            {filtered.map((p, idx) => (
+            {filteredByGroup.map((p, idx) => (
               <button
                 key={`${layout}-${p.name}-${idx}`}
                 type="button"
