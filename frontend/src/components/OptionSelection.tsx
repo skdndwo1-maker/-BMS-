@@ -18,6 +18,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { postOptionsChat, type OptionsChatMessage } from "@/lib/optionsChatApi";
+import { apiUrl } from "@/lib/apiUrl";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 
 const mainOptions = [
   {
@@ -108,7 +110,33 @@ export function OptionSelection() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const canOpenAdmin = (sessionStorage.getItem("bms_admin_key") || "").trim().length > 0;
+  const [canOpenAdmin, setCanOpenAdmin] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const sb = getSupabaseClient();
+        const { data } = await sb.auth.getSession();
+        const token = data.session?.access_token;
+        if (!token) {
+          if (!cancelled) setCanOpenAdmin(false);
+          return;
+        }
+        const r = await fetch(apiUrl("/api/admin/me"), {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const out = (await r.json().catch(() => ({}))) as { isAdmin?: boolean };
+        if (!cancelled) setCanOpenAdmin(Boolean(out?.isAdmin));
+      } catch {
+        if (!cancelled) setCanOpenAdmin(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [chatMessages, setChatMessages] = useState<
     Array<{ id: string; role: "user" | "assistant"; content: string }>

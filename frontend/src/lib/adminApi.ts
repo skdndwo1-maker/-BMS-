@@ -1,4 +1,5 @@
 import { apiUrl } from "./apiUrl";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 
 export type AdminRunRow = {
   id: string;
@@ -16,29 +17,39 @@ export type AdminRunRow = {
 };
 
 async function adminFetch(adminKey: string, path: string, init?: RequestInit) {
-  if (!adminKey.trim()) {
-    throw new Error("admin_key_required");
+  const sb = (() => {
+    try {
+      return getSupabaseClient();
+    } catch {
+      return null;
+    }
+  })();
+  const sessionRes = sb ? await sb.auth.getSession() : { data: { session: null as any } };
+  const token = sessionRes.data.session?.access_token as string | undefined;
+
+  if (!token && !adminKey.trim()) {
+    throw new Error("not_logged_in");
   }
   const r = await fetch(apiUrl(path), {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      "X-Admin-Key": adminKey.trim(),
+      ...(token ? { Authorization: `Bearer ${token}` } : { "X-Admin-Key": adminKey.trim() }),
       ...(init?.headers ?? {}),
     },
   });
-  const data = (await r.json().catch(() => ({}))) as any;
-  if (!r.ok || data?.ok === false) {
-    throw new Error(data?.error ?? `요청 실패 (${r.status})`);
+  const payload = (await r.json().catch(() => ({}))) as any;
+  if (!r.ok || payload?.ok === false) {
+    throw new Error(payload?.error ?? `요청 실패 (${r.status})`);
   }
-  return data;
+  return payload;
 }
 
 export async function listRuns(adminKey: string, status = "pending_review", limit = 50): Promise<AdminRunRow[]> {
-  const data = await adminFetch(adminKey, `/api/admin/runs?status=${encodeURIComponent(status)}&limit=${limit}`, {
+  const payload = await adminFetch(adminKey, `/api/admin/runs?status=${encodeURIComponent(status)}&limit=${limit}`, {
     method: "GET",
   });
-  return (data?.runs ?? []) as AdminRunRow[];
+  return (payload?.runs ?? []) as AdminRunRow[];
 }
 
 export async function approveRun(adminKey: string, runId: string, reviewer?: string): Promise<void> {

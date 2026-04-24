@@ -241,6 +241,17 @@ app.post("/api/options/chat", async (req, res) => {
   }
 });
 
+/** Admin: 현재 로그인 사용자의 관리자 여부 (A안) */
+app.get("/api/admin/me", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    // not logged in / forbidden 모두 isAdmin=false로 응답 (UI gating용)
+    res.json({ ok: true, isAdmin: false });
+    return;
+  }
+  res.json({ ok: true, isAdmin: true, userId: auth.userId ?? null });
+});
+
 /** 초대코드 게이트: `INVITE_CODE`가 비어 있으면 프론트에서 게이트 비활성화. Railway 등에 설정 시에만 검증 */
 app.get("/api/invite/status", (_req, res) => {
   res.json({ required: Boolean(process.env.INVITE_CODE?.trim()) });
@@ -1274,7 +1285,7 @@ app.post("/api/design-editor/replace-image", async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 app.get("/api/admin/runs", async (req, res) => {
-  const auth = requireAdmin(req);
+  const auth = await requireAdmin(req);
   if (!auth.ok) {
     res.status(auth.status).json({ ok: false, error: auth.error });
     return;
@@ -1313,7 +1324,7 @@ app.get("/api/admin/runs", async (req, res) => {
 });
 
 app.post("/api/admin/runs/:id/approve", async (req, res) => {
-  const auth = requireAdmin(req);
+  const auth = await requireAdmin(req);
   if (!auth.ok) {
     res.status(auth.status).json({ ok: false, error: auth.error });
     return;
@@ -1376,7 +1387,7 @@ app.post("/api/admin/runs/:id/approve", async (req, res) => {
 });
 
 app.post("/api/admin/runs/:id/reject", async (req, res) => {
-  const auth = requireAdmin(req);
+  const auth = await requireAdmin(req);
   if (!auth.ok) {
     res.status(auth.status).json({ ok: false, error: auth.error });
     return;
