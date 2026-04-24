@@ -5,7 +5,7 @@ import { InviteCodeScreen } from "@/components/InviteCodeScreen";
 import { OptionSelection } from "@/components/OptionSelection";
 import { BrandInspection } from "@/components/BrandInspection";
 import { BrandNaming } from "@/components/BrandNaming";
-import { FeaturePlaceholder } from "@/components/FeaturePlaceholder";
+import { BrandLibrary } from "@/components/BrandLibrary";
 import { TemplateGallery } from "@/components/TemplateGallery";
 import { DesignEditor } from "@/components/design/DesignEditor";
 import { AdminReview } from "@/components/AdminReview";
@@ -66,7 +66,7 @@ export default function AppGate() {
       <Route path="/dashboard" element={<MyDesignsDashboard />} />
       <Route path="/inspection" element={<BrandInspection />} />
       <Route path="/naming" element={<BrandNaming />} />
-      <Route path="/library" element={<FeaturePlaceholder />} />
+      <Route path="/library" element={<BrandLibrary />} />
       <Route path="/import" element={<ImportViewer />} />
       <Route path="/admin/review" element={<AdminReview />} />
       <Route path="*" element={<Navigate to="/" replace />} />
