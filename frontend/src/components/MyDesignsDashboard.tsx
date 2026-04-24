@@ -6,11 +6,15 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { templates } from "@/design/templates";
 import { toast } from "sonner";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { deleteDesign, listDesignsForUser, requireAuthedUserId, type DesignListItem } from "@/lib/designsApi";
+import { deleteDesign, getDesignById, listDesignsForUser, requireAuthedUserId, type DesignListItem } from "@/lib/designsApi";
+import { DesignCanvas } from "@/components/design/DesignCanvas";
+import type { DesignContent } from "@/design/types";
 
 function templateLabel(templateId: string): string {
   return templates.find((t) => t.id === templateId)?.name ?? templateId;
 }
+
+type DesignWithCanvas = DesignListItem & { canvas_data?: unknown };
 
 export function MyDesignsDashboard() {
   const navigate = useNavigate();
@@ -23,7 +27,7 @@ export function MyDesignsDashboard() {
   }, []);
 
   const [busy, setBusy] = useState(false);
-  const [items, setItems] = useState<DesignListItem[]>([]);
+  const [items, setItems] = useState<DesignWithCanvas[]>([]);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<DesignListItem | null>(null);
@@ -38,7 +42,20 @@ export function MyDesignsDashboard() {
     try {
       const userId = await requireAuthedUserId(sb);
       const out = await listDesignsForUser(sb, { userId });
-      setItems(out);
+      // thumbnail_url이 없는 경우에 대비해, 상위 N개는 canvas_data를 같이 가져와 "내부 캔버스 섬네일"로 렌더
+      const enriched: DesignWithCanvas[] = [...out];
+      const need = enriched.filter((x) => !x.thumbnail_url).slice(0, 12);
+      if (need.length) {
+        const rows = await Promise.all(
+          need.map((it) => getDesignById(sb, { userId, id: it.id }).catch(() => null))
+        );
+        const byId = new Map(rows.filter(Boolean).map((r) => [(r as any).id as string, r as any]));
+        for (const it of enriched) {
+          const row = byId.get(it.id);
+          if (row?.canvas_data != null) it.canvas_data = row.canvas_data;
+        }
+      }
+      setItems(enriched);
     } catch (e) {
       console.error(e);
       const msg =
@@ -129,6 +146,28 @@ export function MyDesignsDashboard() {
                 <div className="aspect-[4/3] w-full bg-gray-50">
                   {it.thumbnail_url ? (
                     <img src={it.thumbnail_url} alt={it.name} className="h-full w-full object-cover" />
+                  ) : it.canvas_data ? (
+                    <div className="h-full w-full pointer-events-none select-none">
+                      <DesignCanvas
+                        content={it.canvas_data as DesignContent}
+                        templateId={it.template_id}
+                        canvasSize={templates.find((t) => t.id === it.template_id)?.size ?? {
+                          width: 1080,
+                          height: 1080,
+                          unit: "px",
+                          name: "Default",
+                        }}
+                        zoom={0.22}
+                        onContentChange={() => {}}
+                        onContentDraftChange={() => {}}
+                        onBeginCanvasTextEdit={() => {}}
+                        onFocusChange={() => {}}
+                        showViGrid={false}
+                        layoutSnapEnabled={false}
+                        onTextFormatTargetChange={() => {}}
+                        onCanvasTextSelectionChanged={() => {}}
+                      />
+                    </div>
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">NO THUMB</div>
                   )}
