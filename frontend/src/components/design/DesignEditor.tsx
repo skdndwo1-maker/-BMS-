@@ -308,11 +308,17 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   };
 
   const openSave = () => {
+    // 모달은 동시에 열리지 않도록 강제
+    setLoadDialogOpen(false);
+    setOverwriteChoiceOpen(false);
     setSaveName(designName?.trim() || formatDefaultDesignName());
     setSaveDialogOpen(true);
   };
 
   const openLoad = async () => {
+    // 모달은 동시에 열리지 않도록 강제
+    setSaveDialogOpen(false);
+    setOverwriteChoiceOpen(false);
     if (!sb) {
       toast.error("Supabase 설정이 필요합니다. (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)");
       return;
@@ -488,11 +494,11 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                 {showPreview ? '편집' : '미리보기'}
               </Button>
 
-              <Button variant="outline" size="sm" onClick={openSave} disabled={saveBusy || bootBusy}>
+              <Button type="button" variant="outline" size="sm" onClick={openSave} disabled={saveBusy || bootBusy}>
                 {saveBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 저장
               </Button>
-              <Button variant="outline" size="sm" onClick={openLoad} disabled={loadBusy || bootBusy}>
+              <Button type="button" variant="outline" size="sm" onClick={openLoad} disabled={loadBusy || bootBusy}>
                 {loadBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 불러오기
               </Button>
