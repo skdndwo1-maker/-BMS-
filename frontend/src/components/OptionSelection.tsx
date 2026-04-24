@@ -237,7 +237,9 @@ export function OptionSelection() {
                   : "권한이 없습니다. 관리자 검토 페이지에서 Admin Key를 입력한 사용자만 접근할 수 있습니다."
               }
               className={`flex items-center gap-2 text-sm transition-colors ${
-                canOpenAdmin ? "text-gray-600 hover:text-gray-900" : "text-gray-300 cursor-not-allowed"
+                canOpenAdmin
+                  ? "text-gray-600 hover:text-gray-900 cursor-pointer"
+                  : "text-gray-300 cursor-not-allowed"
               }`}
             >
               <div
