@@ -492,7 +492,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
             <div className="rounded-xl border border-gray-200 bg-white p-3 space-y-3">
               <div className="space-y-2">
                 <p className="text-[11px] font-semibold text-gray-700">상품 선택</p>
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5">
                   {(["요금제", "모바일서비스", "결합", "요금할인", "로밍"] as const).map((k) => {
                     const active = rcsProduct === k;
                     return (
@@ -503,7 +503,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                           setRcsProduct(k);
                           if (rcsMessageType) applyRcsTitle(rcsTemplates[k][rcsMessageType]);
                         }}
-                        className={`inline-flex items-center justify-center rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                        className={`shrink-0 inline-flex items-center justify-center whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] font-semibold transition-colors ${
                           active
                             ? "border-[#F43182] bg-[#F43182]/10 text-[#F43182]"
                             : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
