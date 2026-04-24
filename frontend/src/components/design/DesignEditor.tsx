@@ -406,6 +406,17 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
 
   const isRcsTemplate = actualTemplateId === "rcs-568x368";
 
+  // RCS 기본 텍스트 스케일: 130% (직접 수정 시 유지)
+  useEffect(() => {
+    if (!isRcsTemplate) return;
+    setContent((prev) => {
+      const next: DesignContent = { ...prev };
+      if (next.titleSize == null) next.titleSize = 130;
+      if (next.bodySize == null) next.bodySize = 130;
+      return next;
+    });
+  }, [isRcsTemplate]);
+
   // ── Canvas ─────────────────────────────────────────────────────
   const renderCanvas = () =>
     isRcsTemplate ? (
@@ -590,42 +601,55 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                           <div className="text-[10px] text-gray-500 font-mono tabular-nums">{content.bodySize ?? 100}%</div>
                         </div>
 
-                        <div className="space-y-2">
-                          <span className="text-[11px] font-semibold text-gray-700">굵기</span>
-                          <div className="grid grid-cols-2 gap-2">
-                            {(["light", "standard", "semi-bold", "bold"] as const).map((w) => {
-                              const activeTitle = (content as any).titleWeight === w;
-                              return (
-                                <button
-                                  key={`title-${w}`}
-                                  type="button"
-                                  onClick={() => setContentWithHistory((prev) => ({ ...(prev as any), titleWeight: w }))}
-                                  className={`rounded-lg border px-2 py-2 text-[11px] font-semibold ${
-                                    activeTitle ? "border-[#F43182] bg-[#F43182]/10 text-[#F43182]" : "border-gray-200 bg-white text-gray-700"
-                                  }`}
-                                >
-                                  타이틀 {w}
-                                </button>
-                              );
-                            })}
-                            {(["light", "standard", "semi-bold", "bold"] as const).map((w) => {
-                              const activeBody = (content as any).bodyWeight === w;
-                              return (
-                                <button
-                                  key={`body-${w}`}
-                                  type="button"
-                                  onClick={() => setContentWithHistory((prev) => ({ ...(prev as any), bodyWeight: w }))}
-                                  className={`rounded-lg border px-2 py-2 text-[11px] font-semibold ${
-                                    activeBody ? "border-[#F43182] bg-[#F43182]/10 text-[#F43182]" : "border-gray-200 bg-white text-gray-700"
-                                  }`}
-                                >
-                                  본문 {w}
-                                </button>
-                              );
-                            })}
+                        <div className="space-y-3">
+                          <div className="space-y-1.5">
+                            <span className="text-[11px] font-semibold text-gray-700">굵기 · Title</span>
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {(["light", "standard", "semi-bold", "bold"] as const).map((w) => {
+                                const active = (content as any).titleWeight === w;
+                                return (
+                                  <button
+                                    key={`title-${w}`}
+                                    type="button"
+                                    onClick={() => setContentWithHistory((prev) => ({ ...(prev as any), titleWeight: w }))}
+                                    className={`rounded-md border px-1.5 py-1 text-[10px] font-semibold ${
+                                      active
+                                        ? "border-[#F43182] bg-[#F43182]/10 text-[#F43182]"
+                                        : "border-gray-200 bg-white text-gray-700"
+                                    }`}
+                                  >
+                                    {w.replace("-", " ")}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
+
+                          <div className="space-y-1.5">
+                            <span className="text-[11px] font-semibold text-gray-700">굵기 · 본문</span>
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {(["light", "standard", "semi-bold", "bold"] as const).map((w) => {
+                                const active = (content as any).bodyWeight === w;
+                                return (
+                                  <button
+                                    key={`body-${w}`}
+                                    type="button"
+                                    onClick={() => setContentWithHistory((prev) => ({ ...(prev as any), bodyWeight: w }))}
+                                    className={`rounded-md border px-1.5 py-1 text-[10px] font-semibold ${
+                                      active
+                                        ? "border-[#F43182] bg-[#F43182]/10 text-[#F43182]"
+                                        : "border-gray-200 bg-white text-gray-700"
+                                    }`}
+                                  >
+                                    {w.replace("-", " ")}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
                           <p className="text-[10px] text-gray-500 leading-snug">
-                            RCS는 캔버스 텍스트 박스 선택 방식이 아닌, 크기/굵기 옵션으로 조절합니다.
+                            RCS는 크기/굵기 옵션으로 조절합니다.
                           </p>
                         </div>
                       </div>
