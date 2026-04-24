@@ -147,9 +147,9 @@ export function MyDesignsDashboard() {
                       onClick={() =>
                         navigate(`/create/${it.template_id}?designId=${encodeURIComponent(it.id)}`)
                       }
-                      className="gap-2"
+                      className="h-8 px-2 text-xs gap-1.5"
                     >
-                      <Pencil className="h-4 w-4" />
+                      <Pencil className="h-3.5 w-3.5" />
                       이어서 편집
                     </Button>
                     <Button
@@ -157,9 +157,9 @@ export function MyDesignsDashboard() {
                       type="button"
                       variant="outline"
                       onClick={() => askDelete(it)}
-                      className="gap-2"
+                      className="h-8 px-2 text-xs gap-1.5"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5" />
                       삭제
                     </Button>
                   </div>

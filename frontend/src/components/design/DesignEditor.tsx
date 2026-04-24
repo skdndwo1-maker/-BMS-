@@ -187,6 +187,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   const [zoom,                 setZoom]                  = useState(getInitialZoom());
   /** VI 12분할 정렬 그리드 (캔버스 위 오버레이) */
   const [showViGrid, setShowViGrid] = useState(true);
+  const prevShowViGridRef = useRef<boolean>(true);
   /** VI 격자에 맞춘 요소 스냅 (끄면 1px 단위 이동) */
   const [layoutSnapEnabled, setLayoutSnapEnabled] = useState(true);
 
@@ -197,6 +198,21 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   useEffect(() => {
     if (textFormatTarget) setTextOptionsPanelOpen(true);
   }, [textFormatTarget]);
+
+  // 저장/불러오기 다이얼로그가 열리면 캔버스 VI 그리드를 숨겨 "후면 그리드 패턴"이 비치지 않게 함
+  useEffect(() => {
+    const dialogOpen = activeDialog !== "none";
+    if (dialogOpen) {
+      prevShowViGridRef.current = showViGrid;
+      if (showViGrid) setShowViGrid(false);
+      return;
+    }
+    // 다이얼로그가 닫히면 이전 상태 복원
+    if (prevShowViGridRef.current !== showViGrid) {
+      setShowViGrid(prevShowViGridRef.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDialog]);
 
   // designId로 진입 시 Supabase에서 자동 복원
   useEffect(() => {
