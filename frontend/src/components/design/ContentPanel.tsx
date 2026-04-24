@@ -26,6 +26,7 @@ import { ILLUSTRATION_PRESETS, PICTOGRAM_PRESETS, filterAssetPresets } from "@/d
 import { AssetPresetPickerDialog } from "@/components/design/AssetPresetPickerDialog";
 import { templates as allDesignTemplates } from "@/design/templates";
 import { resolvePosterBodyBlocksForRender, applyBodyBlockTextEdit } from "@/design/posterBodyDisplay";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface ContentPanelProps {
   content: DesignContent;
@@ -91,6 +92,39 @@ const POSTER_CATEGORIES: {
   { key: "promotion", label: "프로모션", emoji: "🎁", color: "#F43182", preset: { backgroundColor: "#F43182", titleColor: "#FFFFFF", subtitle: "특별 혜택", title: "특별 혜택을 드립니다.", bodyText: "가입 즉시 혜택 제공\n최대 할인\n사은품 증정", emphasizedTitle: "※ 본 프로모션은 기간 한정으로 조기 종료될 수 있습니다." } },
   { key: "plan-benefit", label: "요금&혜택", emoji: "💰", color: "#8B5CF6", preset: { backgroundColor: "#FFF0F5", titleColor: "#1A1A1A", subtitle: "요금 안내", title: "합리적인 요금제.", bodyText: "월 요금부터\n데이터 혜택\n가족 결합 할인", emphasizedTitle: "※ 부가세 포함 금액이며 약정 조건에 따라 상이합니다." } },
 ];
+
+const rcsTemplates = {
+  요금제: {
+    가입안내: "요금제 가입 환영해요",
+    해지안내: "아쉽지만 또 만나요",
+    "서비스 종료안내": "요금제 이용이 곧 종료됩니다",
+    혜택안내: "함께하면 더 특별한 요금제 혜택",
+  },
+  모바일서비스: {
+    가입안내: "모바일 서비스 가입을 환영해요",
+    해지안내: "다음에 또 만나요",
+    "서비스 종료안내": "모바일 서비스 이용이 곧 종료됩니다",
+    혜택안내: "유플러스 사전예약 혜택 5.14(화)~5.20(화)",
+  },
+  결합: {
+    가입안내: "이제 함께 할인받을 수 있어요",
+    해지안내: "아쉽지만 또 만나요",
+    "서비스 종료안내": "결합 이용이 곧 종료됩니다",
+    혜택안내: "가족과 함께하면 네이버페이 100% 증정!",
+  },
+  요금할인: {
+    가입안내: "요금부담을 덜었어요",
+    해지안내: "아쉽지만 또 만나요",
+    "서비스 종료안내": "요금할인 이용이 곧 종료됩니다",
+    혜택안내: "쓰던 폰 그대로, 가족 모두 할인",
+  },
+  로밍: {
+    가입안내: "로밍 가입을 환영해요",
+    해지안내: "안전한 귀국길 되셨나요?",
+    "서비스 종료안내": "로밍 이용이 곧 종료됩니다",
+    혜택안내: "밝은 여행길을 위해, 데이터 2배 증정 혜택",
+  },
+} as const;
 
 function normalizePosterCategory(k: string | undefined): PosterCategory {
   if (!k) return "basic";
@@ -165,10 +199,28 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const isRcs = templateMeta?.category === "rcs";
   const assetLayers   = content.assetLayers ?? [];
 
+  // RCS 20종 문구 선택 UI (우측 패널 전용)
+  const [rcsProduct, setRcsProduct] = useState<keyof typeof rcsTemplates | null>(null);
+  const [rcsMessageType, setRcsMessageType] = useState<keyof (typeof rcsTemplates)["요금제"] | null>(null);
+  const [rcsConfirmOpen, setRcsConfirmOpen] = useState(false);
+  const rcsCanApply = Boolean(rcsProduct && rcsMessageType);
+  const rcsNextTitle = rcsCanApply ? rcsTemplates[rcsProduct!][rcsMessageType!] : "";
+
   const onAssetDrop = useCallback((files: File[], type: AssetType) => {
     const newAssets = files.map(f => createAssetLayer(URL.createObjectURL(f), type, f.name));
     onContentChange({ ...content, assetLayers: [...assetLayers, ...newAssets] });
   }, [content, assetLayers, onContentChange]);
+
+  const applyRcsTitle = (nextTitle: string) => {
+    const t = (nextTitle ?? "").trim();
+    if (!t.length) return;
+    const cur = (content.title ?? "").trim();
+    if (cur.length && cur !== t) {
+      setRcsConfirmOpen(true);
+      return;
+    }
+    onContentChange({ ...content, title: t });
+  };
 
   const { getRootProps:getImageRP,  getInputProps:getImageIP,  isDragActive:isImageDrag  } = useDropzone({ onDrop:(f)=>{ if(f[0]){
     onContentChange({
@@ -428,37 +480,158 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         )}
 
         {/* 카테고리 */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label className="text-sm font-semibold text-gray-700">템플릿 카테고리</Label>
-            <button onClick={()=>setShowCategoryPalette(!showCategoryPalette)} className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
-              {showCategoryPalette?<ChevronUp className="w-3.5 h-3.5"/>:<ChevronDown className="w-3.5 h-3.5"/>}{showCategoryPalette?'닫기':'변경'}
-            </button>
-          </div>
-          <div className="flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 cursor-pointer transition-all" style={{borderColor:currentCat.color,backgroundColor:`${currentCat.color}10`}} onClick={()=>setShowCategoryPalette(!showCategoryPalette)}>
-            <span className="text-lg">{currentCat.emoji}</span>
-            <div><p className="text-sm font-bold" style={{color:currentCat.color}}>{currentCat.label}</p><p className="text-[10px] text-gray-400">클릭하여 카테고리 변경</p></div>
-            <ChevronDown className="w-4 h-4 ml-auto text-gray-400"/>
-          </div>
-          {showCategoryPalette&&(
-            <div className="border border-gray-200 rounded-xl p-3 bg-gray-50 space-y-2">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">카테고리 선택</p>
-              {POSTER_CATEGORIES.map((cat)=>{
-                const isActive=normalizePosterCategory(content.posterCategory)===cat.key;
-                return (
-                  <button key={cat.key} onClick={()=>handleCategorySelect(cat)}
-                    className={`w-full flex items-center gap-3 rounded-lg border-2 px-3 py-2.5 text-left transition-all ${isActive?'shadow-sm':'border-gray-200 hover:border-gray-300 bg-white'}`}
-                    style={isActive?{borderColor:cat.color,backgroundColor:`${cat.color}10`}:{}}>
-                    <span className="text-xl">{cat.emoji}</span>
-                    <div className="flex-1"><p className="text-sm font-bold" style={{color:isActive?cat.color:'#374151'}}>{cat.label}</p><p className="text-[10px] text-gray-400">{cat.key==='basic'?'기본 빈 양식':cat.key==='notice'?'공지·안내 문구':cat.key==='new-product'?'신제품 런칭':cat.key==='promotion'?'이벤트 및 프로모션':'요금제 및 혜택 안내'}</p></div>
-                    {isActive&&<span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{background:`${cat.color}20`,color:cat.color}}>선택됨</span>}
-                  </button>
-                );
-              })}
-              <p className="text-[10px] text-gray-400 mt-2">※ 선택 시 샘플 텍스트와 색상이 자동 적용됩니다</p>
+        {isRcs ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-semibold text-gray-700">템플릿 카테고리</Label>
+              <span className="text-[10px] font-medium text-[#F43182] bg-[#F43182]/10 border border-[#F43182]/20 rounded-full px-2 py-0.5">
+                RCS 전용
+              </span>
             </div>
-          )}
-        </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-3 space-y-3">
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-gray-700">상품 선택</p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(["요금제", "모바일서비스", "결합", "요금할인", "로밍"] as const).map((k) => {
+                    const active = rcsProduct === k;
+                    return (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => {
+                          setRcsProduct(k);
+                          if (rcsMessageType) applyRcsTitle(rcsTemplates[k][rcsMessageType]);
+                        }}
+                        className={`inline-flex items-center justify-center rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                          active
+                            ? "border-[#F43182] bg-[#F43182]/10 text-[#F43182]"
+                            : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                        }`}
+                      >
+                        {k}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-gray-700">메시지 유형</p>
+                <div className="grid grid-cols-1 gap-2 min-w-0">
+                  {(["가입안내", "해지안내", "서비스 종료안내", "혜택안내"] as const).map((k) => {
+                    const active = rcsMessageType === k;
+                    return (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => {
+                          setRcsMessageType(k);
+                          if (rcsProduct) applyRcsTitle(rcsTemplates[rcsProduct][k]);
+                        }}
+                        className={`w-full min-w-0 rounded-xl border-2 p-2.5 text-left transition-all ${
+                          active ? "border-[#F43182] bg-[#F43182]/6" : "border-gray-200 bg-white hover:border-gray-300"
+                        }`}
+                      >
+                        <div className={`text-[12px] font-semibold ${active ? "text-[#F43182]" : "text-gray-800"}`}>
+                          {k}
+                        </div>
+                        <div className="mt-0.5 text-[10px] text-gray-400 break-words whitespace-normal">
+                          {rcsProduct ? rcsTemplates[rcsProduct][k] : "상품을 먼저 선택하세요"}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 flex-1 text-[12px]"
+                  onClick={() => {
+                    setRcsProduct(null);
+                    setRcsMessageType(null);
+                  }}
+                >
+                  선택 초기화
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 flex-1 text-[12px]"
+                  disabled={!rcsCanApply}
+                  onClick={() => applyRcsTitle(rcsNextTitle)}
+                >
+                  적용
+                </Button>
+              </div>
+            </div>
+
+            <Dialog open={rcsConfirmOpen} onOpenChange={setRcsConfirmOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>메인 타이틀을 교체할까요?</DialogTitle>
+                  <DialogDescription>기존 타이틀이 있습니다. 적용하면 선택한 문구로 교체됩니다.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-[11px] font-semibold text-gray-700">적용될 문구</p>
+                  <p className="text-sm font-semibold text-gray-900">{rcsNextTitle}</p>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setRcsConfirmOpen(false)}>
+                    취소
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setRcsConfirmOpen(false);
+                      if (!rcsCanApply) return;
+                      onContentChange({ ...content, title: rcsNextTitle });
+                    }}
+                    disabled={!rcsCanApply}
+                  >
+                    교체 적용
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-semibold text-gray-700">템플릿 카테고리</Label>
+              <button onClick={()=>setShowCategoryPalette(!showCategoryPalette)} className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
+                {showCategoryPalette?<ChevronUp className="w-3.5 h-3.5"/>:<ChevronDown className="w-3.5 h-3.5"/>}{showCategoryPalette?'닫기':'변경'}
+              </button>
+            </div>
+            <div className="flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 cursor-pointer transition-all" style={{borderColor:currentCat.color,backgroundColor:`${currentCat.color}10`}} onClick={()=>setShowCategoryPalette(!showCategoryPalette)}>
+              <span className="text-lg">{currentCat.emoji}</span>
+              <div><p className="text-sm font-bold" style={{color:currentCat.color}}>{currentCat.label}</p><p className="text-[10px] text-gray-400">클릭하여 카테고리 변경</p></div>
+              <ChevronDown className="w-4 h-4 ml-auto text-gray-400"/>
+            </div>
+            {showCategoryPalette&&(
+              <div className="border border-gray-200 rounded-xl p-3 bg-gray-50 space-y-2">
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">카테고리 선택</p>
+                {POSTER_CATEGORIES.map((cat)=>{
+                  const isActive=normalizePosterCategory(content.posterCategory)===cat.key;
+                  return (
+                    <button key={cat.key} onClick={()=>handleCategorySelect(cat)}
+                      className={`w-full flex items-center gap-3 rounded-lg border-2 px-3 py-2.5 text-left transition-all ${isActive?'shadow-sm':'border-gray-200 hover:border-gray-300 bg-white'}`}
+                      style={isActive?{borderColor:cat.color,backgroundColor:`${cat.color}10`}:{}}>
+                      <span className="text-xl">{cat.emoji}</span>
+                      <div className="flex-1"><p className="text-sm font-bold" style={{color:isActive?cat.color:'#374151'}}>{cat.label}</p><p className="text-[10px] text-gray-400">{cat.key==='basic'?'기본 빈 양식':cat.key==='notice'?'공지·안내 문구':cat.key==='new-product'?'신제품 런칭':cat.key==='promotion'?'이벤트 및 프로모션':'요금제 및 혜택 안내'}</p></div>
+                      {isActive&&<span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{background:`${cat.color}20`,color:cat.color}}>선택됨</span>}
+                    </button>
+                  );
+                })}
+                <p className="text-[10px] text-gray-400 mt-2">※ 선택 시 샘플 텍스트와 색상이 자동 적용됩니다</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 현수막(placard): 분할영역 배경 옵션을 템플릿 카테고리 바로 아래로 이동 */}
         {isPlacard ? (
@@ -910,12 +1083,14 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           </div>
         ) : null}
 
-        {/* 로고 */}
-        <div ref={refLogo} className="border-t border-gray-100 pt-4 space-y-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">브랜드 로고</p>
-          <LogoSelector/>
-          {!isPlacard && !isRcs ? <LogoPositionSelector/> : null}
-        </div>
+        {/* 로고 (RCS에서는 제거) */}
+        {!isRcs ? (
+          <div ref={refLogo} className="border-t border-gray-100 pt-4 space-y-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">브랜드 로고</p>
+            <LogoSelector/>
+            {!isPlacard ? <LogoPositionSelector/> : null}
+          </div>
+        ) : null}
 
         {/* 이미지 (RCS: 업로드 옵션 제거) */}
         {!isRcs ? (
@@ -984,8 +1159,8 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         </div>
         ) : null}
 
-        {/* 모든 템플릿: 이미지 옵션 아래 배경 라운드 박스 */}
-        {(
+        {/* 모든 템플릿: 이미지 옵션 아래 배경 라운드 박스 (RCS에서는 제거) */}
+        {!isRcs ? (
           <div className="border-t border-gray-100 pt-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
@@ -1069,7 +1244,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               <p className="text-xs text-gray-400">+추가를 눌러 캔버스에 라운드 박스를 생성하세요.</p>
             )}
           </div>
-        )}
+        ) : null}
 
         <AssetSection/>
 

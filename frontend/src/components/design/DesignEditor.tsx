@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { templates } from "@/design/templates";
 import type { DesignContent } from "@/design/types";
@@ -49,39 +49,6 @@ function getInitialZoom(): number {
   return 1.0;
 }
 
-const rcsTemplates = {
-  요금제: {
-    가입안내: "요금제 가입 환영해요",
-    해지안내: "아쉽지만 또 만나요",
-    "서비스 종료안내": "요금제 이용이 곧 종료됩니다",
-    혜택안내: "함께하면 더 특별한 요금제 혜택",
-  },
-  모바일서비스: {
-    가입안내: "모바일 서비스 가입을 환영해요",
-    해지안내: "다음에 또 만나요",
-    "서비스 종료안내": "모바일 서비스 이용이 곧 종료됩니다",
-    혜택안내: "유플러스 사전예약 혜택 5.14(화)~5.20(화)",
-  },
-  결합: {
-    가입안내: "이제 함께 할인받을 수 있어요",
-    해지안내: "아쉽지만 또 만나요",
-    "서비스 종료안내": "결합 이용이 곧 종료됩니다",
-    혜택안내: "가족과 함께하면 네이버페이 100% 증정!",
-  },
-  요금할인: {
-    가입안내: "요금부담을 덜었어요",
-    해지안내: "아쉽지만 또 만나요",
-    "서비스 종료안내": "요금할인 이용이 곧 종료됩니다",
-    혜택안내: "쓰던 폰 그대로, 가족 모두 할인",
-  },
-  로밍: {
-    가입안내: "로밍 가입을 환영해요",
-    해지안내: "안전한 귀국길 되셨나요?",
-    "서비스 종료안내": "로밍 이용이 곧 종료됩니다",
-    혜택안내: "밝은 여행길을 위해, 데이터 2배 증정 혜택",
-  },
-} as const;
-
 export function DesignEditor({ templateId }: DesignEditorProps) {
   const navigate = useNavigate();
   const params = useParams();
@@ -109,13 +76,6 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
 
   const [bootBusy, setBootBusy] = useState(false);
 
-  // RCS 템플릿 20종 선택 UI (좌측 패널 전용)
-  const [rcsProduct, setRcsProduct] = useState<keyof typeof rcsTemplates | null>(null);
-  const [rcsMessageType, setRcsMessageType] = useState<keyof (typeof rcsTemplates)["요금제"] | null>(null);
-  const [rcsConfirmOpen, setRcsConfirmOpen] = useState(false);
-
-  const rcsCanApply = Boolean(rcsProduct && rcsMessageType);
-  const rcsNextTitle = rcsCanApply ? rcsTemplates[rcsProduct!][rcsMessageType!] : "";
 
   function formatDefaultDesignName(): string {
     const base = template?.name?.trim() || (actualTemplateId ?? "디자인");
@@ -209,19 +169,6 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     });
   };
 
-  const tryApplyRcsTitle = useCallback(
-    (nextTitle: string) => {
-      if (!nextTitle.trim()) return;
-      const current = (content.title ?? "").trim();
-      const hasExisting = Boolean(current);
-      if (hasExisting && current !== nextTitle.trim()) {
-        setRcsConfirmOpen(true);
-        return;
-      }
-      setContentWithHistory((prev) => ({ ...prev, title: nextTitle }));
-    },
-    [content.title, setContentWithHistory]
-  );
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -614,101 +561,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                   Shift+클릭으로 여러 요소를 추가·해제해 함께 이동·정렬할 수 있습니다. 빈 배경을 클릭하면 선택이 해제됩니다.
                 </p>
 
-                {isRcsTemplate ? (
-                  <div className="mt-2 rounded-xl border border-gray-200 bg-white p-3 space-y-3">
-                    <div className="space-y-2">
-                      <p className="text-[11px] font-semibold text-gray-700">RCS 템플릿 카테고리</p>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {(
-                          ["요금제", "모바일서비스", "결합", "요금할인", "로밍"] as const
-                        ).map((k) => {
-                          const active = rcsProduct === k;
-                          return (
-                            <button
-                              key={k}
-                              type="button"
-                              onClick={() => {
-                                setRcsProduct(k);
-                                if (rcsMessageType) {
-                                  tryApplyRcsTitle(rcsTemplates[k][rcsMessageType]);
-                                }
-                              }}
-                              className={`inline-flex items-center justify-center rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-                                active
-                                  ? "border-[#F43182] bg-[#F43182]/10 text-[#F43182]"
-                                  : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-                              }`}
-                            >
-                              {k}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <p className="text-[11px] font-semibold text-gray-700">메시지 유형</p>
-                      <div className="grid grid-cols-1 gap-2 min-w-0">
-                        {(
-                          ["가입안내", "해지안내", "서비스 종료안내", "혜택안내"] as const
-                        ).map((k) => {
-                          const active = rcsMessageType === k;
-                          return (
-                            <button
-                              key={k}
-                              type="button"
-                              onClick={() => {
-                                setRcsMessageType(k);
-                                if (rcsProduct) {
-                                  tryApplyRcsTitle(rcsTemplates[rcsProduct][k]);
-                                }
-                              }}
-                              className={`w-full min-w-0 rounded-xl border-2 p-2.5 text-left transition-all ${
-                                active
-                                  ? "border-[#F43182] bg-[#F43182]/6"
-                                  : "border-gray-200 bg-white hover:border-gray-300"
-                              }`}
-                            >
-                              <div className={`text-[12px] font-semibold ${active ? "text-[#F43182]" : "text-gray-800"}`}>
-                                {k}
-                              </div>
-                              <div className="mt-0.5 text-[10px] text-gray-400 break-words whitespace-normal">
-                                {rcsProduct ? rcsTemplates[rcsProduct][k] : "상품을 먼저 선택하세요"}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 flex-1 text-[12px]"
-                        onClick={() => {
-                          setRcsProduct(null);
-                          setRcsMessageType(null);
-                        }}
-                      >
-                        선택 초기화
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="h-8 flex-1 text-[12px]"
-                        disabled={!rcsCanApply}
-                        onClick={() => {
-                          if (!rcsCanApply) return;
-                          tryApplyRcsTitle(rcsNextTitle);
-                        }}
-                      >
-                        적용
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
+                {null}
               </div>
             </div>
           )}
@@ -972,38 +825,6 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
           onOpenChange={setShowQuickStartDialog}
           onLoadDemo={handleLoadDemo}
         />
-
-        {/* ── RCS apply confirm ────────────────────────────────────── */}
-        <Dialog open={rcsConfirmOpen} onOpenChange={setRcsConfirmOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>메인 타이틀을 교체할까요?</DialogTitle>
-              <DialogDescription>
-                기존에 입력된 메인 타이틀이 있습니다. 적용하면 선택한 템플릿 문구로 교체됩니다.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
-              <p className="text-[11px] font-semibold text-gray-700">적용될 문구</p>
-              <p className="text-sm font-semibold text-gray-900">{rcsNextTitle}</p>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setRcsConfirmOpen(false)}>
-                취소
-              </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  setRcsConfirmOpen(false);
-                  if (!rcsCanApply) return;
-                  setContentWithHistory((prev) => ({ ...prev, title: rcsNextTitle }));
-                }}
-                disabled={!rcsCanApply}
-              >
-                교체 적용
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         {/* ── Status Bar ──────────────────────────────────────────── */}
         <div className="flex flex-shrink-0 items-center justify-between border-t border-gray-200 bg-white px-4 py-2 text-xs text-gray-500">
