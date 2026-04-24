@@ -66,12 +66,10 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   const [designId, setDesignId] = useState<string | null>(null);
   const [designName, setDesignName] = useState<string>("");
 
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [activeDialog, setActiveDialog] = useState<"none" | "save" | "load">( "none");
   const [saveName, setSaveName] = useState("");
   const [saveBusy, setSaveBusy] = useState(false);
-  const [overwriteChoiceOpen, setOverwriteChoiceOpen] = useState(false);
 
-  const [loadDialogOpen, setLoadDialogOpen] = useState(false);
   const [loadBusy, setLoadBusy] = useState(false);
   const [loadItems, setLoadItems] = useState<DesignListItem[]>([]);
 
@@ -308,22 +306,16 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   };
 
   const openSave = () => {
-    // 모달은 동시에 열리지 않도록 강제
-    setLoadDialogOpen(false);
-    setOverwriteChoiceOpen(false);
+    setActiveDialog("save");
     setSaveName(designName?.trim() || formatDefaultDesignName());
-    setSaveDialogOpen(true);
   };
 
   const openLoad = async () => {
-    // 모달은 동시에 열리지 않도록 강제
-    setSaveDialogOpen(false);
-    setOverwriteChoiceOpen(false);
     if (!sb) {
       toast.error("Supabase 설정이 필요합니다. (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)");
       return;
     }
-    setLoadDialogOpen(true);
+    setActiveDialog("load");
     setLoadBusy(true);
     try {
       const userId = await ensureUserId();
@@ -339,7 +331,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
             : "불러오기 목록 조회에 실패했습니다.";
       toast.error(msg);
       if (msg.includes("로그인")) navigate("/", { replace: false });
-      setLoadDialogOpen(false);
+      setActiveDialog("none");
     } finally {
       setLoadBusy(false);
     }
@@ -620,12 +612,12 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
           )}
         </div>
 
-        {/* ── Save: 이름 입력 ───────────────────────────────────────── */}
-        <Dialog open={saveDialogOpen} onOpenChange={(o) => (saveBusy ? null : setSaveDialogOpen(o))}>
-          <DialogContent className="sm:max-w-md">
+        {/* ── Save ─────────────────────────────────────────────────── */}
+        <Dialog open={activeDialog === "save"} onOpenChange={(o) => (saveBusy ? null : setActiveDialog(o ? "save" : "none"))}>
+          <DialogContent className="sm:max-w-xl">
             <DialogHeader>
               <DialogTitle>저장하기</DialogTitle>
-              <DialogDescription>디자인 이름을 입력해 저장합니다.</DialogDescription>
+              <DialogDescription>디자인 이름을 입력하고 저장 방식을 선택하세요.</DialogDescription>
             </DialogHeader>
             <div className="space-y-2">
               <Label htmlFor="design-save-name">이름</Label>
@@ -641,27 +633,22 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setSaveDialogOpen(false)}
+                onClick={() => setActiveDialog("none")}
                 disabled={saveBusy}
               >
                 취소
               </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  const name = saveName.trim() || formatDefaultDesignName();
-                  setSaveName(name);
-                  setSaveDialogOpen(false);
-                  if (!sb) {
-                    toast.error("Supabase 설정이 필요합니다. (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)");
-                    return;
-                  }
-                  if (designId) {
-                    setOverwriteChoiceOpen(true);
-                  } else {
+              {designId ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    const name = saveName.trim() || formatDefaultDesignName();
+                    setSaveName(name);
                     void (async () => {
                       try {
                         await doSaveNew(name);
+                        setActiveDialog("none");
                       } catch (e) {
                         console.error(e);
                         const msg =
@@ -674,61 +661,27 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                         if (msg.includes("로그인")) navigate("/", { replace: false });
                       }
                     })();
+                  }}
+                  disabled={saveBusy}
+                >
+                  {saveBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  새로 저장
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                onClick={() => {
+                  const name = saveName.trim() || formatDefaultDesignName();
+                  setSaveName(name);
+                  if (!sb) {
+                    toast.error("Supabase 설정이 필요합니다. (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)");
+                    return;
                   }
-                }}
-                disabled={saveBusy}
-              >
-                {saveBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                저장
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* ── Save: 새로 저장 / 덮어쓰기 선택 ───────────────────────── */}
-        <Dialog open={overwriteChoiceOpen} onOpenChange={(o) => (saveBusy ? null : setOverwriteChoiceOpen(o))}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>이미 저장된 디자인입니다</DialogTitle>
-              <DialogDescription>새로 저장하거나 기존 저장본에 덮어쓸 수 있습니다.</DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setOverwriteChoiceOpen(false)}
-                disabled={saveBusy}
-              >
-                취소
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  const name = saveName.trim() || formatDefaultDesignName();
                   void (async () => {
                     try {
-                      setOverwriteChoiceOpen(false);
-                      await doSaveNew(name);
-                    } catch (e) {
-                      console.error(e);
-                      toast.error(e instanceof Error ? e.message : "저장에 실패했습니다.");
-                    }
-                  })();
-                }}
-                disabled={saveBusy}
-              >
-                {saveBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                새로 저장
-              </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  const name = saveName.trim() || formatDefaultDesignName();
-                  void (async () => {
-                    try {
-                      setOverwriteChoiceOpen(false);
-                      await doSaveOverwrite(name);
+                      if (designId) await doSaveOverwrite(name);
+                      else await doSaveNew(name);
+                      setActiveDialog("none");
                     } catch (e) {
                       console.error(e);
                       const msg =
@@ -736,7 +689,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                           ? "로그인이 필요합니다."
                           : e instanceof Error
                             ? e.message
-                            : "덮어쓰기에 실패했습니다.";
+                            : "저장에 실패했습니다.";
                       toast.error(msg);
                       if (msg.includes("로그인")) navigate("/", { replace: false });
                     }
@@ -745,20 +698,20 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                 disabled={saveBusy}
               >
                 {saveBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                덮어쓰기
+                {designId ? "덮어쓰기" : "저장"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* ── Load: 목록 ───────────────────────────────────────────── */}
-        <Dialog open={loadDialogOpen} onOpenChange={(o) => (loadBusy ? null : setLoadDialogOpen(o))}>
-          <DialogContent className="sm:max-w-3xl">
+        {/* ── Load ─────────────────────────────────────────────────── */}
+        <Dialog open={activeDialog === "load"} onOpenChange={(o) => (loadBusy ? null : setActiveDialog(o ? "load" : "none"))}>
+          <DialogContent className="sm:max-w-4xl">
             <DialogHeader>
               <DialogTitle>불러오기</DialogTitle>
               <DialogDescription>저장된 디자인을 선택해 현재 캔버스에 복원합니다.</DialogDescription>
             </DialogHeader>
-            <div className="max-h-[60vh] overflow-y-auto">
+            <div className="max-h-[70vh] overflow-y-auto pr-1">
               {loadBusy ? (
                 <div className="flex items-center justify-center py-10 text-sm text-gray-500">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -767,12 +720,12 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
               ) : loadItems.length === 0 ? (
                 <div className="py-10 text-center text-sm text-gray-500">저장된 항목이 없습니다.</div>
               ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {loadItems.map((it) => (
                     <button
                       key={it.id}
                       type="button"
-                      className="group flex w-full items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 text-left hover:border-[#F43182] hover:bg-pink-50/20 transition"
+                      className="group flex w-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm hover:border-[#F43182] hover:shadow-md transition"
                       onClick={() => {
                         if (!sb) return;
                         void (async () => {
@@ -793,7 +746,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                             });
                             setContentWithHistory(() => row.canvas_data as DesignContent);
                             toast.success("불러오기 완료");
-                            setLoadDialogOpen(false);
+                            setActiveDialog("none");
                           } catch (e) {
                             console.error(e);
                             const msg =
@@ -810,18 +763,16 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                         })();
                       }}
                     >
-                      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
+                      <div className="aspect-[4/3] w-full bg-gray-50">
                         {it.thumbnail_url ? (
                           <img src={it.thumbnail_url} alt={it.name} className="h-full w-full object-cover" />
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center text-[10px] text-gray-400">
-                            NO THUMB
-                          </div>
+                          <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">NO THUMB</div>
                         )}
                       </div>
-                      <div className="min-w-0 flex-1">
+                      <div className="w-full p-3">
                         <div className="truncate text-sm font-semibold text-gray-900">{it.name}</div>
-                        <div className="mt-0.5 text-xs text-gray-500">
+                        <div className="mt-1 text-xs text-gray-500">
                           {new Date(it.updated_at || it.created_at).toLocaleString()}
                         </div>
                       </div>
@@ -831,7 +782,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
               )}
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setLoadDialogOpen(false)} disabled={loadBusy}>
+              <Button type="button" variant="outline" onClick={() => setActiveDialog("none")} disabled={loadBusy}>
                 닫기
               </Button>
             </DialogFooter>
