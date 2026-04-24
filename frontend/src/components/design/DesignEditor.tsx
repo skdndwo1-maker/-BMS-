@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { templates } from "@/design/templates";
 import type { DesignContent } from "@/design/types";
@@ -208,6 +208,20 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
       return resolved;
     });
   };
+
+  const tryApplyRcsTitle = useCallback(
+    (nextTitle: string) => {
+      if (!nextTitle.trim()) return;
+      const current = (content.title ?? "").trim();
+      const hasExisting = Boolean(current);
+      if (hasExisting && current !== nextTitle.trim()) {
+        setRcsConfirmOpen(true);
+        return;
+      }
+      setContentWithHistory((prev) => ({ ...prev, title: nextTitle }));
+    },
+    [content.title, setContentWithHistory]
+  );
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -613,7 +627,12 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                             <button
                               key={k}
                               type="button"
-                              onClick={() => setRcsProduct(k)}
+                              onClick={() => {
+                                setRcsProduct(k);
+                                if (rcsMessageType) {
+                                  tryApplyRcsTitle(rcsTemplates[k][rcsMessageType]);
+                                }
+                              }}
                               className={`inline-flex items-center justify-center rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
                                 active
                                   ? "border-[#F43182] bg-[#F43182]/10 text-[#F43182]"
@@ -629,7 +648,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
 
                     <div className="space-y-2">
                       <p className="text-[11px] font-semibold text-gray-700">메시지 유형</p>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 gap-2 min-w-0">
                         {(
                           ["가입안내", "해지안내", "서비스 종료안내", "혜택안내"] as const
                         ).map((k) => {
@@ -638,8 +657,13 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                             <button
                               key={k}
                               type="button"
-                              onClick={() => setRcsMessageType(k)}
-                              className={`rounded-xl border-2 p-2.5 text-left transition-all ${
+                              onClick={() => {
+                                setRcsMessageType(k);
+                                if (rcsProduct) {
+                                  tryApplyRcsTitle(rcsTemplates[rcsProduct][k]);
+                                }
+                              }}
+                              className={`w-full min-w-0 rounded-xl border-2 p-2.5 text-left transition-all ${
                                 active
                                   ? "border-[#F43182] bg-[#F43182]/6"
                                   : "border-gray-200 bg-white hover:border-gray-300"
@@ -648,7 +672,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                               <div className={`text-[12px] font-semibold ${active ? "text-[#F43182]" : "text-gray-800"}`}>
                                 {k}
                               </div>
-                              <div className="mt-0.5 text-[10px] text-gray-400 truncate">
+                              <div className="mt-0.5 text-[10px] text-gray-400 break-words whitespace-normal">
                                 {rcsProduct ? rcsTemplates[rcsProduct][k] : "상품을 먼저 선택하세요"}
                               </div>
                             </button>
@@ -677,12 +701,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                         disabled={!rcsCanApply}
                         onClick={() => {
                           if (!rcsCanApply) return;
-                          const hasExisting = Boolean(content.title?.trim());
-                          if (hasExisting && content.title.trim() !== rcsNextTitle.trim()) {
-                            setRcsConfirmOpen(true);
-                            return;
-                          }
-                          setContentWithHistory((prev) => ({ ...prev, title: rcsNextTitle }));
+                          tryApplyRcsTitle(rcsNextTitle);
                         }}
                       >
                         적용
