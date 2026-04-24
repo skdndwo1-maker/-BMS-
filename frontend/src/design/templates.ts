@@ -39,12 +39,12 @@ export const templates: Template[] = [
     mediaType: 'online',
   },
 
-  // RCS (Online) — MMS/RCS 헤더 카드 이미지 (기본 568×368px)
+  // RCS (Online) — MMS/RCS 헤더 카드 이미지 (기본 568×338px)
   {
     id: 'rcs-568x368',
-    name: 'RCS (568×368)',
+    name: 'RCS (568×338)',
     category: 'rcs',
-    size: { width: 568, height: 368, unit: 'px', name: '568x368' },
+    size: { width: 568, height: 338, unit: 'px', name: '568x338' },
     thumbnail: '',
     description: 'MMS/RCS 메시지 상단에 먼저 표시되는 헤더 카드 이미지',
     mediaType: 'online',

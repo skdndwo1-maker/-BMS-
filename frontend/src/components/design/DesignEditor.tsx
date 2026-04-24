@@ -405,6 +405,16 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   };
 
   const isRcsTemplate = actualTemplateId === "rcs-568x368";
+  const rcsMessageType = (content as any)?.rcsMessageType as string | undefined;
+  const effectiveCanvasSize = useMemo(() => {
+    if (!isRcsTemplate) return template.size;
+    const isBenefitInfo = rcsMessageType === "혜택안내";
+    return {
+      ...template.size,
+      height: isBenefitInfo ? 528 : 338,
+      name: `568x${isBenefitInfo ? 528 : 338}`,
+    };
+  }, [isRcsTemplate, rcsMessageType, template.size]);
 
   // RCS 기본 텍스트 스케일: 130% (직접 수정 시 유지)
   useEffect(() => {
@@ -413,6 +423,8 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
       const next: DesignContent = { ...prev };
       if (next.titleSize == null) next.titleSize = 130;
       if (next.bodySize == null) next.bodySize = 130;
+      if ((next as any).titleWeight == null) (next as any).titleWeight = "bold";
+      if ((next as any).bodyWeight == null) (next as any).bodyWeight = "standard";
       return next;
     });
   }, [isRcsTemplate]);
@@ -420,7 +432,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   // ── Canvas ─────────────────────────────────────────────────────
   const renderCanvas = () =>
     isRcsTemplate ? (
-      <RCSCanvas content={content} canvasSize={template.size} zoom={zoom} />
+      <RCSCanvas content={content} canvasSize={effectiveCanvasSize} zoom={zoom} />
     ) : (
       <DesignCanvas
         ref={designCanvasRef}
@@ -440,7 +452,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     );
 
   const renderStatusBar = () => {
-    const { width: sw, height: sh, unit } = template.size;
+    const { width: sw, height: sh, unit } = effectiveCanvasSize;
     const shortSide = Math.min(sw, sh);
     const oneX =
       unit === "mm"
@@ -477,7 +489,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
               <div>
                 <h1 className="font-semibold text-gray-900 text-sm">U+ AI 브랜드 Agent - {template.name}</h1>
                 <p className="text-xs text-gray-500">
-                  {template.size.width} × {template.size.height} {template.size.unit}
+                  {effectiveCanvasSize.width} × {effectiveCanvasSize.height} {effectiveCanvasSize.unit}
                 </p>
               </div>
             </div>
@@ -578,7 +590,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                           <input
                             type="range"
                             min={70}
-                            max={140}
+                            max={rcsMessageType === "혜택안내" ? 180 : 140}
                             step={5}
                             value={content.titleSize ?? 100}
                             onChange={(e) => setContentWithHistory((prev) => ({ ...prev, titleSize: Number(e.target.value) }))}

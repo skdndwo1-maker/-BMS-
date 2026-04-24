@@ -132,23 +132,7 @@ function ensureBodySlot(c: DesignContent, index: number): DesignContent {
 
 const AI_TEXT_SECTIONS: { heading: string; items: [DesignEditorTextSuggestionTarget, string][] }[] = [
   { heading: "메인 타이틀", items: [["mainTitle", "제안 받기"]] },
-  {
-    heading: "부제 1 · 2 · 3",
-    items: [
-      ["subtitle", "부제 1"],
-      ["subtitle2", "부제 2"],
-      ["subtitle3", "부제 3"],
-    ],
-  },
-  {
-    heading: "본문 1 · 2 · 3",
-    items: [
-      ["body", "본문 1"],
-      ["body2", "본문 2"],
-      ["body3", "본문 3"],
-    ],
-  },
-  { heading: "유의사항", items: [["footer", "제안 받기"]] },
+  { heading: "본문", items: [["body", "제안 받기"]] },
 ];
 
 type AssistantTab = "text" | "inspect" | "correct";
@@ -470,15 +454,11 @@ export function DesignAssistantChat({
           id="design-creative-topic"
           value={creativeTopic}
           onChange={(e) => setCreativeTopic(e.target.value)}
-          placeholder={
-            "예) 5G 가입 프로모션 안내 포스터. 부제2만 짧은 한 줄로 / 본문1·본문2 모두 작성 / 부제·본문 전부 등 슬롯을 주제에 적으면 해당 범위만 반영하도록 요청할 수 있습니다."
-          }
+          placeholder={"예) 5G 가입 프로모션 안내. 메인 타이틀/본문 톤·길이를 주제에 적으면 제안에 반영됩니다."}
           rows={2}
           className="min-h-[52px] resize-y text-[11px]"
         />
-        <p className="text-[10px] text-gray-400">
-          텍스트 제안·검수·교정에 함께 넘깁니다. 부제·본문이 여러 개일 때는 「본문2만」「부제1만」처럼 주제에 범위를 적어 주세요.
-        </p>
+        <p className="text-[10px] text-gray-400">텍스트 제안·검수·교정에 함께 넘깁니다.</p>
       </div>
 
       <div className="flex gap-1 rounded-xl bg-gray-100/90 p-1">

@@ -24,9 +24,9 @@ import {
 import { adjustBoldRangesOnPlainReplace } from "@/design/bodyBoldRanges";
 import { ILLUSTRATION_PRESETS, PICTOGRAM_PRESETS, filterAssetPresets } from "@/design/assetPresets";
 import { AssetPresetPickerDialog } from "@/components/design/AssetPresetPickerDialog";
+import { resolveRcsMessageBackground } from "@/components/design/RCSCanvas";
 import { templates as allDesignTemplates } from "@/design/templates";
 import { resolvePosterBodyBlocksForRender, applyBodyBlockTextEdit } from "@/design/posterBodyDisplay";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface ContentPanelProps {
   content: DesignContent;
@@ -202,9 +202,18 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   // RCS 20종 문구 선택 UI (우측 패널 전용)
   const [rcsProduct, setRcsProduct] = useState<keyof typeof rcsTemplates | null>(null);
   const [rcsMessageType, setRcsMessageType] = useState<keyof (typeof rcsTemplates)["요금제"] | null>(null);
-  const [rcsConfirmOpen, setRcsConfirmOpen] = useState(false);
   const rcsCanApply = Boolean(rcsProduct && rcsMessageType);
   const rcsNextTitle = rcsCanApply ? rcsTemplates[rcsProduct!][rcsMessageType!] : "";
+  const rcsTypeForPanel =
+    rcsMessageType ?? (content as DesignContent & { rcsMessageType?: string | null }).rcsMessageType ?? null;
+
+  const setRcsMessageTypeOnContent = (t: keyof (typeof rcsTemplates)["요금제"] | null) => {
+    onContentChange((prev) => ({
+      ...prev,
+      rcsMessageType: t,
+      backgroundColor: resolveRcsMessageBackground(t),
+    }));
+  };
 
   const onAssetDrop = useCallback((files: File[], type: AssetType) => {
     const newAssets = files.map(f => createAssetLayer(URL.createObjectURL(f), type, f.name));
@@ -214,11 +223,6 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const applyRcsTitle = (nextTitle: string) => {
     const t = (nextTitle ?? "").trim();
     if (!t.length) return;
-    const cur = (content.title ?? "").trim();
-    if (cur.length && cur !== t) {
-      setRcsConfirmOpen(true);
-      return;
-    }
     onContentChange({ ...content, title: t });
   };
 
@@ -529,6 +533,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                         type="button"
                         onClick={() => {
                           setRcsMessageType(k);
+                          setRcsMessageTypeOnContent(k);
                           if (rcsProduct) applyRcsTitle(rcsTemplates[rcsProduct][k]);
                         }}
                         className={`w-full min-w-0 rounded-xl border-2 p-2.5 text-left transition-all ${
@@ -556,6 +561,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                   onClick={() => {
                     setRcsProduct(null);
                     setRcsMessageType(null);
+                    setRcsMessageTypeOnContent(null);
                   }}
                 >
                   선택 초기화
@@ -572,34 +578,6 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               </div>
             </div>
 
-            <Dialog open={rcsConfirmOpen} onOpenChange={setRcsConfirmOpen}>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>메인 타이틀을 교체할까요?</DialogTitle>
-                  <DialogDescription>기존 타이틀이 있습니다. 적용하면 선택한 문구로 교체됩니다.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
-                  <p className="text-[11px] font-semibold text-gray-700">적용될 문구</p>
-                  <p className="text-sm font-semibold text-gray-900">{rcsNextTitle}</p>
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setRcsConfirmOpen(false)}>
-                    취소
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      setRcsConfirmOpen(false);
-                      if (!rcsCanApply) return;
-                      onContentChange({ ...content, title: rcsNextTitle });
-                    }}
-                    disabled={!rcsCanApply}
-                  >
-                    교체 적용
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
           </div>
         ) : (
           <div className="space-y-2">
@@ -676,26 +654,38 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           </div>
         ) : null}
 
-        {/* 배경색 (RCS: 4가지 고정 / 기타: 기존 팔레트 + 커스텀) */}
+        {/* 배경색 (RCS: 메시지 유형으로 고정 · 기타: 팔레트 + 커스텀) */}
         {!isPlacard ? (
           <div className="space-y-3 border-t border-gray-100 pt-4">
             <Label className="text-sm font-semibold text-gray-700">배경색</Label>
+            {isRcs ? (
+              <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+                <p className="text-[11px] text-gray-600 leading-relaxed">
+                  메시지 유형에 따라 자동 적용됩니다. 가입안내: Pink · 혜택안내: Light Purple · 해지안내/서비스
+                  종료안내: Ivory
+                </p>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="h-8 w-10 rounded-md border border-gray-200 shrink-0"
+                    style={{ background: resolveRcsMessageBackground(rcsTypeForPanel) }}
+                  />
+                  <div className="min-w-0 text-[11px] text-gray-700">
+                    <p className="font-mono tabular-nums">{resolveRcsMessageBackground(rcsTypeForPanel)}</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">유형을 선택하지 않은 경우 기본(Pink)입니다.</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
             <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5">
-              {(isRcs
-                ? [
-                    { label: "White", hex: "#FFFFFF", border: "#E5E5E5" },
-                    { label: "Ivory", hex: "#FDFAF0", border: "#D9D5C0" },
-                    { label: "Pink", hex: "#FFF0F5", border: "#F4B8D0" },
-                    { label: "Light Purple", hex: "#E8D9F5", border: "#CDB7E6" },
-                  ]
-                : [
-                    { label: "White", hex: "#FFFFFF", border: "#E5E5E5" },
-                    { label: "Grey", hex: "#F5F5F5", border: "#D1D1D1" },
-                    { label: "Ivory", hex: "#FDFAF0", border: "#D9D5C0" },
-                    { label: "Pink", hex: "#FFF0F5", border: "#F4B8D0" },
-                    { label: "Magenta", hex: "#F43182", border: "#F43182" },
-                    { label: "Black", hex: "#000000", border: "#000000" },
-                  ]
+              {(
+                [
+                  { label: "White", hex: "#FFFFFF", border: "#E5E5E5" },
+                  { label: "Grey", hex: "#F5F5F5", border: "#D1D1D1" },
+                  { label: "Ivory", hex: "#FDFAF0", border: "#D9D5C0" },
+                  { label: "Pink", hex: "#FFF0F5", border: "#F4B8D0" },
+                  { label: "Magenta", hex: "#F43182", border: "#F43182" },
+                  { label: "Black", hex: "#000000", border: "#000000" },
+                ] as const
               ).map((color) => {
                 const active = (content.backgroundColor || "#FFFFFF") === color.hex;
                 return (
@@ -725,6 +715,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                 );
               })}
             </div>
+            )}
 
             {!isRcs ? (
               <div className="flex items-center gap-2">
@@ -886,6 +877,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               <Type className="w-3.5 h-3.5 text-gray-500" />
               메인 타이틀
             </Label>
+            {!isRcs ? (
             <Button
               type="button"
               variant="outline"
@@ -916,6 +908,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               <Plus className="w-3.5 h-3.5 mr-1" />
               부제 추가
             </Button>
+            ) : null}
           </div>
           {/* 기능부연설명(점선 박스) 제거 */}
           <Textarea
@@ -928,6 +921,19 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
             className="font-medium resize-none"
           />
           <p className="text-xs text-gray-400">마침표(.)로 끝나면 마젠타 원형 포인트로 자동 변환됩니다</p>
+          {isRcs ? (
+            <div className="space-y-1.5 rounded-lg border border-gray-100 bg-gray-50/70 p-3">
+              <Label className="text-xs font-semibold text-gray-600">강조</Label>
+              <Input
+                value={content.emphasizedTitle || ""}
+                onChange={(e) => onContentChange({ ...content, emphasizedTitle: e.target.value })}
+                placeholder="메인 타이틀 중 강조할 단어/구문"
+              />
+              <p className="text-[10px] text-gray-400">
+                입력한 문자열이 메인 타이틀 안에 포함되면 해당 부분이 마젠타로 강조됩니다.
+              </p>
+            </div>
+          ) : null}
           {(content.posterSubtitles ?? []).map((s, si) => (
             <div key={s.id} className="space-y-1.5 rounded-lg border border-gray-100 bg-gray-50/80 p-3">
               <div className="flex items-center justify-between gap-2">
@@ -977,6 +983,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               <AlignLeft className="w-3.5 h-3.5 text-gray-500" />
               본문
             </Label>
+            {!isRcs ? (
             <Button
               type="button"
               variant="outline"
@@ -1001,6 +1008,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               <Plus className="w-3.5 h-3.5 mr-1" />
               추가
             </Button>
+            ) : null}
           </div>
           {/* 기능부연설명(점선 박스) 제거 */}
           {resolvePosterBodyBlocksForRender(content).map((b, bi) => (

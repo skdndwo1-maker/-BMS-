@@ -4,18 +4,31 @@ import type { AssetLayer, CanvasSize, DesignContent } from "@/design/types";
 const DARK = "#1A1A1A";
 const MAGENTA = "#F43182";
 
-type RcsCategory = "benefit" | "signup" | "cancellation" | "termination";
+/** RCS: 메시지 유형별 고정 배경 (우측 패널/저장용 backgroundColor과 동기화) */
+const RCS_BG_BY_MESSAGE: Record<string, string> = {
+  가입안내: "#FFF0F5", // Pink
+  혜택안내: "#E8D9F5", // Light Purple
+  해지안내: "#FDFAF0", // Ivory
+  "서비스 종료안내": "#FDFAF0", // Ivory
+};
+
+const RCS_BG_DEFAULT = "#FFF0F5";
+
+/** 우측 패널·내보내기와 동일한 색 (메시지 유형 미선택 시 기본 Pink) */
+export function resolveRcsMessageBackground(messageType: string | null | undefined): string {
+  if (!messageType) return RCS_BG_DEFAULT;
+  return RCS_BG_BY_MESSAGE[messageType] ?? RCS_BG_DEFAULT;
+}
+
+function getRcsCanvasBackground(content: DesignContent): string {
+  const t = (content as { rcsMessageType?: string }).rcsMessageType;
+  return resolveRcsMessageBackground(t ?? null);
+}
 
 interface RCSCanvasProps {
   content: DesignContent;
   canvasSize: CanvasSize;
   zoom: number;
-}
-
-function getRcsCategory(content: DesignContent): RcsCategory {
-  const v = (content as any).rcsCategory as string | undefined;
-  if (v === "benefit" || v === "signup" || v === "cancellation" || v === "termination") return v;
-  return "benefit";
 }
 
 function getFontWeight(weight?: string): number {
@@ -76,22 +89,17 @@ export function RCSCanvas({ content, canvasSize, zoom }: RCSCanvasProps) {
   const W = displayW;
   const marginLeft = W * 0.06;
   const marginTop = W * 0.08;
-
-  const category = getRcsCategory(content);
-  const rcsStyle =
-    category === "signup"
-      ? { bgColor: "#FFE5F0", accentColor: "#F43182" }
-      : category === "benefit"
-        ? { bgColor: "#E8D9F5", accentColor: "#9B6DD6" }
-        : { bgColor: "#F5F3ED", accentColor: "#F5F3ED" };
-
-  // 우측 패널의 배경색 선택이 RCS 캔버스에 즉시 반영되도록 연결
-  const canvasBg = (content.backgroundColor || "").trim() || rcsStyle.bgColor;
+  const canvasBg = getRcsCanvasBackground(content);
+  /** 일러스트: 우·하단 여백을 20% 축소(코너 쪽으로), 박스 크기는 +10% */
+  const assetRight = W * 0.08 * 0.6;
+  const assetBottom = marginLeft * 0.6;
+  const assetBox = W * 0.35 * 1.1;
 
   const baseTitleFontSize = W * 0.078;
   const baseBodyFontSize = W * 0.028;
   const titleFontSize = baseTitleFontSize * ((content.titleSize || 100) / 100);
   const bodyFontSize = baseBodyFontSize * ((content.bodySize || 100) / 100);
+  const bodyIndent = Math.max(W * 0.008, titleFontSize * 0.05);
 
   const titleWeight = getFontWeight((content as any).titleWeight);
   const bodyWeight = getFontWeight((content as any).bodyWeight);
@@ -203,20 +211,37 @@ export function RCSCanvas({ content, canvasSize, zoom }: RCSCanvasProps) {
             left: `${marginLeft}px`,
             maxWidth: `${W * 0.55}px`,
             zIndex: 5,
+            textAlign: "left",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-start",
+            boxSizing: "border-box",
           }}
         >
           {title ? renderTitle() : null}
-          {body ? renderBody() : null}
+          {body ? (
+            <div
+              style={{
+                width: "100%",
+                textAlign: "left",
+                alignSelf: "stretch",
+                paddingLeft: `${bodyIndent}px`,
+                boxSizing: "border-box",
+              }}
+            >
+              {renderBody()}
+            </div>
+          ) : null}
         </div>
 
         {rcsAsset?.src ? (
           <div
             style={{
               position: "absolute",
-              right: `${W * 0.08}px`,
-              bottom: `${marginLeft}px`,
-              width: `${W * 0.35}px`,
-              height: `${W * 0.35}px`,
+              right: `${assetRight}px`,
+              bottom: `${assetBottom}px`,
+              width: `${assetBox}px`,
+              height: `${assetBox}px`,
               zIndex: 4,
               display: "flex",
               alignItems: "center",
