@@ -1,4 +1,10 @@
 import type { DesignContent } from "@/design/types";
+import {
+  resolvePosterBodyBlockRect,
+  isValidNormalizedRect,
+  coerceNormalizedRect,
+} from "@/design/posterBodyDisplay";
+import { DEFAULT_POSTER_BADGE_RECT } from "@/design/posterDefaults";
 
 export type NormalizedRect = { x: number; y: number; width: number; height: number };
 
@@ -15,22 +21,35 @@ export function getPosterRectByKey(c: DesignContent, key: string): NormalizedRec
   }
   if (key.startsWith("body:")) {
     const id = key.slice(5);
-    const fromMap = c.posterBodyRects?.[id];
-    if (fromMap) return fromMap;
-    if (id === "body-1") return c.posterBodyRect ?? null;
-    return null;
+    return resolvePosterBodyBlockRect(c, id);
+  }
+  if (key.startsWith("badge:")) {
+    const id = key.slice(6);
+    const per = c.posterBadgeRects?.[id];
+    if (isValidNormalizedRect(per)) return per;
+    return coerceNormalizedRect(c.posterBadgeRect, DEFAULT_POSTER_BADGE_RECT);
   }
   switch (key) {
     case "image":
       return c.posterBackgroundImageRect ?? null;
     case "badge":
-      return c.posterBadgeRect ?? null;
+      return coerceNormalizedRect(c.posterBadgeRect, DEFAULT_POSTER_BADGE_RECT);
     case "title":
       return c.posterTitleRect ?? null;
     case "body":
-      return c.posterBodyRect ?? (c.posterBodyRects?.["body-1"] ?? null);
+      return resolvePosterBodyBlockRect(c, "body-1");
     case "footer":
       return c.posterFooterRect ?? null;
+    case "panelBg": {
+      const pr = c.panelBgRect;
+      if (pr == null || !isValidNormalizedRect(pr)) return null;
+      return pr;
+    }
+    case "xbannerBg": {
+      const xr = c.xbannerBgRect;
+      if (xr == null || !isValidNormalizedRect(xr)) return null;
+      return xr;
+    }
     default:
       return null;
   }
@@ -49,6 +68,10 @@ export function setPosterRectByKey(c: DesignContent, key: string, r: NormalizedR
     if (id === "body-1") next = { ...next, posterBodyRect: r };
     return next;
   }
+  if (key.startsWith("badge:")) {
+    const id = key.slice(6);
+    return { ...c, posterBadgeRects: { ...(c.posterBadgeRects ?? {}), [id]: r } };
+  }
   switch (key) {
     case "image":
       return { ...c, posterBackgroundImageRect: r };
@@ -60,6 +83,10 @@ export function setPosterRectByKey(c: DesignContent, key: string, r: NormalizedR
       return { ...c, posterBodyRect: r, posterBodyRects: { ...(c.posterBodyRects ?? {}), "body-1": r } };
     case "footer":
       return { ...c, posterFooterRect: r };
+    case "panelBg":
+      return { ...c, panelBgRect: r, panelBgOnCanvas: true };
+    case "xbannerBg":
+      return { ...c, xbannerBgRect: r, xbannerBgOnCanvas: true };
     default:
       return c;
   }

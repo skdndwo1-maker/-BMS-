@@ -55,6 +55,7 @@ type SharedProps = {
   selectionRenderTick?: number;
   getSelection?: () => [number, number] | null;
   onTogglePartialStyle?: (which: "bold" | "italic" | "underline") => void;
+  onApplyPartialColor?: (hex: string) => void;
 };
 
 export function CanvasTextFormatControls({
@@ -64,6 +65,7 @@ export function CanvasTextFormatControls({
   selectionRenderTick = 0,
   getSelection,
   onTogglePartialStyle,
+  onApplyPartialColor,
 }: SharedProps) {
   void selectionRenderTick;
   const kind = target.kind;
@@ -183,6 +185,12 @@ export function CanvasTextFormatControls({
   };
 
   const setColor = (hex: string) => {
+    const sel = getSelection?.();
+    const canPartial = Boolean(onApplyPartialColor && sel && sel[0] !== sel[1]);
+    if (canPartial) {
+      onApplyPartialColor?.(hex);
+      return;
+    }
     if (kind === "title") onDraft({ ...content, titleColor: hex });
     else if (kind === "footer") onDraft({ ...content, posterFooterColor: hex });
     else if (kind === "body") onDraft({ ...content, bodyColor: hex });
@@ -223,6 +231,14 @@ export function CanvasTextFormatControls({
     if (!sel || sel[0] === sel[1]) return;
     onTogglePartialStyle(which);
   };
+
+  const toggleWholeBold = () => {
+    const next = fw >= boldThreshold ? Math.max(300, fw - 300) : Math.max(fw, boldThreshold);
+    applyTypo({ fontWeight: next });
+  };
+  const toggleWholeItalic = () => applyTypo({ fontStyle: fs === "italic" ? "normal" : "italic" });
+  const toggleWholeUnderline = () =>
+    applyTypo({ textDecoration: td === "underline" ? "none" : "underline" });
 
   const setFont = (fam: string) => {
     applyTypo({ fontFamily: fam.trim() ? fam : undefined });
@@ -307,37 +323,40 @@ export function CanvasTextFormatControls({
       <div className="flex flex-wrap gap-0.5">
         <button
           type="button"
-          className={`${iconBtn} ${!hasPartialRange && fw >= boldThreshold ? iconActive : ""} ${!hasPartialRange ? "opacity-50" : ""}`}
+          className={`${iconBtn} ${fw >= boldThreshold ? iconActive : ""}`}
           title={
             hasPartialRange
               ? "선택 구간 굵게"
-              : "캔버스에서 더블클릭해 편집한 뒤, 구간을 드래그해 적용"
+              : "전체 굵게/해제"
           }
           onMouseDown={(e) => {
             e.preventDefault();
-            tryPartial("bold");
+            if (hasPartialRange) tryPartial("bold");
+            else toggleWholeBold();
           }}
         >
           <Bold className="h-3.5 w-3.5" />
         </button>
         <button
           type="button"
-          className={`${iconBtn} ${!hasPartialRange && fs === "italic" ? iconActive : ""} ${!hasPartialRange ? "opacity-50" : ""}`}
-          title={hasPartialRange ? "선택 구간 기울임" : "더블클릭 편집 후 구간을 드래그해 적용"}
+          className={`${iconBtn} ${fs === "italic" ? iconActive : ""}`}
+          title={hasPartialRange ? "선택 구간 기울임" : "전체 기울임/해제"}
           onMouseDown={(e) => {
             e.preventDefault();
-            tryPartial("italic");
+            if (hasPartialRange) tryPartial("italic");
+            else toggleWholeItalic();
           }}
         >
           <Italic className="h-3.5 w-3.5" />
         </button>
         <button
           type="button"
-          className={`${iconBtn} ${!hasPartialRange && td === "underline" ? iconActive : ""} ${!hasPartialRange ? "opacity-50" : ""}`}
-          title={hasPartialRange ? "선택 구간 밑줄" : "더블클릭 편집 후 구간을 드래그해 적용"}
+          className={`${iconBtn} ${td === "underline" ? iconActive : ""}`}
+          title={hasPartialRange ? "선택 구간 밑줄" : "전체 밑줄/해제"}
           onMouseDown={(e) => {
             e.preventDefault();
-            tryPartial("underline");
+            if (hasPartialRange) tryPartial("underline");
+            else toggleWholeUnderline();
           }}
         >
           <Underline className="h-3.5 w-3.5" />

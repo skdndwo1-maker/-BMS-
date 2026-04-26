@@ -29,6 +29,7 @@ import { VI_COLORS, VI_FONT_STACK, getViGridStepPx } from "@/design/viCanvasCons
 import {
   renderPlainWithBoldRanges,
   renderPlainWithTriStyleRanges,
+  renderPlainWithQuadStyleRanges,
   renderBodyWithBold,
 } from "./bodyRichText";
 import {
@@ -36,6 +37,7 @@ import {
   toggleCharRangesOnSelection,
   type CharRange,
 } from "@/design/charStyleRanges";
+import { applyColorOnSelection, sanitizeColorRanges, type ColorRange } from "@/design/colorStyleRanges";
 import {
   applyGroupRectDelta,
   applyGroupRectLeaderResize,
@@ -43,10 +45,23 @@ import {
   selectedKeysIncludeBody,
   type AlignMode,
 } from "@/design/designCanvasAlign";
+import {
+  addCanvasGroup,
+  canGroupSelection,
+  canUngroupSelection,
+  canvasSelectionContainsKey,
+  expandKeysForRectOps,
+  removeGroupsTouchingKeys,
+  findGroupContainingKey,
+  isGroupSelectionKey,
+} from "@/design/canvasGroups";
 import { migrateBoldMarkdownToRanges, sanitizeBoldRanges } from "@/design/bodyBoldRanges";
 import {
   resolvePosterBodyBlocksForRender,
   applyBodyBlockTextEdit,
+  resolvePosterBodyBlockRect,
+  coerceNormalizedRect,
+  isValidNormalizedRect,
 } from "@/design/posterBodyDisplay";
 import { ViAlignmentGrid } from "./ViAlignmentGrid";
 import {
@@ -159,7 +174,13 @@ interface DesignCanvasProps {
 export type DesignCanvasHandle = {
   getInlineTextSelection: () => [number, number] | null;
   handleTogglePartialStyle: (which: "bold" | "italic" | "underline") => void;
+  handleApplyPartialColor: (hex: string) => void;
   getInlineEditActive: () => boolean;
+  getExpandedSelectionKeys: () => string[];
+  alignSelected: (mode: AlignMode) => void;
+  groupSelection: () => void;
+  ungroupSelection: () => void;
+  clearSelection: () => void;
 };
 
 export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function DesignCanvas(
@@ -222,7 +243,9 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const [inlineEditTarget, setInlineEditTarget] = useState<CanvasTextEditTarget | null>(null);
   const formatTarget = useMemo((): CanvasTextEditTarget | null => {
     if (selectedKeys.length !== 1) return null;
-    return selectedKeyToFormatTarget(selectedKeys[0]);
+    const k = selectedKeys[0];
+    if (isGroupSelectionKey(k)) return null;
+    return selectedKeyToFormatTarget(k);
   }, [selectedKeys]);
   const activeTextTarget = inlineEditTarget ?? formatTarget;
   const titleEditRef = useRef<HTMLTextAreaElement>(null);
@@ -426,31 +449,33 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const gapPx = realAspect >= 3 ? Math.max(8, Math.min(18, displayH * 0.06)) : displayH * 0.035;
 
   const computeDefaultTextRects = (titleTextRaw: string) => {
-    const x = W * marginX;
-    const w = Math.max(40, W * (1 - marginX * 2));
+    // NOTE: DraggableCanvasOverlay는 정규화 rect(0~1)를 사용한다.
+    // 이 함수는 "픽셀 기반 계산"을 하되, 최종 반환은 정규화 값으로 변환한다.
+    const xPx = W * marginX;
+    const wPx = Math.max(40, W * (1 - marginX * 2));
 
     // 로고 높이는 실제 이미지 비율을 모르므로 안전한 근사치로 배치(너비 기준, 상한 적용)
     const approxLogoH = Math.min(displayH * 0.18, Math.max(18, effectiveLogoWidth * 0.3));
     const logoY = displayH * marginTop;
 
-    const titleY = logoY + approxLogoH + gapPx;
+    const titleYPx = logoY + approxLogoH + gapPx;
     const titleLineH = Math.max(12, titleFontSize * 1.15);
-    const titleCharsPerLine = Math.max(6, Math.floor(w / Math.max(10, titleFontSize * 0.9)));
+    const titleCharsPerLine = Math.max(6, Math.floor(wPx / Math.max(10, titleFontSize * 0.9)));
     const titleLen = titleTextRaw.trim().length;
     const computedTitleLines = titleLen ? Math.ceil(titleLen / titleCharsPerLine) : 2;
     const titleLines = Math.min(3, Math.max(2, computedTitleLines));
     const titleH = titleLineH * titleLines + titleLineH * 0.15;
 
-    const bodyY = titleY + titleH + gapPx;
+    const bodyYPx = titleYPx + titleH + gapPx;
     const bodyLineH = Math.max(11, bodyFontSize * 1.35);
     const bodyH = Math.min(displayH * 0.42, Math.max(bodyLineH * 4, displayH * 0.18));
 
-    const footerY = bodyY + bodyH + gapPx;
+    const footerYPx = bodyYPx + bodyH + gapPx;
     const footerLineH = Math.max(10, disclaimerSize * 1.35);
     const footerH = Math.min(displayH * 0.22, Math.max(footerLineH * 2, displayH * 0.10));
 
     const bottomLimit = displayH * (1 - marginTop);
-    let overflow = footerY + footerH - bottomLimit;
+    let overflow = footerYPx + footerH - bottomLimit;
     let shrinkBodyH = bodyH;
     let shrinkFooterH = footerH;
     let shrinkTitleH = titleH;
@@ -476,10 +501,30 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     }
 
     return {
-      titleRect: { x, y: titleY, width: w, height: shrinkTitleH },
-      bodyRect: { x, y: bodyY, width: w, height: shrinkBodyH },
-      footerRect: { x, y: footerY, width: w, height: shrinkFooterH },
-      badgeRect: { x, y: Math.max(displayH * marginTop, titleY - gapPx - displayH * 0.06), width: W * 0.3, height: displayH * 0.06 },
+      titleRect: {
+        x: xPx / W,
+        y: titleYPx / displayH,
+        width: wPx / W,
+        height: shrinkTitleH / displayH,
+      },
+      bodyRect: {
+        x: xPx / W,
+        y: bodyYPx / displayH,
+        width: wPx / W,
+        height: shrinkBodyH / displayH,
+      },
+      footerRect: {
+        x: xPx / W,
+        y: footerYPx / displayH,
+        width: wPx / W,
+        height: shrinkFooterH / displayH,
+      },
+      badgeRect: {
+        x: xPx / W,
+        y: Math.max(displayH * marginTop, titleYPx - gapPx - displayH * 0.06) / displayH,
+        width: (W * 0.3) / W,
+        height: (displayH * 0.06) / displayH,
+      },
     };
   };
 
@@ -587,17 +632,27 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     const titleTextRaw = typeof content.title === "string" ? content.title : "";
     const { titleRect, bodyRect, footerRect, badgeRect } = computeDefaultTextRects(titleTextRaw);
 
-    if (showTitle && content.title?.trim() && !content.posterTitleRect) patch.posterTitleRect = titleRect;
-    if (showBody && (content.bodyText?.trim() || content.posterBodies?.some((b) => b.text?.trim())) && !content.posterBodyRect)
+    if (showTitle && content.title?.trim() && !isValidNormalizedRect(content.posterTitleRect))
+      patch.posterTitleRect = titleRect;
+    if (
+      showBody &&
+      (content.bodyText?.trim() || content.posterBodies?.some((b) => b.text?.trim())) &&
+      !isValidNormalizedRect(content.posterBodyRect)
+    )
       patch.posterBodyRect = bodyRect;
-    if (showFooter && content.emphasizedTitle?.trim() && !content.posterFooterRect) patch.posterFooterRect = footerRect;
-    if (content.subtitle?.trim() && !content.posterBadgeRect) patch.posterBadgeRect = badgeRect;
+    if (showFooter && content.emphasizedTitle?.trim() && !isValidNormalizedRect(content.posterFooterRect))
+      patch.posterFooterRect = footerRect;
+    if (content.subtitle?.trim() && !isValidNormalizedRect(content.posterBadgeRect))
+      patch.posterBadgeRect = badgeRect;
 
     if (Object.keys(patch).length === 0) return;
     const next = { ...content, ...patch };
     // 본문 배열이 존재하는 경우, body-1의 rect가 비어있으면 기본 rect를 함께 채움
-    if (next.posterBodies?.length && !(next.posterBodyRects?.["body-1"]) && next.posterBodyRect) {
-      next.posterBodyRects = { ...(next.posterBodyRects ?? {}), "body-1": next.posterBodyRect };
+    if (next.posterBodies?.length && isValidNormalizedRect(next.posterBodyRect)) {
+      const b1r = next.posterBodyRects?.["body-1"];
+      if (!isValidNormalizedRect(b1r)) {
+        next.posterBodyRects = { ...(next.posterBodyRects ?? {}), "body-1": next.posterBodyRect };
+      }
     }
     onContentChange(next);
   }, [
@@ -620,17 +675,26 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   /** 다중 선택 시: Shift 없이 클릭 → 단일 선택. Shift+클릭 → 목록에 추가·제거(토글). 같은 요소를 다시 눌러 드래그할 때는 선택 유지 */
   const pickKey = useCallback((key: string, additive: boolean) => {
     setSelectedKeys((prev) => {
+      const c = contentRef.current;
+      const g = findGroupContainingKey(c.canvasGroups, key);
       if (additive) {
+        if (g) {
+          const gk = `group:${g.id}`;
+          if (prev.includes(gk)) return prev.filter((k) => k !== gk);
+          return [...prev, gk];
+        }
         if (prev.includes(key)) return prev.filter((k) => k !== key);
         return [...prev, key];
       }
       if (prev.length > 1 && prev.includes(key)) return prev;
+      if (prev.length >= 1 && g && prev.includes(`group:${g.id}`) && g.keys.includes(key)) return prev;
+      if (g) return [`group:${g.id}`];
       return [key];
     });
   }, []);
 
   useEffect(() => {
-    if (!selectedKeys.includes("image")) setImageInnerPosAdjust(false);
+    if (!expandKeysForRectOps(contentRef.current, selectedKeys).includes("image")) setImageInnerPosAdjust(false);
   }, [selectedKeys]);
 
   useEffect(() => {
@@ -649,7 +713,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     (id: string, patch: Partial<AssetLayer>) => {
       if (!onContentChange) return;
       const c = contentRef.current;
-      const keys = selectedKeysRef.current;
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       const k = `asset:${id}`;
       if (
         keys.length >= 2 &&
@@ -671,6 +735,24 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           }
         }
       }
+      if (keys.length >= 2 && keys.includes(k) && (patch.width != null || patch.height != null)) {
+        const a = (c.assetLayers ?? []).find((x) => x.id === id);
+        if (a) {
+          const prev = { x: a.x, y: a.y, width: a.width, height: a.height };
+          const next = { ...prev, ...patch };
+          if (
+            Math.abs(next.width - prev.width) > 1e-9 ||
+            Math.abs(next.height - prev.height) > 1e-9 ||
+            Math.abs(next.x - prev.x) > 1e-9 ||
+            Math.abs(next.y - prev.y) > 1e-9
+          ) {
+            const merged = applyGroupRectLeaderResize(c, keys, k, prev, next);
+            contentRef.current = merged;
+            onContentChange(merged);
+            return;
+          }
+        }
+      }
       const updated = (c.assetLayers ?? []).map((x) => (x.id === id ? { ...x, ...patch } : x));
       const u = { ...c, assetLayers: updated };
       contentRef.current = u;
@@ -682,8 +764,11 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const handleAssetDelete = useCallback(
     (id: string) => {
       if (!onContentChange) return;
-      onContentChange({ ...content, assetLayers: assetLayers.filter((a) => a.id !== id) });
-      setSelectedKeys((prev) => prev.filter((x) => x !== `asset:${id}`));
+      const k = `asset:${id}`;
+      const base = { ...content, assetLayers: assetLayers.filter((a) => a.id !== id) };
+      const next = removeGroupsTouchingKeys(base, [k]);
+      onContentChange(next);
+      setSelectedKeys((prev) => prev.filter((x) => x !== k));
     },
     [content, assetLayers, onContentChange]
   );
@@ -768,7 +853,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       const ae = document.activeElement;
       if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement) return;
       if ((ae as HTMLElement | null)?.isContentEditable) return;
-      const keys = selectedKeysRef.current;
+      const c0 = contentRef.current;
+      const keys = expandKeysForRectOps(c0, selectedKeysRef.current);
       const removeTitle = keys.includes("title");
       const removeFooter = keys.includes("footer");
       const removeImage = keys.includes("image");
@@ -792,6 +878,12 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         next.posterImagePosY = undefined;
       }
       if (bodyIds.size > 0) next = applyRemoveBodyBlockIds(next, bodyIds);
+      const removedKeys: string[] = [];
+      if (removeTitle) removedKeys.push("title");
+      if (removeFooter) removedKeys.push("footer");
+      if (removeImage) removedKeys.push("image");
+      for (const id of bodyIds) removedKeys.push(id === "body-1" ? "body" : `body:${id}`);
+      next = removeGroupsTouchingKeys(next, removedKeys);
       onContentChange(next);
       setSelectedKeys((prev) =>
         prev.filter((k) => {
@@ -919,14 +1011,69 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     [inlineEditTarget, onContentDraftChange, getInlineTextSelection]
   );
 
+  const handleApplyPartialColor = useCallback(
+    (hex: string) => {
+      if (!onContentDraftChange || !inlineEditTarget) return;
+      const t = inlineEditTarget;
+      const sel = getInlineTextSelection();
+      if (!sel) return;
+      const [a, b] = sel;
+      const c = contentRef.current;
+      if (t.kind === "title") {
+        const plain = c.title ?? "";
+        const next = applyColorOnSelection(plain, c.posterTitleColorRanges, a, b, hex);
+        onContentDraftChange({ ...c, posterTitleColorRanges: next });
+        return;
+      }
+      if (t.kind === "footer") {
+        const plain = c.emphasizedTitle ?? "";
+        const next = applyColorOnSelection(plain, c.posterFooterColorRanges, a, b, hex);
+        onContentDraftChange({ ...c, posterFooterColorRanges: next });
+        return;
+      }
+      if (t.kind === "body") {
+        const id = t.id;
+        const block = c.posterBodies?.find((x) => x.id === id);
+        const plain = block?.text ?? "";
+        const map = { ...(c.posterBodyColorRanges ?? {}) };
+        map[id] = applyColorOnSelection(plain, map[id], a, b, hex);
+        onContentDraftChange({ ...c, posterBodyColorRanges: map });
+        return;
+      }
+      if (t.kind === "subtitle") {
+        const id = t.id;
+        const sub = c.posterSubtitles?.find((x) => x.id === id);
+        const plain = sub?.text ?? "";
+        const map = { ...(c.posterSubtitleColorRanges ?? {}) };
+        map[id] = applyColorOnSelection(plain, map[id], a, b, hex);
+        onContentDraftChange({ ...c, posterSubtitleColorRanges: map });
+      }
+    },
+    [getInlineTextSelection, inlineEditTarget, onContentDraftChange]
+  );
+
   useImperativeHandle(
     ref,
     () => ({
       getInlineTextSelection,
       handleTogglePartialStyle,
+      handleApplyPartialColor,
       getInlineEditActive: () => inlineEditTarget !== null,
+      getExpandedSelectionKeys: () => expandKeysForRectOps(contentRef.current, selectedKeysRef.current),
+      alignSelected: (mode: AlignMode) => runAlign(mode),
+      groupSelection: () => handleCanvasGroup(),
+      ungroupSelection: () => handleCanvasUngroup(),
+      clearSelection: () => setSelectedKeys([]),
     }),
-    [getInlineTextSelection, handleTogglePartialStyle, inlineEditTarget]
+    [
+      getInlineTextSelection,
+      handleTogglePartialStyle,
+      handleApplyPartialColor,
+      inlineEditTarget,
+      runAlign,
+      handleCanvasGroup,
+      handleCanvasUngroup,
+    ]
   );
 
   useEffect(() => {
@@ -953,7 +1100,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     (mode: AlignMode) => {
       if (!onContentChange) return;
       const c = contentRef.current;
-      const keys = selectedKeysRef.current;
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       const merged = applyMultiAlign(c, keys, mode);
       contentRef.current = merged;
       onContentChange(merged);
@@ -961,19 +1108,17 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     [onContentChange]
   );
 
-  const imageRect = content.posterBackgroundImageRect ?? DEFAULT_POSTER_BG_RECT;
-  const badgeRect = content.posterBadgeRect ?? DEFAULT_POSTER_BADGE_RECT;
-  const titleRect = content.posterTitleRect ?? DEFAULT_POSTER_TITLE_RECT;
-  const footerRect = content.posterFooterRect ?? DEFAULT_POSTER_FOOTER_RECT;
+  const imageRect = coerceNormalizedRect(content.posterBackgroundImageRect, DEFAULT_POSTER_BG_RECT);
+  const badgeRect = coerceNormalizedRect(content.posterBadgeRect, DEFAULT_POSTER_BADGE_RECT);
+  const titleRect = coerceNormalizedRect(content.posterTitleRect, DEFAULT_POSTER_TITLE_RECT);
+  const footerRect = coerceNormalizedRect(content.posterFooterRect, DEFAULT_POSTER_FOOTER_RECT);
 
   const posterBodiesSafe = useMemo(
     () => resolvePosterBodyBlocksForRender(content),
     [content.posterBodies, content.bodyText]
   );
 
-  const normBodyRect = (id: string) =>
-    content.posterBodyRects?.[id] ??
-    (id === "body-1" ? (content.posterBodyRect ?? DEFAULT_POSTER_BODY_RECT) : DEFAULT_POSTER_BODY_RECT);
+  const normBodyRect = (id: string) => resolvePosterBodyBlockRect(content, id);
 
   const posterSubtitlesSafe = content.posterSubtitles ?? [];
 
@@ -981,14 +1126,14 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     (next: typeof imageRect) => {
       if (!onContentChange) return;
       const c = contentRef.current;
-      const prev = c.posterBackgroundImageRect ?? DEFAULT_POSTER_BG_RECT;
+      const prev = coerceNormalizedRect(c.posterBackgroundImageRect, DEFAULT_POSTER_BG_RECT);
       if (next.width !== prev.width || next.height !== prev.height) {
         const u = { ...c, posterBackgroundImageRect: next };
         contentRef.current = u;
         onContentChange(u);
         return;
       }
-      const keys = selectedKeysRef.current;
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       if (keys.length >= 2 && keys.includes("image")) {
         const dx = next.x - prev.x;
         const dy = next.y - prev.y;
@@ -1010,6 +1155,30 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     (next: { x: number; y: number; width: number; height: number }) => {
       if (!onContentChange) return;
       const c = contentRef.current;
+      const prev = coerceNormalizedRect(c.panelBgRect, DEFAULT_POSTER_BG_RECT);
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
+      if (next.width !== prev.width || next.height !== prev.height) {
+        if (keys.length >= 2 && keys.includes("panelBg")) {
+          const merged = applyGroupRectLeaderResize(c, keys, "panelBg", prev, next);
+          contentRef.current = merged;
+          onContentChange(merged);
+          return;
+        }
+        const u = { ...c, panelBgRect: next, panelBgOnCanvas: true };
+        contentRef.current = u;
+        onContentChange(u);
+        return;
+      }
+      if (keys.length >= 2 && keys.includes("panelBg")) {
+        const dx = next.x - prev.x;
+        const dy = next.y - prev.y;
+        if (Math.abs(dx) > 1e-9 || Math.abs(dy) > 1e-9) {
+          const merged = applyGroupRectDelta(c, keys, dx, dy);
+          contentRef.current = merged;
+          onContentChange(merged);
+          return;
+        }
+      }
       const u = { ...c, panelBgRect: next, panelBgOnCanvas: true };
       contentRef.current = u;
       onContentChange(u);
@@ -1021,9 +1190,9 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     (id: string, next: { x: number; y: number; width: number; height: number }) => {
       if (!onContentChange) return;
       const c = contentRef.current;
-      const prev = c.posterBadgeRects?.[id] ?? DEFAULT_POSTER_BADGE_RECT;
+      const prev = coerceNormalizedRect(c.posterBadgeRects?.[id], DEFAULT_POSTER_BADGE_RECT);
       const key = `badge:${id}`;
-      const keys = selectedKeysRef.current;
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       if (next.width !== prev.width || next.height !== prev.height) {
         if (keys.length >= 2 && keys.includes(key)) {
           const merged = applyGroupRectLeaderResize(c, keys, key, prev, next);
@@ -1057,8 +1226,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     (next: typeof titleRect) => {
       if (!onContentChange) return;
       const c = contentRef.current;
-      const prev = c.posterTitleRect ?? DEFAULT_POSTER_TITLE_RECT;
-      const keys = selectedKeysRef.current;
+      const prev = coerceNormalizedRect(c.posterTitleRect, DEFAULT_POSTER_TITLE_RECT);
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       if (next.width !== prev.width || next.height !== prev.height) {
         if (keys.length >= 2 && keys.includes("title")) {
           const merged = applyGroupRectLeaderResize(c, keys, "title", prev, next);
@@ -1092,10 +1261,9 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     (id: string, next: { x: number; y: number; width: number; height: number }) => {
       if (!onContentChange) return;
       const c = contentRef.current;
-      const prev =
-        c.posterBodyRects?.[id] ?? (id === "body-1" ? c.posterBodyRect : undefined) ?? DEFAULT_POSTER_BODY_RECT;
+      const prev = resolvePosterBodyBlockRect(c, id);
       const key = `body:${id}`;
-      const keys = selectedKeysRef.current;
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       if (next.width !== prev.width || next.height !== prev.height) {
         if (keys.length >= 2 && selectedKeysIncludeBody(keys, id)) {
           const merged = applyGroupRectLeaderResize(c, keys, key, prev, next);
@@ -1137,9 +1305,9 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     (id: string, next: { x: number; y: number; width: number; height: number }) => {
       if (!onContentChange) return;
       const c = contentRef.current;
-      const prev = c.posterSubtitleRects?.[id] ?? DEFAULT_POSTER_SUBTITLE_RECT;
+      const prev = coerceNormalizedRect(c.posterSubtitleRects?.[id], DEFAULT_POSTER_SUBTITLE_RECT);
       const key = `subtitle:${id}`;
-      const keys = selectedKeysRef.current;
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       if (next.width !== prev.width || next.height !== prev.height) {
         if (keys.length >= 2 && keys.includes(key)) {
           const merged = applyGroupRectLeaderResize(c, keys, key, prev, next);
@@ -1173,8 +1341,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     (next: typeof footerRect) => {
       if (!onContentChange) return;
       const c = contentRef.current;
-      const prev = c.posterFooterRect ?? DEFAULT_POSTER_FOOTER_RECT;
-      const keys = selectedKeysRef.current;
+      const prev = coerceNormalizedRect(c.posterFooterRect, DEFAULT_POSTER_FOOTER_RECT);
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       if (next.width !== prev.width || next.height !== prev.height) {
         if (keys.length >= 2 && keys.includes("footer")) {
           const merged = applyGroupRectLeaderResize(c, keys, "footer", prev, next);
@@ -1209,7 +1377,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     if (!draft) return;
     if (content.posterTitleOnCanvas === false) return;
     if (content.posterTitleRectLocked) return;
-    const tr = content.posterTitleRect ?? DEFAULT_POSTER_TITLE_RECT;
+    const tr = coerceNormalizedRect(content.posterTitleRect, DEFAULT_POSTER_TITLE_RECT);
     const wPx = tr.width * displayW;
     const charW = titleFontSize * 0.52;
     const charsPerLine = Math.max(4, wPx / Math.max(1, charW));
@@ -1239,7 +1407,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     if (content.posterFooterOnCanvas === false) return;
     if (content.posterFooterRectLocked) return;
     if (!content.emphasizedTitle?.trim()) return;
-    const fr = content.posterFooterRect ?? DEFAULT_POSTER_FOOTER_RECT;
+    const fr = coerceNormalizedRect(content.posterFooterRect, DEFAULT_POSTER_FOOTER_RECT);
     const wPx = fr.width * displayW;
     const charW = disclaimerSize * 0.5;
     const charsPerLine = Math.max(4, wPx / Math.max(1, charW));
@@ -1268,13 +1436,10 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     const bodies = resolvePosterBodyBlocksForRender(content);
     let next = content;
     let touched = false;
-    for (const b of bodies) {
-      if (!b.text?.trim()) continue;
-      if (content.posterBodyRectLocked?.[b.id]) continue;
-      const br =
-        next.posterBodyRects?.[b.id] ??
-        (b.id === "body-1" ? next.posterBodyRect : undefined) ??
-        DEFAULT_POSTER_BODY_RECT;
+    bodies.forEach((b) => {
+      if (!b.text?.trim()) return;
+      if (content.posterBodyRectLocked?.[b.id]) return;
+      const br = resolvePosterBodyBlockRect(next, b.id);
       const wPx = br.width * displayW;
       const charW = bodyFontSize * 0.48;
       const charsPerLine = Math.max(6, wPx / Math.max(1, charW));
@@ -1284,7 +1449,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       );
       const wantH = (lines * bodyFontSize * 1.75 + bodyFontSize * 0.15) / displayH;
       const nh = Math.min(0.7, Math.max(0.06, wantH));
-      if (Math.abs(nh - br.height) < 0.004) continue;
+      if (Math.abs(nh - br.height) < 0.004) return;
       const rects = { ...(next.posterBodyRects ?? {}), [b.id]: { ...br, height: nh } };
       next = {
         ...next,
@@ -1292,7 +1457,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         ...(b.id === "body-1" ? { posterBodyRect: { ...br, height: nh } } : {}),
       };
       touched = true;
-    }
+    });
     if (touched) draft(next);
   }, [
     content,
@@ -1331,7 +1496,32 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   /** 부제 크기는 메인 타이틀 배율과 독립(캔버스 너비·posterSubtitleFontScale만 사용) */
   const subtitleFontSize = W * 0.045 * ((content.posterSubtitleFontScale ?? 100) / 100);
 
-  const multiSel = selectedKeys.length >= 2;
+  const expandedSelKeys = useMemo(
+    () => expandKeysForRectOps(content, selectedKeys),
+    [content.canvasGroups, selectedKeys]
+  );
+
+  const handleCanvasGroup = useCallback(() => {
+    if (!onContentChange) return;
+    const c = contentRef.current;
+    const res = addCanvasGroup(c, expandKeysForRectOps(c, selectedKeysRef.current));
+    if (!res) return;
+    contentRef.current = res.content;
+    onContentChange(res.content);
+    setSelectedKeys([`group:${res.groupId}`]);
+  }, [onContentChange]);
+
+  const handleCanvasUngroup = useCallback(() => {
+    if (!onContentChange) return;
+    const c = contentRef.current;
+    const sel = selectedKeysRef.current;
+    const touch = [...expandKeysForRectOps(c, sel), ...sel.filter(isGroupSelectionKey)];
+    const nextKeys = expandKeysForRectOps(c, sel);
+    const next = removeGroupsTouchingKeys(c, touch);
+    contentRef.current = next;
+    onContentChange(next);
+    setSelectedKeys(nextKeys);
+  }, [onContentChange]);
 
   const titleFlex = flexAlignFromCanvasAlign(content.posterTitleAlign ?? "left");
   const bodyFlex = flexAlignFromCanvasAlign(content.posterBodyAlign ?? "left");
@@ -1357,45 +1547,6 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         boxSizing: "border-box",
       }}
     >
-      {multiSel && (
-        <div
-          className="pointer-events-auto absolute top-2 left-1/2 z-[120] flex -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-lg border border-gray-200 bg-white/95 px-2 py-1.5 shadow-md"
-          style={{ maxWidth: "calc(100% - 24px)" }}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <span className="mr-1 text-[10px] font-medium text-gray-600">{selectedKeys.length}개 선택</span>
-          {(
-            [
-              ["left", "좌"],
-              ["right", "우"],
-              ["centerH", "수평중앙"],
-              ["top", "상단"],
-              ["bottom", "하단"],
-              ["centerV", "수직중앙"],
-              ["distributeH", "가로간격"],
-              ["distributeV", "세로간격"],
-            ] as const
-          ).map(([mode, label]) => (
-            <button
-              key={mode}
-              type="button"
-              className="rounded border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 hover:border-[#F43182] hover:text-[#F43182]"
-              onClick={() => runAlign(mode)}
-            >
-              {label}
-            </button>
-          ))}
-          <button
-            type="button"
-            className="rounded border border-gray-300 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-700 hover:border-[#F43182] hover:text-[#F43182]"
-            onClick={() => setSelectedKeys([])}
-          >
-            모두 해제
-          </button>
-          <span className="text-[9px] text-gray-400">Shift+클릭으로 추가·해제</span>
-        </div>
-      )}
       <div
         ref={canvasRef}
         id="design-canvas"
@@ -1455,7 +1606,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             canvasW={displayW}
             canvasH={displayH}
             onRectChange={updatePanelBgRect}
-            isSelected={selectedKeys.includes("panelBg")}
+            isSelected={canvasSelectionContainsKey(content, selectedKeys, "panelBg")}
             onSelect={(opts) => {
               pickKey("panelBg", !!opts?.additive);
             }}
@@ -1483,7 +1634,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             canvasW={displayW}
             canvasH={displayH}
             onRectChange={updateImageRect}
-            isSelected={selectedKeys.includes("image")}
+            isSelected={canvasSelectionContainsKey(content, selectedKeys, "image")}
             onSelect={(opts) => {
               pickKey("image", !!opts?.additive);
               onFocusChange?.("image");
@@ -1553,7 +1704,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             canvasW={displayW}
             canvasH={displayH}
             onRectChange={updateTitleRect}
-            isSelected={selectedKeys.includes("title")}
+            isSelected={canvasSelectionContainsKey(content, selectedKeys, "title")}
             onSelect={(opts) => {
               pickKey("title", !!opts?.additive);
               onFocusChange?.("title");
@@ -1595,8 +1746,9 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                     const br = content.posterTitleBoldRanges;
                     const ir = content.posterTitleItalicRanges;
                     const ur = content.posterTitleUnderlineRanges;
-                    const hasTri = Boolean(br?.length || ir?.length || ur?.length);
-                    if (!content.title?.trim() && !hasTri) {
+                    const cr = content.posterTitleColorRanges;
+                    const hasQuad = Boolean(br?.length || ir?.length || ur?.length || cr?.length);
+                    if (!content.title?.trim() && !hasQuad) {
                       return (
                         <span style={{ ...tw, color: "#C4C4C4", textShadow: "none" }}>
                           {TITLE_PLACEHOLDER_TEXT}
@@ -1605,13 +1757,18 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                     }
                     const endsDot = content.title.endsWith(".");
                     const mainText = endsDot ? content.title.slice(0, -1) : content.title;
-                    if (hasTri) {
+                    if (hasQuad) {
                       return (
                         <>
-                          {renderPlainWithTriStyleRanges(mainText, br, ir, ur, tw, {
-                            defaultWeight: 800,
-                            strongWeight: 900,
-                          })}
+                          {renderPlainWithQuadStyleRanges(
+                            mainText,
+                            br,
+                            ir,
+                            ur,
+                            sanitizeColorRanges(mainText.length, cr as ColorRange[] | undefined),
+                            tw,
+                            { defaultWeight: 800, strongWeight: 900 }
+                          )}
                           {endsDot ? (
                             <span
                               style={{
@@ -1655,14 +1812,14 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
 
         {posterSubtitlesSafe.map((s, idx) => {
           if (!s.text?.trim()) return null;
-          const sr =
-            content.posterSubtitleRects?.[s.id] ?? {
-              ...DEFAULT_POSTER_SUBTITLE_RECT,
-              y: Math.min(
-                0.78,
-                DEFAULT_POSTER_SUBTITLE_RECT.y + idx * DEFAULT_POSTER_SUBTITLE_OFFSET_Y
-              ),
-            };
+          const subDefault = {
+            ...DEFAULT_POSTER_SUBTITLE_RECT,
+            y: Math.min(
+              0.78,
+              DEFAULT_POSTER_SUBTITLE_RECT.y + idx * DEFAULT_POSTER_SUBTITLE_OFFSET_Y
+            ),
+          };
+          const sr = coerceNormalizedRect(content.posterSubtitleRects?.[s.id], subDefault);
           const subAlign = getSubtitleAlign(content, s.id);
           const subFlex = flexAlignFromCanvasAlign(subAlign);
           return (
@@ -1672,7 +1829,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               canvasW={displayW}
               canvasH={displayH}
               onRectChange={(next) => updateSubtitleRect(s.id, next)}
-              isSelected={selectedKeys.includes(`subtitle:${s.id}`)}
+              isSelected={canvasSelectionContainsKey(content, selectedKeys, `subtitle:${s.id}`)}
               onSelect={(opts) => {
                 pickKey(`subtitle:${s.id}`, !!opts?.additive);
                 onFocusChange?.(`subtitle:${s.id}`);
@@ -1707,12 +1864,14 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                 >
                   {content.posterSubtitleBoldRanges?.[s.id]?.length ||
                   content.posterSubtitleItalicRanges?.[s.id]?.length ||
-                  content.posterSubtitleUnderlineRanges?.[s.id]?.length ? (
-                    renderPlainWithTriStyleRanges(
+                  content.posterSubtitleUnderlineRanges?.[s.id]?.length ||
+                  content.posterSubtitleColorRanges?.[s.id]?.length ? (
+                    renderPlainWithQuadStyleRanges(
                       s.text,
                       content.posterSubtitleBoldRanges?.[s.id],
                       content.posterSubtitleItalicRanges?.[s.id],
                       content.posterSubtitleUnderlineRanges?.[s.id],
+                      sanitizeColorRanges(s.text.length, content.posterSubtitleColorRanges?.[s.id] as ColorRange[] | undefined),
                       subtitleTextStyle(content, s.id, subtitleFontSize, subtitleColor),
                       { defaultWeight: 680, strongWeight: 800 }
                     )
@@ -1730,10 +1889,11 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           const br = normBodyRect(b.id);
           const bodyKey = `body:${b.id}`;
           const bStyle = bodyTextStyle(content, b.id, bodyFontSize, bodyColor);
-          const hasTri =
+          const hasQuad =
             Boolean(content.posterBodyBoldRanges?.[b.id]?.length) ||
             Boolean(content.posterBodyItalicRanges?.[b.id]?.length) ||
-            Boolean(content.posterBodyUnderlineRanges?.[b.id]?.length);
+            Boolean(content.posterBodyUnderlineRanges?.[b.id]?.length) ||
+            Boolean(content.posterBodyColorRanges?.[b.id]?.length);
           return (
             <DraggableCanvasOverlay
               key={b.id}
@@ -1741,14 +1901,17 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               canvasW={displayW}
               canvasH={displayH}
               onRectChange={(next) => updateBodyBlockRect(b.id, next)}
-              isSelected={selectedKeys.includes(bodyKey) || (b.id === "body-1" && selectedKeys.includes("body"))}
+              isSelected={
+                canvasSelectionContainsKey(content, selectedKeys, bodyKey) ||
+                (b.id === "body-1" && canvasSelectionContainsKey(content, selectedKeys, "body"))
+              }
               onSelect={(opts) => {
                 pickKey(bodyKey, !!opts?.additive);
                 const ft: DesignFocusTarget =
                   b.id === "body-1" ? "body" : (`body:${b.id}` as `body:${string}`);
                 onFocusChange?.(ft);
               }}
-              zIndex={10}
+              zIndex={10 + bi}
               label={posterBodiesSafe.length > 1 ? `본문 (${bi + 1})` : "본문"}
               borderRadiusMode="auto"
               snapStepPx={snapPx}
@@ -1768,14 +1931,15 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                     inlineEditTarget?.kind === "body" && inlineEditTarget.id === b.id ? 0 : 1,
                 }}
               >
-                {!b.text?.trim() && !hasTri ? (
+                {!b.text?.trim() && !hasQuad ? (
                   <span style={{ ...bStyle, color: "#C4C4C4" }}>본문을 입력하세요</span>
-                ) : hasTri ? (
-                  renderPlainWithTriStyleRanges(
+                ) : hasQuad ? (
+                  renderPlainWithQuadStyleRanges(
                     b.text,
                     content.posterBodyBoldRanges?.[b.id],
                     content.posterBodyItalicRanges?.[b.id],
                     content.posterBodyUnderlineRanges?.[b.id],
+                    sanitizeColorRanges(b.text.length, content.posterBodyColorRanges?.[b.id] as ColorRange[] | undefined),
                     bStyle,
                     { defaultWeight: 400, strongWeight: 700 }
                   )
@@ -1796,7 +1960,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             canvasW={displayW}
             canvasH={displayH}
             onRectChange={updateFooterRect}
-            isSelected={selectedKeys.includes("footer")}
+            isSelected={canvasSelectionContainsKey(content, selectedKeys, "footer")}
             onSelect={(opts) => {
               pickKey("footer", !!opts?.additive);
               onFocusChange?.("footer");
@@ -1827,18 +1991,20 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                 const hasTriF =
                   Boolean(content.posterFooterBoldRanges?.length) ||
                   Boolean(content.posterFooterItalicRanges?.length) ||
-                  Boolean(content.posterFooterUnderlineRanges?.length);
+                  Boolean(content.posterFooterUnderlineRanges?.length) ||
+                  Boolean(content.posterFooterColorRanges?.length);
                 if (!content.emphasizedTitle?.trim() && !hasTriF) {
                   return (
                     <span style={{ ...ft, color: "#C4C4C4" }}>유의사항을 입력하세요</span>
                   );
                 }
                 return hasTriF ? (
-                  renderPlainWithTriStyleRanges(
+                  renderPlainWithQuadStyleRanges(
                     content.emphasizedTitle ?? "",
                     content.posterFooterBoldRanges,
                     content.posterFooterItalicRanges,
                     content.posterFooterUnderlineRanges,
+                    sanitizeColorRanges((content.emphasizedTitle ?? "").length, content.posterFooterColorRanges as ColorRange[] | undefined),
                     footerTextStyle(content, disclaimerSize),
                     { defaultWeight: 400, strongWeight: 700 }
                   )
@@ -1912,7 +2078,10 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                       canvasW={displayW}
                       canvasH={displayH}
                       onRectChange={(next) => updateBadgeItemRect(b.id, next)}
-                      isSelected={selectedKeys.includes(`badge:${b.id}`) || (b.id === "legacy-1" && selectedKeys.includes("badge"))}
+                      isSelected={
+                        canvasSelectionContainsKey(content, selectedKeys, `badge:${b.id}`) ||
+                        (b.id === "legacy-1" && canvasSelectionContainsKey(content, selectedKeys, "badge"))
+                      }
                       onSelect={(opts) => {
                         pickKey(`badge:${b.id}`, !!opts?.additive);
                         onFocusChange?.("badge");
@@ -1963,7 +2132,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             canvasW={displayW}
             canvasH={displayH}
             snapStepPx={snapPx}
-            isSelected={selectedKeys.includes(`asset:${asset.id}`)}
+            isSelected={canvasSelectionContainsKey(content, selectedKeys, `asset:${asset.id}`)}
             onSelect={(id, opts) => {
               pickKey(`asset:${id}`, !!opts?.additive);
               onFocusChange?.({ assetId: id });
@@ -2135,14 +2304,14 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             const s = posterSubtitlesSafe.find((x) => x.id === inlineEditTarget.id);
             if (!s) return null;
             const idx = posterSubtitlesSafe.findIndex((x) => x.id === s.id);
-            const sr =
-              content.posterSubtitleRects?.[s.id] ?? {
-                ...DEFAULT_POSTER_SUBTITLE_RECT,
-                y: Math.min(
-                  0.78,
-                  DEFAULT_POSTER_SUBTITLE_RECT.y + idx * DEFAULT_POSTER_SUBTITLE_OFFSET_Y
-                ),
-              };
+            const subDefault = {
+              ...DEFAULT_POSTER_SUBTITLE_RECT,
+              y: Math.min(
+                0.78,
+                DEFAULT_POSTER_SUBTITLE_RECT.y + idx * DEFAULT_POSTER_SUBTITLE_OFFSET_Y
+              ),
+            };
+            const sr = coerceNormalizedRect(content.posterSubtitleRects?.[s.id], subDefault);
             const subF = flexAlignFromCanvasAlign(getSubtitleAlign(content, s.id));
             return (
               <textarea
@@ -2194,10 +2363,10 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             const badges = content.posterBadges ?? [];
             const b = badges.find((x) => x.id === id);
             if (!b) return null;
-            const rect =
-              content.posterBadgeRects?.[id] ??
-              content.posterBadgeRect ??
-              DEFAULT_POSTER_BADGE_RECT;
+            const perBadge = content.posterBadgeRects?.[id];
+            const rect = isValidNormalizedRect(perBadge)
+              ? perBadge
+              : coerceNormalizedRect(content.posterBadgeRect, DEFAULT_POSTER_BADGE_RECT);
             const m = computeBadgeAutoText(rect);
             return (
               <textarea

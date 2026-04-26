@@ -156,15 +156,22 @@ export async function deleteChunksForSource(sourceId: string): Promise<void> {
   if (error) console.error("[supabase] deleteChunksForSource failed:", error.message);
 }
 
+/** `public.rag_embeddings.embedding` is `vector(768)` in migrations. We force outputDimensionality=768 in geminiEmbeddings. */
+const RAG_EMBEDDING_VECTOR_DIM = 768;
+
 export async function insertChunksWithEmbeddings(args: {
   sourceId: string;
   chunks: string[];
   embeddingModel?: string;
   embed: (text: string) => Promise<number[]>;
-}): Promise<{ chunkCount: number } | null> {
+  /** Must match DB `vector(N)`. Default 768. */
+  expectedVectorDimensions?: number;
+}): Promise<{ chunkCount: number; embeddedCount: number } | null> {
   if (!isSupabaseRagEnabled()) return null;
   const sb = getSupabaseServiceClient();
-  const model = args.embeddingModel ?? "text-embedding-004";
+  const embeddingModel = args.embeddingModel ?? "gemini-embedding-001";
+  const expectedDim = args.expectedVectorDimensions ?? RAG_EMBEDDING_VECTOR_DIM;
+  let embeddedCount = 0;
 
   for (let idx = 0; idx < args.chunks.length; idx++) {
     const content = args.chunks[idx];
@@ -181,23 +188,203 @@ export async function insertChunksWithEmbeddings(args: {
       .select("id")
       .single();
     if (chunkErr) {
-      console.error("[supabase] insert chunk failed:", chunkErr.message);
+      console.error(
+        `[RAG] rag_chunks insert failed | sourceId=${args.sourceId} chunkIndex=${idx} | ${chunkErr.message}`
+      );
+      continue;
+    }
+    if (!chunkRow?.id) continue;
+
+    let vec: number[];
+    try {
+      vec = await args.embed(content);
+      console.log(
+        `[RAG] embed() ok | sourceId=${args.sourceId} chunkIndex=${idx} model=${embeddingModel} | vec.length=${Array.isArray(vec) ? vec.length : "(not array)"}`
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(
+        `[RAG] embed() failed | sourceId=${args.sourceId} chunkId=${chunkRow.id} chunkIndex=${idx} model=${embeddingModel} | ${msg}`
+      );
       continue;
     }
 
-    const vec = await args.embed(content);
-    const vecText = `[${vec.join(",")}]`;
-    const { error: embErr } = await sb.rpc("insert_rag_embedding", {
-      p_chunk_id: chunkRow.id,
-      p_model: model,
-      p_embedding: vecText,
-    });
-    if (embErr) {
-      console.error("[supabase] insert embedding failed:", embErr.message);
+    if (!Array.isArray(vec)) {
+      console.error(
+        `[RAG] invalid embedding: not a number[] | sourceId=${args.sourceId} chunkId=${chunkRow.id} chunkIndex=${idx} model=${embeddingModel} | typeof=${typeof vec}`
+      );
+      continue;
     }
+    if (vec.length !== expectedDim) {
+      console.error(
+        `[RAG] embedding dimension mismatch | sourceId=${args.sourceId} chunkId=${chunkRow.id} chunkIndex=${idx} model=${embeddingModel} | expected=${expectedDim} (DB rag_embeddings is vector(${expectedDim})) | got.length=${vec.length} — use a 768-dim model or change DB/RPC/expectedVectorDimensions`
+      );
+      continue;
+    }
+
+    const vecText = `[${vec.join(",")}]`;
+    const ok = await upsertEmbeddingForChunk({
+      sb,
+      sourceId: args.sourceId,
+      chunkId: chunkRow.id as string,
+      chunkIndex: idx,
+      model: embeddingModel,
+      vecText,
+      vecLength: vec.length,
+    });
+    if (ok) embeddedCount += 1;
   }
 
-  return { chunkCount: args.chunks.length };
+  const n = args.chunks.length;
+  if (n > 0 && embeddedCount < n) {
+    console.error(
+      `[RAG] insertChunksWithEmbeddings incomplete | sourceId=${args.sourceId} | embeddedCount=${embeddedCount}/${n} (missing=${n - embeddedCount})`
+    );
+  }
+  return { chunkCount: n, embeddedCount };
+}
+
+type SupabaseClientLike = ReturnType<typeof getSupabaseServiceClient>;
+
+/** Insert embedding via RPC; on failure fall back to direct table insert (service role client bypasses RLS). */
+async function upsertEmbeddingForChunk(args: {
+  sb: SupabaseClientLike;
+  sourceId: string;
+  chunkId: string;
+  chunkIndex: number;
+  model: string;
+  vecText: string;
+  vecLength: number;
+}): Promise<boolean> {
+  const { sb, sourceId, chunkId, chunkIndex, model, vecText, vecLength } = args;
+  const { error: rpcErr } = await sb.rpc("insert_rag_embedding", {
+    p_chunk_id: chunkId,
+    p_model: model,
+    p_embedding: vecText,
+  });
+  if (!rpcErr) return true;
+
+  const p = rpcErr as { message?: string; code?: string; details?: string; hint?: string };
+  const parts = [
+    `[RAG] insert_rag_embedding RPC failed`,
+    `sourceId=${sourceId}`,
+    `chunkId=${chunkId}`,
+    `chunkIndex=${chunkIndex}`,
+    `model=${model}`,
+    `vec.length=${vecLength}`,
+    `vecText.length=${vecText.length}`,
+    `message=${p.message ?? "(no message)"}`,
+  ];
+  if (p.code) parts.push(`code=${p.code}`);
+  if (p.details) parts.push(`details=${p.details}`);
+  if (p.hint) parts.push(`hint=${p.hint}`);
+  console.error(parts.join(" | "));
+
+  console.warn(`[RAG] falling back to direct insert into rag_embeddings | chunkId=${chunkId}`);
+  const { error: delErr } = await sb.from("rag_embeddings").delete().eq("chunk_id", chunkId);
+  if (delErr) {
+    console.error(
+      `[RAG] direct insert: cleanup existing failed | chunkId=${chunkId} | ${delErr.message}`
+    );
+  }
+  const { error: insErr } = await sb.from("rag_embeddings").insert({
+    chunk_id: chunkId,
+    model,
+    embedding: vecText,
+  });
+  if (insErr) {
+    const ip = insErr as { message?: string; code?: string; details?: string; hint?: string };
+    console.error(
+      [
+        `[RAG] direct insert into rag_embeddings failed`,
+        `sourceId=${sourceId}`,
+        `chunkId=${chunkId}`,
+        `chunkIndex=${chunkIndex}`,
+        `model=${model}`,
+        `vec.length=${vecLength}`,
+        `message=${ip.message ?? "(no message)"}`,
+        ip.code ? `code=${ip.code}` : null,
+        ip.details ? `details=${ip.details}` : null,
+        ip.hint ? `hint=${ip.hint}` : null,
+      ]
+        .filter(Boolean)
+        .join(" | ")
+    );
+    return false;
+  }
+  return true;
+}
+
+/** Find chunks with no embedding row and embed them (used by backfill). */
+export async function backfillMissingEmbeddings(args: {
+  embed: (text: string) => Promise<number[]>;
+  embeddingModel?: string;
+  expectedVectorDimensions?: number;
+  limit?: number;
+}): Promise<{ scanned: number; embedded: number; failed: number }> {
+  if (!isSupabaseRagEnabled()) return { scanned: 0, embedded: 0, failed: 0 };
+  const sb = getSupabaseServiceClient();
+  const embeddingModel = args.embeddingModel ?? "gemini-embedding-001";
+  const expectedDim = args.expectedVectorDimensions ?? 768;
+  const limit = Math.max(1, Math.min(2000, args.limit ?? 500));
+
+  const { data: existing, error: existingErr } = await sb
+    .from("rag_embeddings")
+    .select("chunk_id")
+    .limit(100000);
+  if (existingErr) {
+    console.error(`[RAG] backfill: load existing failed | ${existingErr.message}`);
+    return { scanned: 0, embedded: 0, failed: 0 };
+  }
+  const have = new Set<string>();
+  for (const row of (existing ?? []) as Array<{ chunk_id: string }>) have.add(row.chunk_id);
+
+  const { data: chunks, error: chunksErr } = await sb
+    .from("rag_chunks")
+    .select("id, source_id, chunk_index, content")
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  if (chunksErr) {
+    console.error(`[RAG] backfill: load chunks failed | ${chunksErr.message}`);
+    return { scanned: 0, embedded: 0, failed: 0 };
+  }
+
+  let scanned = 0;
+  let embedded = 0;
+  let failed = 0;
+  for (const c of (chunks ?? []) as Array<{ id: string; source_id: string; chunk_index: number; content: string }>) {
+    if (have.has(c.id)) continue;
+    scanned += 1;
+    let vec: number[];
+    try {
+      vec = await args.embed(c.content);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[RAG] backfill: embed() failed | chunkId=${c.id} | ${msg}`);
+      failed += 1;
+      continue;
+    }
+    if (!Array.isArray(vec) || vec.length !== expectedDim) {
+      console.error(
+        `[RAG] backfill: unexpected vec.length | chunkId=${c.id} | length=${Array.isArray(vec) ? vec.length : "(not array)"} expected=${expectedDim}`
+      );
+      failed += 1;
+      continue;
+    }
+    const ok = await upsertEmbeddingForChunk({
+      sb,
+      sourceId: c.source_id,
+      chunkId: c.id,
+      chunkIndex: c.chunk_index,
+      model: embeddingModel,
+      vecText: `[${vec.join(",")}]`,
+      vecLength: vec.length,
+    });
+    if (ok) embedded += 1;
+    else failed += 1;
+  }
+  console.log(`[RAG] backfill done | scanned=${scanned} embedded=${embedded} failed=${failed}`);
+  return { scanned, embedded, failed };
 }
 
 export async function matchRagChunks(args: {

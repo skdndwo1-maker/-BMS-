@@ -35,6 +35,7 @@ import {
   DEFAULT_POSTER_BODY_EXTRA_1,
   DEFAULT_POSTER_BODY_EXTRA_2,
 } from "@/design/posterDefaults";
+import { templates as allDesignTemplates } from "@/design/templates";
 
 const html2canvasOpts = {
   scale: 2,
@@ -130,10 +131,46 @@ function ensureBodySlot(c: DesignContent, index: number): DesignContent {
   return { ...c, posterBodies: bodies, posterBodyRects: rects };
 }
 
-const AI_TEXT_SECTIONS: { heading: string; items: [DesignEditorTextSuggestionTarget, string][] }[] = [
-  { heading: "메인 타이틀", items: [["mainTitle", "제안 받기"]] },
-  { heading: "본문", items: [["body", "제안 받기"]] },
-];
+type AiTextSection = { heading: string; items: [DesignEditorTextSuggestionTarget, string][] };
+
+/** RCS는 메인+본문 1쌍만. 그 외 온·오프라인은 우측 패널에서 추가한 부제·본문 개수에 맞춰 동적 노출 + 유의사항 포함. */
+function buildAiTextSections(content: DesignContent, templateId: string): AiTextSection[] {
+  const tpl = allDesignTemplates.find((t) => t.id === templateId);
+  const isRcs = tpl?.category === "rcs";
+
+  if (isRcs) {
+    return [
+      { heading: "메인 타이틀", items: [["mainTitle", "제안 받기"]] },
+      { heading: "본문", items: [["body", "제안 받기"]] },
+    ];
+  }
+
+  const subCount = Math.min(3, Math.max(0, content.posterSubtitles?.length ?? 0));
+  const bodyCount = Math.min(3, Math.max(1, content.posterBodies?.length ?? 1));
+
+  const subKeys: DesignEditorTextSuggestionTarget[] = ["subtitle", "subtitle2", "subtitle3"];
+  const bodyKeys: DesignEditorTextSuggestionTarget[] = ["body", "body2", "body3"];
+
+  const sections: AiTextSection[] = [{ heading: "메인 타이틀", items: [["mainTitle", "제안 받기"]] }];
+
+  if (subCount > 0) {
+    const subItems: [DesignEditorTextSuggestionTarget, string][] = [];
+    for (let i = 0; i < subCount; i++) {
+      subItems.push([subKeys[i]!, `부제 ${i + 1}`]);
+    }
+    sections.push({ heading: "부제", items: subItems });
+  }
+
+  const bodyItems: [DesignEditorTextSuggestionTarget, string][] = [];
+  for (let i = 0; i < bodyCount; i++) {
+    bodyItems.push([bodyKeys[i]!, `본문 ${i + 1}`]);
+  }
+  sections.push({ heading: "본문", items: bodyItems });
+
+  sections.push({ heading: "유의사항", items: [["footer", "제안 받기"]] });
+
+  return sections;
+}
 
 type AssistantTab = "text" | "inspect" | "correct";
 
@@ -148,6 +185,7 @@ export function DesignAssistantChat({
   templateId: string;
   guidelineId?: string;
 }) {
+  const aiTextSections = buildAiTextSections(content, templateId);
   const [tab, setTab] = useState<AssistantTab>("text");
   const [loading, setLoading] = useState(false);
   /** 제작물 주제 — VI 가이드와 함께 모든 AI 제안·검수·교정에 반영 */
@@ -492,7 +530,7 @@ export function DesignAssistantChat({
           {textSuggestSectionOpen ? (
             <div className="space-y-3">
               <div className="space-y-2.5">
-                {AI_TEXT_SECTIONS.map((sec) => (
+                {aiTextSections.map((sec) => (
                   <div
                     key={sec.heading}
                     className="rounded-lg border border-gray-200 bg-white/90 p-2 shadow-sm"

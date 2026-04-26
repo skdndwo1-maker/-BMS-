@@ -235,12 +235,23 @@ export interface DesignContent {
 
   /** 하단 유의사항 글자색 (미지정 시 VI 회색 톤) */
   posterFooterColor?: string;
+  /** 부분 색상(드래그 선택 구간) */
+  posterTitleColorRanges?: Array<{ start: number; end: number; hex: string }>;
+  posterFooterColorRanges?: Array<{ start: number; end: number; hex: string }>;
+  posterSubtitleColorRanges?: Record<string, Array<{ start: number; end: number; hex: string }>>;
+  posterBodyColorRanges?: Record<string, Array<{ start: number; end: number; hex: string }>>;
 
   /** 캔버스 툴바 타이포 세부 */
   posterTitleTypography?: PosterElementTypography;
   posterFooterTypography?: PosterElementTypography;
   posterBodyTypography?: Record<string, PosterElementTypography>;
   posterSubtitleTypography?: Record<string, PosterElementTypography>;
+
+  /**
+   * 비RCS 디자인 캔버스: 요소를 함께 선택·이동하기 위한 사용자 그룹.
+   * `keys` 값은 캔버스 선택 키와 동일 (예: title, image, badge:<id>, asset:<id>, body:<id> …).
+   */
+  canvasGroups?: Array<{ id: string; keys: string[] }>;
 }
 
 export interface ComplianceIssue {

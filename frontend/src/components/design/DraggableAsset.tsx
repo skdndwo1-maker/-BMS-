@@ -163,7 +163,7 @@ export function DraggableAsset({
         outline:   isSelected ? '2px solid #F43182' : '2px solid transparent',
         outlineOffset: '1px',
         userSelect: 'none',
-        zIndex:    isSelected ? 100 : 10,
+        zIndex:    isSelected ? 9000 : 10,
         boxSizing: 'border-box',
         overflow:  'visible',
       }}
@@ -182,7 +182,7 @@ export function DraggableAsset({
       {/* 선택됐을 때만 핸들 + 툴바 표시 */}
       {isSelected && !asset.locked && (
         <>
-          {/* 리사이즈 핸들 8개 */}
+          {/* 리사이즈 핸들 8개 — 다른 박스의 z-index와 무관하게 항상 위로 */}
           {handles.map((h) => (
             <div
               key={h.key}
@@ -194,9 +194,12 @@ export function DraggableAsset({
                 border:    '1.5px solid #fff',
                 borderRadius: '2px',
                 ...h.style,
-                zIndex: 101,
+                zIndex: 100000,
+                pointerEvents: 'auto',
+                boxShadow: '0 0 0 1px rgba(0,0,0,0.04)',
               }}
               onMouseDown={(e) => onMouseDownResize(e, h.key)}
+              onClick={(e) => e.stopPropagation()}
             />
           ))}
 
