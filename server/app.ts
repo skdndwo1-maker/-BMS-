@@ -1389,17 +1389,12 @@ app.post("/api/admin/runs/:id/approve", async (req, res) => {
             `[rag] approve indexing run=${id.slice(0, 8)} type=${String(run.type)} corpus=${corpusSource} chars=${corpus.length} chunks=${chunks.length}`
           );
           await deleteChunksForSource(src.sourceId);
-          const result = await insertChunksWithEmbeddings({
+          await insertChunksWithEmbeddings({
             sourceId: src.sourceId,
             chunks,
             embeddingModel: "text-embedding-004",
             embed: (t) => embedTextWithGemini(t, { model: "text-embedding-004" }),
           });
-          if (result) {
-            console.log(
-              `[rag] approve persisted run=${id.slice(0, 8)} type=${String(run.type)} requested=${chunks.length} inserted=${result.inserted} embedded=${result.embedded} failed=${result.failed}`
-            );
-          }
         }
       } catch (e) {
         console.error("[rag] run approve indexing failed:", e instanceof Error ? e.message : String(e));
