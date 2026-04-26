@@ -55,6 +55,8 @@ type SharedProps = {
   selectionRenderTick?: number;
   getSelection?: () => [number, number] | null;
   onTogglePartialStyle?: (which: "bold" | "italic" | "underline") => void;
+  /** 캔버스 인라인 편집 중 텍스트 일부만 색상 적용 */
+  onApplyPartialColor?: (hex: string) => void;
 };
 
 export function CanvasTextFormatControls({
@@ -64,6 +66,7 @@ export function CanvasTextFormatControls({
   selectionRenderTick = 0,
   getSelection,
   onTogglePartialStyle,
+  onApplyPartialColor,
 }: SharedProps) {
   void selectionRenderTick;
   const kind = target.kind;
@@ -182,7 +185,17 @@ export function CanvasTextFormatControls({
       });
   };
 
+  /**
+   * 글자색 적용
+   * - 캔버스 인라인 편집 중 텍스트 일부를 선택했다면 → 해당 구간에만 색상 적용(부분)
+   * - 그 외(요소만 선택된 상태) → 전체 색상 적용
+   */
   const setColor = (hex: string) => {
+    const sel = getSelection?.();
+    if (sel && sel[0] !== sel[1] && onApplyPartialColor) {
+      onApplyPartialColor(hex);
+      return;
+    }
     if (kind === "title") onDraft({ ...content, titleColor: hex });
     else if (kind === "footer") onDraft({ ...content, posterFooterColor: hex });
     else if (kind === "body") onDraft({ ...content, bodyColor: hex });
@@ -217,11 +230,31 @@ export function CanvasTextFormatControls({
     partialRange && partialRange[0] !== partialRange[1] && onTogglePartialStyle
   );
 
+  /**
+   * 굵기·기울임·밑줄 버튼:
+   * - 인라인 편집 중 글자 범위가 선택돼 있으면 → 해당 구간만 토글(부분 스타일)
+   * - 그 외(요소만 선택돼 있는 상태)에는 → 요소 전체 타이포그래피 토글
+   *   · 굵게: fontWeight 600~800 (off=400)
+   *   · 기울임: fontStyle italic / normal
+   *   · 밑줄: textDecoration underline / none
+   */
+  const onWeightForKind =
+    kind === "title" ? 800 : kind === "subtitle" ? 700 : 600;
+
   const tryPartial = (which: "bold" | "italic" | "underline") => {
-    if (!onTogglePartialStyle) return;
     const sel = getSelection?.();
-    if (!sel || sel[0] === sel[1]) return;
-    onTogglePartialStyle(which);
+    if (sel && sel[0] !== sel[1] && onTogglePartialStyle) {
+      onTogglePartialStyle(which);
+      return;
+    }
+    if (which === "bold") {
+      const isBold = fw >= boldThreshold;
+      applyTypo({ fontWeight: isBold ? 400 : onWeightForKind });
+    } else if (which === "italic") {
+      applyTypo({ fontStyle: fs === "italic" ? "normal" : "italic" });
+    } else {
+      applyTypo({ textDecoration: td === "underline" ? "none" : "underline" });
+    }
   };
 
   const setFont = (fam: string) => {
@@ -307,12 +340,8 @@ export function CanvasTextFormatControls({
       <div className="flex flex-wrap gap-0.5">
         <button
           type="button"
-          className={`${iconBtn} ${!hasPartialRange && fw >= boldThreshold ? iconActive : ""} ${!hasPartialRange ? "opacity-50" : ""}`}
-          title={
-            hasPartialRange
-              ? "선택 구간 굵게"
-              : "캔버스에서 더블클릭해 편집한 뒤, 구간을 드래그해 적용"
-          }
+          className={`${iconBtn} ${fw >= boldThreshold ? iconActive : ""}`}
+          title={hasPartialRange ? "선택 구간 굵게" : "전체 굵게 토글"}
           onMouseDown={(e) => {
             e.preventDefault();
             tryPartial("bold");
@@ -322,8 +351,8 @@ export function CanvasTextFormatControls({
         </button>
         <button
           type="button"
-          className={`${iconBtn} ${!hasPartialRange && fs === "italic" ? iconActive : ""} ${!hasPartialRange ? "opacity-50" : ""}`}
-          title={hasPartialRange ? "선택 구간 기울임" : "더블클릭 편집 후 구간을 드래그해 적용"}
+          className={`${iconBtn} ${fs === "italic" ? iconActive : ""}`}
+          title={hasPartialRange ? "선택 구간 기울임" : "전체 기울임 토글"}
           onMouseDown={(e) => {
             e.preventDefault();
             tryPartial("italic");
@@ -333,8 +362,8 @@ export function CanvasTextFormatControls({
         </button>
         <button
           type="button"
-          className={`${iconBtn} ${!hasPartialRange && td === "underline" ? iconActive : ""} ${!hasPartialRange ? "opacity-50" : ""}`}
-          title={hasPartialRange ? "선택 구간 밑줄" : "더블클릭 편집 후 구간을 드래그해 적용"}
+          className={`${iconBtn} ${td === "underline" ? iconActive : ""}`}
+          title={hasPartialRange ? "선택 구간 밑줄" : "전체 밑줄 토글"}
           onMouseDown={(e) => {
             e.preventDefault();
             tryPartial("underline");

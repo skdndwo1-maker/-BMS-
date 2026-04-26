@@ -12,6 +12,7 @@ type Props = {
   selectionRenderTick?: number;
   getSelection?: () => [number, number] | null;
   onTogglePartialStyle?: (which: "bold" | "italic" | "underline") => void;
+  onApplyPartialColor?: (hex: string) => void;
   onClose: () => void;
 };
 
@@ -29,6 +30,7 @@ export function CanvasTextFormatPanel({
   selectionRenderTick = 0,
   getSelection,
   onTogglePartialStyle,
+  onApplyPartialColor,
   onClose,
 }: Props) {
   return (
@@ -65,6 +67,7 @@ export function CanvasTextFormatPanel({
             selectionRenderTick={selectionRenderTick}
             getSelection={getSelection}
             onTogglePartialStyle={onTogglePartialStyle}
+            onApplyPartialColor={onApplyPartialColor}
           />
         )}
       </div>

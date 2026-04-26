@@ -219,12 +219,21 @@ export interface DesignContent {
   posterSubtitleBoldRanges?: Record<string, Array<{ start: number; end: number }>>;
   posterSubtitleItalicRanges?: Record<string, Array<{ start: number; end: number }>>;
   posterSubtitleUnderlineRanges?: Record<string, Array<{ start: number; end: number }>>;
+
+  /** 부분 글자색 — plain 기준 [start,end)에 hex 색상을 보관(전체 색상에 우선) */
+  posterTitleColorRanges?: Array<{ start: number; end: number; color: string }>;
+  posterFooterColorRanges?: Array<{ start: number; end: number; color: string }>;
+  posterBodyColorRanges?: Record<string, Array<{ start: number; end: number; color: string }>>;
+  posterSubtitleColorRanges?: Record<string, Array<{ start: number; end: number; color: string }>>;
+
   posterFooterRect?: { x: number; y: number; width: number; height: number };
 
   /** 텍스트 박스 자동 크기: 사용자가 핸들로 크기 조절하면 해당 플래그로 자동 맞춤 일시 중단 */
   posterTitleRectLocked?: boolean;
   posterFooterRectLocked?: boolean;
   posterBodyRectLocked?: Record<string, boolean>;
+  /** 부제 블록별 자동 크기 일시 중단 */
+  posterSubtitleRectLocked?: Record<string, boolean>;
 
   /** 포스터: 메인 타이틀/본문/하단 유의사항 정렬 */
   posterTitleAlign?: CanvasTextAlign;
@@ -241,6 +250,9 @@ export interface DesignContent {
   posterFooterTypography?: PosterElementTypography;
   posterBodyTypography?: Record<string, PosterElementTypography>;
   posterSubtitleTypography?: Record<string, PosterElementTypography>;
+
+  /** 비RCS 캔버스: 사용자 정의 그룹(선택 키 기반) */
+  canvasGroups?: Array<{ id: string; keys: string[] }>;
 }
 
 export interface ComplianceIssue {

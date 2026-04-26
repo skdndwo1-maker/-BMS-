@@ -4,6 +4,9 @@
 
 export type CharRange = { start: number; end: number };
 
+/** 부분 색상 — 같은 [start,end) 범위에 색상값을 함께 보관 */
+export type ColorRange = { start: number; end: number; color: string };
+
 export function sanitizeCharRanges(len: number, ranges: CharRange[] | undefined): CharRange[] {
   if (!ranges?.length) return [];
   return ranges
@@ -68,4 +71,52 @@ export function toggleCharRangesOnSelection(
   if (isFullyCovered(cur, a, b)) return subtractRange(cur, a, b);
   const next = [...cur, { start: a, end: b }];
   return sanitizeCharRanges(len, mergeOverlapping(next));
+}
+
+/** 색상 구간 정리 — 텍스트 길이로 클램프, 시작이 끝보다 큰 항목 제거 */
+export function sanitizeColorRanges(len: number, ranges: ColorRange[] | undefined): ColorRange[] {
+  if (!ranges?.length) return [];
+  return ranges
+    .map((r) => ({
+      start: Math.max(0, Math.min(len, Math.min(r.start, r.end))),
+      end: Math.max(0, Math.min(len, Math.max(r.start, r.end))),
+      color: r.color,
+    }))
+    .filter((r) => r.end > r.start && typeof r.color === "string" && r.color.length > 0);
+}
+
+/**
+ * 선택 구간 [a,b)에 색상을 적용. 기존 색상 구간이 부분 겹치면 잘라낸 뒤 새 색을 덮어씌운다.
+ * (같은 색이 이어지면 자연스럽게 합쳐지도록 머지)
+ */
+export function applyColorOnSelection(
+  plain: string,
+  ranges: ColorRange[] | undefined,
+  selStart: number,
+  selEnd: number,
+  color: string
+): ColorRange[] {
+  const len = plain.length;
+  const a = Math.max(0, Math.min(len, Math.min(selStart, selEnd)));
+  const b = Math.max(0, Math.min(len, Math.max(selStart, selEnd)));
+  if (a === b) return sanitizeColorRanges(len, ranges);
+  const cur = sanitizeColorRanges(len, ranges);
+  const out: ColorRange[] = [];
+  for (const r of cur) {
+    if (r.end <= a || r.start >= b) {
+      out.push(r);
+      continue;
+    }
+    if (r.start < a) out.push({ start: r.start, end: a, color: r.color });
+    if (r.end > b) out.push({ start: b, end: r.end, color: r.color });
+  }
+  out.push({ start: a, end: b, color });
+  out.sort((x, y) => x.start - y.start);
+  const merged: ColorRange[] = [];
+  for (const r of out) {
+    const last = merged[merged.length - 1];
+    if (last && last.end === r.start && last.color === r.color) last.end = r.end;
+    else merged.push({ ...r });
+  }
+  return merged;
 }

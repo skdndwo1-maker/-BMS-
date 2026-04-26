@@ -1,4 +1,15 @@
 import type { DesignContent } from "@/design/types";
+import {
+  DEFAULT_POSTER_BG_RECT,
+  DEFAULT_POSTER_BADGE_RECT,
+  DEFAULT_POSTER_BODY_EXTRA_1,
+  DEFAULT_POSTER_BODY_EXTRA_2,
+  DEFAULT_POSTER_BODY_RECT,
+  DEFAULT_POSTER_FOOTER_RECT,
+  DEFAULT_POSTER_SUBTITLE_OFFSET_Y,
+  DEFAULT_POSTER_SUBTITLE_RECT,
+  DEFAULT_POSTER_TITLE_RECT,
+} from "@/design/posterDefaults";
 
 export type NormalizedRect = { x: number; y: number; width: number; height: number };
 
@@ -8,32 +19,55 @@ export function clampNormRect(r: NormalizedRect): NormalizedRect {
   return { ...r, x, y };
 }
 
+/**
+ * 정렬·그룹 이동에서 사용. 명시 rect가 없어도 화면에는 기본 rect가 그려지므로
+ * 기본 rect로 폴백해 다중 선택 정렬 시 일부 요소만 빠지는 문제를 방지.
+ *
+ * - 본문 추가 블록(body-2, body-3 등)도 화면 렌더링과 동일한 기본 위치를 반환.
+ * - 부제 다중 블록은 인덱스 정보가 없으므로 첫 번째 기본 rect로 처리(렌더 시점에서
+ *   이미 명시 rect가 잡혀 있음 — 정렬 후 명시 rect로 저장됨).
+ */
 export function getPosterRectByKey(c: DesignContent, key: string): NormalizedRect | null {
   if (key.startsWith("subtitle:")) {
     const id = key.slice(9);
-    return c.posterSubtitleRects?.[id] ?? null;
+    return c.posterSubtitleRects?.[id] ?? defaultSubtitleRectFor(c, id);
   }
   if (key.startsWith("body:")) {
     const id = key.slice(5);
     const fromMap = c.posterBodyRects?.[id];
     if (fromMap) return fromMap;
-    if (id === "body-1") return c.posterBodyRect ?? null;
-    return null;
+    if (id === "body-1") return c.posterBodyRect ?? DEFAULT_POSTER_BODY_RECT;
+    if (id === "body-2") return DEFAULT_POSTER_BODY_EXTRA_1;
+    if (id === "body-3") return DEFAULT_POSTER_BODY_EXTRA_2;
+    return DEFAULT_POSTER_BODY_RECT;
   }
   switch (key) {
     case "image":
-      return c.posterBackgroundImageRect ?? null;
+      return c.posterBackgroundImageRect ?? DEFAULT_POSTER_BG_RECT;
     case "badge":
-      return c.posterBadgeRect ?? null;
+      return c.posterBadgeRect ?? DEFAULT_POSTER_BADGE_RECT;
     case "title":
-      return c.posterTitleRect ?? null;
+      return c.posterTitleRect ?? DEFAULT_POSTER_TITLE_RECT;
     case "body":
-      return c.posterBodyRect ?? (c.posterBodyRects?.["body-1"] ?? null);
+      return c.posterBodyRect ?? c.posterBodyRects?.["body-1"] ?? DEFAULT_POSTER_BODY_RECT;
     case "footer":
-      return c.posterFooterRect ?? null;
+      return c.posterFooterRect ?? DEFAULT_POSTER_FOOTER_RECT;
+    case "panelBg":
+      return c.panelBgRect ?? null;
+    case "xbannerBg":
+      return c.xbannerBgRect ?? null;
     default:
       return null;
   }
+}
+
+function defaultSubtitleRectFor(c: DesignContent, id: string): NormalizedRect {
+  const idx = (c.posterSubtitles ?? []).findIndex((s) => s.id === id);
+  if (idx <= 0) return DEFAULT_POSTER_SUBTITLE_RECT;
+  return {
+    ...DEFAULT_POSTER_SUBTITLE_RECT,
+    y: Math.min(0.78, DEFAULT_POSTER_SUBTITLE_RECT.y + idx * DEFAULT_POSTER_SUBTITLE_OFFSET_Y),
+  };
 }
 
 export function setPosterRectByKey(c: DesignContent, key: string, r: NormalizedRect): DesignContent {
@@ -60,6 +94,10 @@ export function setPosterRectByKey(c: DesignContent, key: string, r: NormalizedR
       return { ...c, posterBodyRect: r, posterBodyRects: { ...(c.posterBodyRects ?? {}), "body-1": r } };
     case "footer":
       return { ...c, posterFooterRect: r };
+    case "panelBg":
+      return { ...c, panelBgRect: r };
+    case "xbannerBg":
+      return { ...c, xbannerBgRect: r };
     default:
       return c;
   }

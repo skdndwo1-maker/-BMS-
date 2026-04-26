@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import html2canvas from "html2canvas";
 import { buildDesignCanvasCaptureOptions } from "@/lib/html2canvasDesignCapture";
 import { toast } from "sonner";
@@ -35,6 +35,7 @@ import {
   DEFAULT_POSTER_BODY_EXTRA_1,
   DEFAULT_POSTER_BODY_EXTRA_2,
 } from "@/design/posterDefaults";
+import { resolvePosterBodyBlocksForRender } from "@/design/posterBodyDisplay";
 
 const html2canvasOpts = {
   scale: 2,
@@ -100,6 +101,31 @@ function labelForTextTarget(t: DesignEditorTextSuggestionTarget): string {
   return m[t];
 }
 
+const SUBTITLE_TARGETS = ["subtitle", "subtitle2", "subtitle3"] as const satisfies readonly DesignEditorTextSuggestionTarget[];
+const BODY_TARGETS = ["body", "body2", "body3"] as const satisfies readonly DesignEditorTextSuggestionTarget[];
+
+/** 우측 패널의 부제·본문 슬롯 수와 동일한 개수의 제안 행 (부제 0~3, 본문 1~3, 유의사항 1) */
+function buildPanelSyncedTextSections(content: DesignContent): {
+  heading: string;
+  items: [DesignEditorTextSuggestionTarget, string][];
+}[] {
+  const sections: { heading: string; items: [DesignEditorTextSuggestionTarget, string][] }[] = [
+    { heading: "메인 타이틀", items: [["mainTitle", "제안 받기"]] },
+  ];
+  const subs = content.posterSubtitles ?? [];
+  for (let i = 0; i < subs.length; i++) {
+    const key = SUBTITLE_TARGETS[i];
+    if (key) sections.push({ heading: `부제 ${i + 1}`, items: [[key, "제안 받기"]] });
+  }
+  const bodies = resolvePosterBodyBlocksForRender(content);
+  for (let i = 0; i < bodies.length; i++) {
+    const key = BODY_TARGETS[i];
+    if (key) sections.push({ heading: `본문 ${i + 1}`, items: [[key, "제안 받기"]] });
+  }
+  sections.push({ heading: "유의사항", items: [["footer", "제안 받기"]] });
+  return sections;
+}
+
 function ensureSubtitleSlot(c: DesignContent, index: number): DesignContent {
   const subs = [...(c.posterSubtitles ?? [])];
   const rects = { ...(c.posterSubtitleRects ?? {}) };
@@ -130,7 +156,8 @@ function ensureBodySlot(c: DesignContent, index: number): DesignContent {
   return { ...c, posterBodies: bodies, posterBodyRects: rects };
 }
 
-const AI_TEXT_SECTIONS: { heading: string; items: [DesignEditorTextSuggestionTarget, string][] }[] = [
+/** RCS 등: 패널과 슬롯 동기 없이 고정 구성 */
+const AI_TEXT_SECTIONS_RCS: { heading: string; items: [DesignEditorTextSuggestionTarget, string][] }[] = [
   { heading: "메인 타이틀", items: [["mainTitle", "제안 받기"]] },
   { heading: "본문", items: [["body", "제안 받기"]] },
 ];
@@ -142,11 +169,14 @@ export function DesignAssistantChat({
   onApplyContent,
   templateId,
   guidelineId = "uplus-brand-guideline",
+  /** false: RCS 고정(메인·본문 1) · true: 우측 패널 부제·본문 슬롯 수와 동기(최대 각 3) */
+  panelSyncedTextSuggest = false,
 }: {
   content: DesignContent;
   onApplyContent: (next: DesignContent) => void;
   templateId: string;
   guidelineId?: string;
+  panelSyncedTextSuggest?: boolean;
 }) {
   const [tab, setTab] = useState<AssistantTab>("text");
   const [loading, setLoading] = useState(false);
@@ -175,6 +205,17 @@ export function DesignAssistantChat({
   const [correctCaption, setCorrectCaption] = useState("");
   /** 텍스트 제안 탭 하위(카테고리·미리보기) 접기 */
   const [textSuggestSectionOpen, setTextSuggestSectionOpen] = useState(false);
+
+  const textSuggestSections = useMemo(() => {
+    if (panelSyncedTextSuggest) return buildPanelSyncedTextSections(content);
+    return AI_TEXT_SECTIONS_RCS;
+  }, [panelSyncedTextSuggest, content]);
+
+  useEffect(() => {
+    if (!textPreview) return;
+    const valid = new Set(textSuggestSections.flatMap((s) => s.items.map((x) => x[0])));
+    if (!valid.has(textPreview.target)) setTextPreview(null);
+  }, [textPreview, textSuggestSections]);
 
   const captureCanvas = useCallback(async () => {
     const el = document.getElementById("design-canvas");
@@ -492,7 +533,7 @@ export function DesignAssistantChat({
           {textSuggestSectionOpen ? (
             <div className="space-y-3">
               <div className="space-y-2.5">
-                {AI_TEXT_SECTIONS.map((sec) => (
+                {textSuggestSections.map((sec) => (
                   <div
                     key={sec.heading}
                     className="rounded-lg border border-gray-200 bg-white/90 p-2 shadow-sm"

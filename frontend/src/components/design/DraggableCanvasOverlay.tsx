@@ -26,7 +26,7 @@ interface Props {
   /** 선택 시 외곽선 (편집 가능 표시) */
   label?: string;
   /** 모서리 라운드 모드 */
-  borderRadiusMode?: "auto" | "pill";
+  borderRadiusMode?: "auto" | "pill" | "square";
   /** auto 라운드 배율 */
   borderRadiusScale?: number;
   /** Alt+드래그로 내부 패닝 */
@@ -79,9 +79,11 @@ export function DraggableCanvasOverlay({
   };
 
   const rPx =
-    borderRadiusMode === "pill"
-      ? Math.max(1, px.height / 2)
-      : Math.max(10, Math.min(px.width, px.height) * 0.06 * Math.max(0.2, borderRadiusScale));
+    borderRadiusMode === "square"
+      ? 0
+      : borderRadiusMode === "pill"
+        ? Math.max(1, px.height / 2)
+        : Math.max(10, Math.min(px.width, px.height) * 0.06 * Math.max(0.2, borderRadiusScale));
 
   const dragStart = useRef<{ mx: number; my: number; ox: number; oy: number } | null>(null);
 

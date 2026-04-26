@@ -32,7 +32,9 @@ import {
   renderBodyWithBold,
 } from "./bodyRichText";
 import {
+  applyColorOnSelection,
   sanitizeCharRanges,
+  sanitizeColorRanges,
   toggleCharRangesOnSelection,
   type CharRange,
 } from "@/design/charStyleRanges";
@@ -40,9 +42,19 @@ import {
   applyGroupRectDelta,
   applyGroupRectLeaderResize,
   applyMultiAlign,
+  clampNormRect,
   selectedKeysIncludeBody,
   type AlignMode,
 } from "@/design/designCanvasAlign";
+import {
+  addCanvasGroup,
+  canGroupSelection,
+  canUngroupSelection,
+  expandKeysForRectOps,
+  findGroupContainingKey,
+  isGroupSelectionKey,
+  removeGroupsTouchingKeys,
+} from "@/design/canvasGroups";
 import { migrateBoldMarkdownToRanges, sanitizeBoldRanges } from "@/design/bodyBoldRanges";
 import {
   resolvePosterBodyBlocksForRender,
@@ -54,10 +66,12 @@ import {
   flexAlignFromCanvasAlign,
   footerTextStyle,
   getSubtitleAlign,
+  resolveFontFamily,
   subtitleTextStyle,
   titleTextStyle,
   type CanvasTextEditTarget,
 } from "@/design/canvasTextTypography";
+import { measureTextBlock } from "@/design/measureCanvasText";
 
 /** 캔버스 빈 타이틀 플레이스홀더 — 높이 자동 계산·표시 문구와 동일해야 함 */
 const TITLE_PLACEHOLDER_TEXT = "메인 타이틀을 입력하세요";
@@ -76,6 +90,7 @@ function applyRemoveBodyBlockIds(c: DesignContent, ids: Set<string>): DesignCont
   const restBold = { ...(c.posterBodyBoldRanges ?? {}) };
   const restItal = { ...(c.posterBodyItalicRanges ?? {}) };
   const restUnd = { ...(c.posterBodyUnderlineRanges ?? {}) };
+  const restColor = { ...(c.posterBodyColorRanges ?? {}) };
   const restTypo = { ...(c.posterBodyTypography ?? {}) };
   const restLocked = { ...(c.posterBodyRectLocked ?? {}) };
   for (const id of ids) {
@@ -83,6 +98,7 @@ function applyRemoveBodyBlockIds(c: DesignContent, ids: Set<string>): DesignCont
     delete restBold[id];
     delete restItal[id];
     delete restUnd[id];
+    delete restColor[id];
     delete restTypo[id];
     delete restLocked[id];
   }
@@ -96,6 +112,7 @@ function applyRemoveBodyBlockIds(c: DesignContent, ids: Set<string>): DesignCont
     posterBodyBoldRanges: restBold,
     posterBodyItalicRanges: restItal,
     posterBodyUnderlineRanges: restUnd,
+    posterBodyColorRanges: restColor,
     posterBodyTypography: restTypo,
     posterBodyRectLocked: restLocked,
     bodyText: nextBt,
@@ -159,6 +176,8 @@ interface DesignCanvasProps {
 export type DesignCanvasHandle = {
   getInlineTextSelection: () => [number, number] | null;
   handleTogglePartialStyle: (which: "bold" | "italic" | "underline") => void;
+  /** 인라인 편집 중 선택된 글자 구간에만 색상을 적용 */
+  handleApplyPartialColor: (hex: string) => void;
   getInlineEditActive: () => boolean;
 };
 
@@ -397,6 +416,9 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const titleFontSize = Math.max(10, Math.min(W * 0.08, displayH * 0.22)) * titleScale;
   const bodyFontSize = Math.max(8, Math.min(W * 0.04, displayH * 0.16)) * bodyScale;
   const disclaimerSize = Math.max(7, Math.min(W * 0.018, displayH * 0.10)) * footerScale;
+  /** 부제 크기는 메인 타이틀 배율과 독립(캔버스 너비·posterSubtitleFontScale만 사용)
+   * - autofit 효과에서도 참조해야 하므로 본문/타이틀과 같은 위치에서 선언 */
+  const subtitleFontSize = W * 0.045 * ((content.posterSubtitleFontScale ?? 100) / 100);
 
   // 로고: 너비의 15~20%(기본 18%). 가로형(>=3:1)일 때 40% 축소
   const logoBase = W * 0.18;
@@ -426,31 +448,32 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const gapPx = realAspect >= 3 ? Math.max(8, Math.min(18, displayH * 0.06)) : displayH * 0.035;
 
   const computeDefaultTextRects = (titleTextRaw: string) => {
-    const x = W * marginX;
-    const w = Math.max(40, W * (1 - marginX * 2));
+    // Compute in px then normalize (0~1). DraggableCanvasOverlay expects normalized rect.
+    const xPx = W * marginX;
+    const wPx = Math.max(40, W * (1 - marginX * 2));
 
     // 로고 높이는 실제 이미지 비율을 모르므로 안전한 근사치로 배치(너비 기준, 상한 적용)
     const approxLogoH = Math.min(displayH * 0.18, Math.max(18, effectiveLogoWidth * 0.3));
     const logoY = displayH * marginTop;
 
-    const titleY = logoY + approxLogoH + gapPx;
+    const titleYPx = logoY + approxLogoH + gapPx;
     const titleLineH = Math.max(12, titleFontSize * 1.15);
-    const titleCharsPerLine = Math.max(6, Math.floor(w / Math.max(10, titleFontSize * 0.9)));
+    const titleCharsPerLine = Math.max(6, Math.floor(wPx / Math.max(10, titleFontSize * 0.9)));
     const titleLen = titleTextRaw.trim().length;
     const computedTitleLines = titleLen ? Math.ceil(titleLen / titleCharsPerLine) : 2;
     const titleLines = Math.min(3, Math.max(2, computedTitleLines));
     const titleH = titleLineH * titleLines + titleLineH * 0.15;
 
-    const bodyY = titleY + titleH + gapPx;
+    const bodyYPx = titleYPx + titleH + gapPx;
     const bodyLineH = Math.max(11, bodyFontSize * 1.35);
     const bodyH = Math.min(displayH * 0.42, Math.max(bodyLineH * 4, displayH * 0.18));
 
-    const footerY = bodyY + bodyH + gapPx;
+    const footerYPx = bodyYPx + bodyH + gapPx;
     const footerLineH = Math.max(10, disclaimerSize * 1.35);
     const footerH = Math.min(displayH * 0.22, Math.max(footerLineH * 2, displayH * 0.10));
 
     const bottomLimit = displayH * (1 - marginTop);
-    let overflow = footerY + footerH - bottomLimit;
+    let overflow = footerYPx + footerH - bottomLimit;
     let shrinkBodyH = bodyH;
     let shrinkFooterH = footerH;
     let shrinkTitleH = titleH;
@@ -476,10 +499,15 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     }
 
     return {
-      titleRect: { x, y: titleY, width: w, height: shrinkTitleH },
-      bodyRect: { x, y: bodyY, width: w, height: shrinkBodyH },
-      footerRect: { x, y: footerY, width: w, height: shrinkFooterH },
-      badgeRect: { x, y: Math.max(displayH * marginTop, titleY - gapPx - displayH * 0.06), width: W * 0.3, height: displayH * 0.06 },
+      titleRect: clampNormRect({ x: xPx / W, y: titleYPx / displayH, width: wPx / W, height: shrinkTitleH / displayH }),
+      bodyRect: clampNormRect({ x: xPx / W, y: bodyYPx / displayH, width: wPx / W, height: shrinkBodyH / displayH }),
+      footerRect: clampNormRect({ x: xPx / W, y: footerYPx / displayH, width: wPx / W, height: shrinkFooterH / displayH }),
+      badgeRect: clampNormRect({
+        x: xPx / W,
+        y: Math.max(displayH * marginTop, titleYPx - gapPx - displayH * 0.06) / displayH,
+        width: (W * 0.3) / W,
+        height: (displayH * 0.06) / displayH,
+      }),
     };
   };
 
@@ -620,17 +648,26 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   /** 다중 선택 시: Shift 없이 클릭 → 단일 선택. Shift+클릭 → 목록에 추가·제거(토글). 같은 요소를 다시 눌러 드래그할 때는 선택 유지 */
   const pickKey = useCallback((key: string, additive: boolean) => {
     setSelectedKeys((prev) => {
+      const c = contentRef.current;
+      const g = findGroupContainingKey(c.canvasGroups, key);
       if (additive) {
+        if (g) {
+          const gk = `group:${g.id}`;
+          if (prev.includes(gk)) return prev.filter((k) => k !== gk);
+          return [...prev, gk];
+        }
         if (prev.includes(key)) return prev.filter((k) => k !== key);
         return [...prev, key];
       }
       if (prev.length > 1 && prev.includes(key)) return prev;
+      if (g) return [`group:${g.id}`];
       return [key];
     });
   }, []);
 
   useEffect(() => {
-    if (!selectedKeys.includes("image")) setImageInnerPosAdjust(false);
+    const keys = expandKeysForRectOps(contentRef.current, selectedKeys);
+    if (!keys.includes("image")) setImageInnerPosAdjust(false);
   }, [selectedKeys]);
 
   useEffect(() => {
@@ -649,7 +686,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     (id: string, patch: Partial<AssetLayer>) => {
       if (!onContentChange) return;
       const c = contentRef.current;
-      const keys = selectedKeysRef.current;
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       const k = `asset:${id}`;
       if (
         keys.length >= 2 &&
@@ -768,7 +805,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       const ae = document.activeElement;
       if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement) return;
       if ((ae as HTMLElement | null)?.isContentEditable) return;
-      const keys = selectedKeysRef.current;
+      const c0 = contentRef.current;
+      const keys = expandKeysForRectOps(c0, selectedKeysRef.current);
       const removeTitle = keys.includes("title");
       const removeFooter = keys.includes("footer");
       const removeImage = keys.includes("image");
@@ -792,6 +830,12 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         next.posterImagePosY = undefined;
       }
       if (bodyIds.size > 0) next = applyRemoveBodyBlockIds(next, bodyIds);
+      const removedKeys: string[] = [];
+      if (removeTitle) removedKeys.push("title");
+      if (removeFooter) removedKeys.push("footer");
+      if (removeImage) removedKeys.push("image");
+      for (const id of bodyIds) removedKeys.push(id === "body-1" ? "body" : `body:${id}`);
+      next = removeGroupsTouchingKeys(next, [...removedKeys, ...selectedKeysRef.current.filter(isGroupSelectionKey)]);
       onContentChange(next);
       setSelectedKeys((prev) =>
         prev.filter((k) => {
@@ -919,14 +963,60 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     [inlineEditTarget, onContentDraftChange, getInlineTextSelection]
   );
 
+  /**
+   * 인라인 편집 중 선택된 글자 구간에 색상을 적용.
+   * 선택이 없거나 편집이 활성화되지 않았으면 호출자(좌측 패널)가 전체 색상으로 폴백 처리.
+   */
+  const handleApplyPartialColor = useCallback(
+    (hex: string) => {
+      if (!onContentDraftChange || !inlineEditTarget) return;
+      const sel = getInlineTextSelection();
+      if (!sel) return;
+      const [a, b] = sel;
+      const c = contentRef.current;
+      const t = inlineEditTarget;
+      if (t.kind === "title") {
+        const plain = c.title ?? "";
+        const next = applyColorOnSelection(plain, c.posterTitleColorRanges, a, b, hex);
+        onContentDraftChange({ ...c, posterTitleColorRanges: next });
+        return;
+      }
+      if (t.kind === "footer") {
+        const plain = c.emphasizedTitle ?? "";
+        const next = applyColorOnSelection(plain, c.posterFooterColorRanges, a, b, hex);
+        onContentDraftChange({ ...c, posterFooterColorRanges: next });
+        return;
+      }
+      if (t.kind === "body") {
+        const id = t.id;
+        const block = c.posterBodies?.find((x) => x.id === id);
+        const plain = block?.text ?? "";
+        const map = { ...(c.posterBodyColorRanges ?? {}) };
+        map[id] = applyColorOnSelection(plain, map[id], a, b, hex);
+        onContentDraftChange({ ...c, posterBodyColorRanges: map });
+        return;
+      }
+      if (t.kind === "subtitle") {
+        const id = t.id;
+        const sub = c.posterSubtitles?.find((x) => x.id === id);
+        const plain = sub?.text ?? "";
+        const map = { ...(c.posterSubtitleColorRanges ?? {}) };
+        map[id] = applyColorOnSelection(plain, map[id], a, b, hex);
+        onContentDraftChange({ ...c, posterSubtitleColorRanges: map });
+      }
+    },
+    [inlineEditTarget, onContentDraftChange, getInlineTextSelection]
+  );
+
   useImperativeHandle(
     ref,
     () => ({
       getInlineTextSelection,
       handleTogglePartialStyle,
+      handleApplyPartialColor,
       getInlineEditActive: () => inlineEditTarget !== null,
     }),
-    [getInlineTextSelection, handleTogglePartialStyle, inlineEditTarget]
+    [getInlineTextSelection, handleTogglePartialStyle, handleApplyPartialColor, inlineEditTarget]
   );
 
   useEffect(() => {
@@ -953,13 +1043,35 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     (mode: AlignMode) => {
       if (!onContentChange) return;
       const c = contentRef.current;
-      const keys = selectedKeysRef.current;
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       const merged = applyMultiAlign(c, keys, mode);
       contentRef.current = merged;
       onContentChange(merged);
     },
     [onContentChange]
   );
+
+  const groupSelection = useCallback(() => {
+    if (!onContentChange) return;
+    const c = contentRef.current;
+    const res = addCanvasGroup(c, expandKeysForRectOps(c, selectedKeysRef.current));
+    if (!res) return;
+    contentRef.current = res.content;
+    onContentChange(res.content);
+    setSelectedKeys([`group:${res.groupId}`]);
+  }, [onContentChange]);
+
+  const ungroupSelection = useCallback(() => {
+    if (!onContentChange) return;
+    const c = contentRef.current;
+    const sel = selectedKeysRef.current;
+    const touch = [...expandKeysForRectOps(c, sel), ...sel.filter(isGroupSelectionKey)];
+    const nextKeys = expandKeysForRectOps(c, sel);
+    const next = removeGroupsTouchingKeys(c, touch);
+    contentRef.current = next;
+    onContentChange(next);
+    setSelectedKeys(nextKeys);
+  }, [onContentChange]);
 
   const imageRect = content.posterBackgroundImageRect ?? DEFAULT_POSTER_BG_RECT;
   const badgeRect = content.posterBadgeRect ?? DEFAULT_POSTER_BADGE_RECT;
@@ -982,13 +1094,19 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       if (!onContentChange) return;
       const c = contentRef.current;
       const prev = c.posterBackgroundImageRect ?? DEFAULT_POSTER_BG_RECT;
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       if (next.width !== prev.width || next.height !== prev.height) {
+        if (keys.length >= 2 && keys.includes("image")) {
+          const merged = applyGroupRectLeaderResize(c, keys, "image", prev, next);
+          contentRef.current = merged;
+          onContentChange(merged);
+          return;
+        }
         const u = { ...c, posterBackgroundImageRect: next };
         contentRef.current = u;
         onContentChange(u);
         return;
       }
-      const keys = selectedKeysRef.current;
       if (keys.length >= 2 && keys.includes("image")) {
         const dx = next.x - prev.x;
         const dy = next.y - prev.y;
@@ -1023,7 +1141,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       const c = contentRef.current;
       const prev = c.posterBadgeRects?.[id] ?? DEFAULT_POSTER_BADGE_RECT;
       const key = `badge:${id}`;
-      const keys = selectedKeysRef.current;
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       if (next.width !== prev.width || next.height !== prev.height) {
         if (keys.length >= 2 && keys.includes(key)) {
           const merged = applyGroupRectLeaderResize(c, keys, key, prev, next);
@@ -1058,7 +1176,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       if (!onContentChange) return;
       const c = contentRef.current;
       const prev = c.posterTitleRect ?? DEFAULT_POSTER_TITLE_RECT;
-      const keys = selectedKeysRef.current;
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       if (next.width !== prev.width || next.height !== prev.height) {
         if (keys.length >= 2 && keys.includes("title")) {
           const merged = applyGroupRectLeaderResize(c, keys, "title", prev, next);
@@ -1095,7 +1213,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       const prev =
         c.posterBodyRects?.[id] ?? (id === "body-1" ? c.posterBodyRect : undefined) ?? DEFAULT_POSTER_BODY_RECT;
       const key = `body:${id}`;
-      const keys = selectedKeysRef.current;
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       if (next.width !== prev.width || next.height !== prev.height) {
         if (keys.length >= 2 && selectedKeysIncludeBody(keys, id)) {
           const merged = applyGroupRectLeaderResize(c, keys, key, prev, next);
@@ -1139,7 +1257,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       const c = contentRef.current;
       const prev = c.posterSubtitleRects?.[id] ?? DEFAULT_POSTER_SUBTITLE_RECT;
       const key = `subtitle:${id}`;
-      const keys = selectedKeysRef.current;
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       if (next.width !== prev.width || next.height !== prev.height) {
         if (keys.length >= 2 && keys.includes(key)) {
           const merged = applyGroupRectLeaderResize(c, keys, key, prev, next);
@@ -1147,7 +1265,11 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           onContentChange(merged);
           return;
         }
-        const u = { ...c, posterSubtitleRects: { ...(c.posterSubtitleRects ?? {}), [id]: next } };
+        const u = {
+          ...c,
+          posterSubtitleRects: { ...(c.posterSubtitleRects ?? {}), [id]: next },
+          posterSubtitleRectLocked: { ...(c.posterSubtitleRectLocked ?? {}), [id]: true },
+        };
         contentRef.current = u;
         onContentChange(u);
         return;
@@ -1174,7 +1296,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       if (!onContentChange) return;
       const c = contentRef.current;
       const prev = c.posterFooterRect ?? DEFAULT_POSTER_FOOTER_RECT;
-      const keys = selectedKeysRef.current;
+      const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       if (next.width !== prev.width || next.height !== prev.height) {
         if (keys.length >= 2 && keys.includes("footer")) {
           const merged = applyGroupRectLeaderResize(c, keys, "footer", prev, next);
@@ -1204,33 +1326,94 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     [onContentChange]
   );
 
+  /**
+   * 텍스트 박스 자동 크기 (Auto-fit)
+   * - 정책: 박스가 텍스트보다 넓지 않도록 가장 긴 줄의 측정 너비를 그대로 반영.
+   *   글자 추가/줄바꿈 시 자라고, 줄어들면 함께 축소.
+   * - 정렬에 따라 앵커를 다르게 두어 박스 좌우 위치가 시각적으로 유지되도록 함.
+   * - `*Locked` 플래그가 true면(템플릿 레이아웃 또는 사용자가 수동 리사이즈한 직후)
+   *   적용을 건너뛰고, 텍스트가 다시 편집되면 호출부에서 lock이 해제되어 다음 렌더에 맞춤.
+   */
+  const fitNormalizedRect = useCallback(
+    (
+      prev: { x: number; y: number; width: number; height: number },
+      wantWPx: number,
+      wantHPx: number,
+      anchor: "left" | "center" | "right",
+      bounds: { minWPx: number; maxWPx: number; minHPx: number; maxHPx: number }
+    ): { x: number; y: number; width: number; height: number } => {
+      const wPx = Math.max(bounds.minWPx, Math.min(bounds.maxWPx, wantWPx));
+      const hPx = Math.max(bounds.minHPx, Math.min(bounds.maxHPx, wantHPx));
+      const nw = wPx / displayW;
+      const nh = hPx / displayH;
+      const prevCenter = prev.x + prev.width / 2;
+      const prevRight = prev.x + prev.width;
+      let nx = prev.x;
+      if (anchor === "center") nx = prevCenter - nw / 2;
+      else if (anchor === "right") nx = prevRight - nw;
+      let ny = prev.y;
+      if (nx + nw > 1) nx = 1 - nw;
+      if (nx < 0) nx = 0;
+      if (ny + nh > 1) ny = 1 - nh;
+      if (ny < 0) ny = 0;
+      return { x: nx, y: ny, width: nw, height: nh };
+    },
+    [displayW, displayH]
+  );
+
   useLayoutEffect(() => {
     const draft = onContentDraftChange;
     if (!draft) return;
     if (content.posterTitleOnCanvas === false) return;
     if (content.posterTitleRectLocked) return;
     const tr = content.posterTitleRect ?? DEFAULT_POSTER_TITLE_RECT;
-    const wPx = tr.width * displayW;
-    const charW = titleFontSize * 0.52;
-    const charsPerLine = Math.max(4, wPx / Math.max(1, charW));
     const raw = content.title?.trim() ? content.title : TITLE_PLACEHOLDER_TEXT;
-    const lines = raw.split("\n").reduce(
-      (acc, line) => acc + Math.max(1, Math.ceil(line.length / charsPerLine)),
-      0
+    const t = content.posterTitleTypography ?? {};
+    const m = measureTextBlock({
+      text: raw,
+      fontPx: titleFontSize,
+      fontWeight: t.fontWeight ?? 800,
+      fontFamily: resolveFontFamily(t.fontFamily),
+      fontStyle: t.fontStyle ?? "normal",
+      letterSpacingEm: t.letterSpacingEm ?? -0.025,
+      lineHeight: t.lineHeight ?? 1.15,
+    });
+    /** 박스 외곽선과 글자 사이 약간의 여유: 가장자리에서 글자가 잘리지 않도록 */
+    const padX = titleFontSize * 0.18;
+    const padY = titleFontSize * 0.4;
+    const align = content.posterTitleAlign ?? "left";
+    const next = fitNormalizedRect(
+      tr,
+      m.widthPx + padX,
+      m.heightPx + padY,
+      align === "center" ? "center" : align === "right" ? "right" : "left",
+      {
+        minWPx: Math.max(40, titleFontSize * 1.4),
+        maxWPx: displayW * 0.96,
+        minHPx: Math.max(24, titleFontSize * 0.9),
+        maxHPx: displayH * 0.5,
+      }
     );
-    const wantH = (lines * titleFontSize * 1.15 + titleFontSize * 0.4) / displayH;
-    const nh = Math.min(0.5, Math.max(0.12, wantH));
-    if (Math.abs(nh - tr.height) < 0.003) return;
-    draft({ ...content, posterTitleRect: { ...tr, height: nh } });
+    if (
+      Math.abs(next.width - tr.width) < 0.003 &&
+      Math.abs(next.height - tr.height) < 0.003 &&
+      Math.abs(next.x - tr.x) < 0.003 &&
+      Math.abs(next.y - tr.y) < 0.003
+    )
+      return;
+    draft({ ...content, posterTitleRect: next });
   }, [
     content,
     content.title,
     content.posterTitleRect,
     content.posterTitleRectLocked,
+    content.posterTitleAlign,
+    content.posterTitleTypography,
     titleFontSize,
     displayW,
     displayH,
     onContentDraftChange,
+    fitNormalizedRect,
   ]);
 
   useLayoutEffect(() => {
@@ -1240,25 +1423,51 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     if (content.posterFooterRectLocked) return;
     if (!content.emphasizedTitle?.trim()) return;
     const fr = content.posterFooterRect ?? DEFAULT_POSTER_FOOTER_RECT;
-    const wPx = fr.width * displayW;
-    const charW = disclaimerSize * 0.5;
-    const charsPerLine = Math.max(4, wPx / Math.max(1, charW));
-    const lines = content.emphasizedTitle.split("\n").reduce(
-      (acc, line) => acc + Math.max(1, Math.ceil(line.length / charsPerLine)),
-      0
+    const t = content.posterFooterTypography ?? {};
+    const m = measureTextBlock({
+      text: content.emphasizedTitle,
+      fontPx: disclaimerSize,
+      fontWeight: t.fontWeight ?? 400,
+      fontFamily: resolveFontFamily(t.fontFamily),
+      fontStyle: t.fontStyle ?? "normal",
+      letterSpacingEm: t.letterSpacingEm ?? 0,
+      lineHeight: t.lineHeight ?? 1.6,
+    });
+    const padX = disclaimerSize * 0.4;
+    const padY = disclaimerSize * 0.3;
+    const align = content.posterFooterAlign ?? "left";
+    const next = fitNormalizedRect(
+      fr,
+      m.widthPx + padX,
+      m.heightPx + padY,
+      align === "center" ? "center" : align === "right" ? "right" : "left",
+      {
+        minWPx: Math.max(40, disclaimerSize * 4),
+        maxWPx: displayW * 0.96,
+        minHPx: Math.max(16, disclaimerSize * 1.2),
+        maxHPx: displayH * 0.22,
+      }
     );
-    const wantH = (lines * disclaimerSize * 1.6 + disclaimerSize * 0.3) / displayH;
-    const nh = Math.min(0.22, Math.max(0.045, wantH));
-    if (Math.abs(nh - fr.height) < 0.003) return;
-    draft({ ...content, posterFooterRect: { ...fr, height: nh } });
+    if (
+      Math.abs(next.width - fr.width) < 0.003 &&
+      Math.abs(next.height - fr.height) < 0.003 &&
+      Math.abs(next.x - fr.x) < 0.003 &&
+      Math.abs(next.y - fr.y) < 0.003
+    )
+      return;
+    draft({ ...content, posterFooterRect: next });
   }, [
+    content,
     content.emphasizedTitle,
     content.posterFooterRect,
     content.posterFooterRectLocked,
+    content.posterFooterAlign,
+    content.posterFooterTypography,
     disclaimerSize,
     displayW,
     displayH,
     onContentDraftChange,
+    fitNormalizedRect,
   ]);
 
   useLayoutEffect(() => {
@@ -1275,21 +1484,43 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         next.posterBodyRects?.[b.id] ??
         (b.id === "body-1" ? next.posterBodyRect : undefined) ??
         DEFAULT_POSTER_BODY_RECT;
-      const wPx = br.width * displayW;
-      const charW = bodyFontSize * 0.48;
-      const charsPerLine = Math.max(6, wPx / Math.max(1, charW));
-      const lines = b.text.split("\n").reduce(
-        (acc, line) => acc + Math.max(1, Math.ceil(line.length / charsPerLine)),
-        0
+      const t = next.posterBodyTypography?.[b.id] ?? {};
+      const m = measureTextBlock({
+        text: b.text,
+        fontPx: bodyFontSize,
+        fontWeight: t.fontWeight ?? 400,
+        fontFamily: resolveFontFamily(t.fontFamily),
+        fontStyle: t.fontStyle ?? "normal",
+        letterSpacingEm: t.letterSpacingEm ?? 0,
+        lineHeight: t.lineHeight ?? 1.75,
+      });
+      const padX = bodyFontSize * 0.32;
+      const padY = bodyFontSize * 0.2;
+      const align = next.posterBodyAlign ?? "left";
+      const fitted = fitNormalizedRect(
+        br,
+        m.widthPx + padX,
+        m.heightPx + padY,
+        align === "center" ? "center" : align === "right" ? "right" : "left",
+        {
+          minWPx: Math.max(40, bodyFontSize * 4),
+          maxWPx: displayW * 0.96,
+          minHPx: Math.max(16, bodyFontSize * 1.2),
+          maxHPx: displayH * 0.7,
+        }
       );
-      const wantH = (lines * bodyFontSize * 1.75 + bodyFontSize * 0.15) / displayH;
-      const nh = Math.min(0.7, Math.max(0.06, wantH));
-      if (Math.abs(nh - br.height) < 0.004) continue;
-      const rects = { ...(next.posterBodyRects ?? {}), [b.id]: { ...br, height: nh } };
+      if (
+        Math.abs(fitted.width - br.width) < 0.004 &&
+        Math.abs(fitted.height - br.height) < 0.004 &&
+        Math.abs(fitted.x - br.x) < 0.004 &&
+        Math.abs(fitted.y - br.y) < 0.004
+      )
+        continue;
+      const rects = { ...(next.posterBodyRects ?? {}), [b.id]: fitted };
       next = {
         ...next,
         posterBodyRects: rects,
-        ...(b.id === "body-1" ? { posterBodyRect: { ...br, height: nh } } : {}),
+        ...(b.id === "body-1" ? { posterBodyRect: fitted } : {}),
       };
       touched = true;
     }
@@ -1301,10 +1532,86 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     content.posterBodyRects,
     content.posterBodyRect,
     content.posterBodyRectLocked,
+    content.posterBodyAlign,
+    content.posterBodyTypography,
     bodyFontSize,
     displayW,
     displayH,
     onContentDraftChange,
+    fitNormalizedRect,
+  ]);
+
+  useLayoutEffect(() => {
+    const draft = onContentDraftChange;
+    if (!draft) return;
+    const subs = content.posterSubtitles ?? [];
+    if (subs.length === 0) return;
+    let next = content;
+    let touched = false;
+    for (let idx = 0; idx < subs.length; idx++) {
+      const s = subs[idx]!;
+      if (!s.text?.trim()) continue;
+      if (content.posterSubtitleRectLocked?.[s.id]) continue;
+      const sr =
+        next.posterSubtitleRects?.[s.id] ?? {
+          ...DEFAULT_POSTER_SUBTITLE_RECT,
+          y: Math.min(
+            0.78,
+            DEFAULT_POSTER_SUBTITLE_RECT.y + idx * DEFAULT_POSTER_SUBTITLE_OFFSET_Y
+          ),
+        };
+      const t = next.posterSubtitleTypography?.[s.id] ?? {};
+      const m = measureTextBlock({
+        text: s.text,
+        fontPx: subtitleFontSize,
+        fontWeight: t.fontWeight ?? 680,
+        fontFamily: resolveFontFamily(t.fontFamily),
+        fontStyle: t.fontStyle ?? "normal",
+        letterSpacingEm: t.letterSpacingEm ?? -0.02,
+        lineHeight: t.lineHeight ?? 1.35,
+      });
+      const padX = subtitleFontSize * 0.3;
+      const padY = subtitleFontSize * 0.25;
+      const align = getSubtitleAlign(next, s.id);
+      const fitted = fitNormalizedRect(
+        sr,
+        m.widthPx + padX,
+        m.heightPx + padY,
+        align === "center" ? "center" : align === "right" ? "right" : "left",
+        {
+          minWPx: Math.max(40, subtitleFontSize * 3),
+          maxWPx: displayW * 0.96,
+          minHPx: Math.max(16, subtitleFontSize * 1.2),
+          maxHPx: displayH * 0.4,
+        }
+      );
+      if (
+        Math.abs(fitted.width - sr.width) < 0.004 &&
+        Math.abs(fitted.height - sr.height) < 0.004 &&
+        Math.abs(fitted.x - sr.x) < 0.004 &&
+        Math.abs(fitted.y - sr.y) < 0.004
+      )
+        continue;
+      next = {
+        ...next,
+        posterSubtitleRects: { ...(next.posterSubtitleRects ?? {}), [s.id]: fitted },
+      };
+      touched = true;
+    }
+    if (touched) draft(next);
+  }, [
+    content,
+    content.posterSubtitles,
+    content.posterSubtitleRects,
+    content.posterSubtitleRectLocked,
+    content.posterSubtitleAlign,
+    content.posterSubtitleTypography,
+    content.posterTitleAlign,
+    subtitleFontSize,
+    displayW,
+    displayH,
+    onContentDraftChange,
+    fitNormalizedRect,
   ]);
 
   /** VI 1칸 높이의 30%까지 축소 허용(높이·폭 동일 기준의 최소 단계) */
@@ -1328,10 +1635,11 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     },
     [badgeCharsOptimal, displayH, displayW, minBadgeHGrid]
   );
-  /** 부제 크기는 메인 타이틀 배율과 독립(캔버스 너비·posterSubtitleFontScale만 사용) */
-  const subtitleFontSize = W * 0.045 * ((content.posterSubtitleFontScale ?? 100) / 100);
-
-  const multiSel = selectedKeys.length >= 2;
+  const expandedSelKeys = useMemo(
+    () => expandKeysForRectOps(content, selectedKeys),
+    [content.canvasGroups, selectedKeys]
+  );
+  const multiSel = expandedSelKeys.length >= 2;
 
   const titleFlex = flexAlignFromCanvasAlign(content.posterTitleAlign ?? "left");
   const bodyFlex = flexAlignFromCanvasAlign(content.posterBodyAlign ?? "left");
@@ -1364,7 +1672,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          <span className="mr-1 text-[10px] font-medium text-gray-600">{selectedKeys.length}개 선택</span>
+          <span className="mr-1 text-[10px] font-medium text-gray-600">{expandedSelKeys.length}개 선택</span>
           {(
             [
               ["left", "좌"],
@@ -1392,6 +1700,22 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             onClick={() => setSelectedKeys([])}
           >
             모두 해제
+          </button>
+          <button
+            type="button"
+            disabled={!canGroupSelection(contentRef.current, selectedKeys)}
+            className="rounded border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 hover:border-[#F43182] hover:text-[#F43182] disabled:opacity-40"
+            onClick={groupSelection}
+          >
+            그룹
+          </button>
+          <button
+            type="button"
+            disabled={!canUngroupSelection(contentRef.current, selectedKeys)}
+            className="rounded border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 hover:border-[#F43182] hover:text-[#F43182] disabled:opacity-40"
+            onClick={ungroupSelection}
+          >
+            그룹 해제
           </button>
           <span className="text-[9px] text-gray-400">Shift+클릭으로 추가·해제</span>
         </div>
@@ -1455,7 +1779,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             canvasW={displayW}
             canvasH={displayH}
             onRectChange={updatePanelBgRect}
-            isSelected={selectedKeys.includes("panelBg")}
+            isSelected={expandedSelKeys.includes("panelBg")}
             onSelect={(opts) => {
               pickKey("panelBg", !!opts?.additive);
             }}
@@ -1483,7 +1807,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             canvasW={displayW}
             canvasH={displayH}
             onRectChange={updateImageRect}
-            isSelected={selectedKeys.includes("image")}
+            isSelected={expandedSelKeys.includes("image")}
             onSelect={(opts) => {
               pickKey("image", !!opts?.additive);
               onFocusChange?.("image");
@@ -1553,14 +1877,14 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             canvasW={displayW}
             canvasH={displayH}
             onRectChange={updateTitleRect}
-            isSelected={selectedKeys.includes("title")}
+            isSelected={expandedSelKeys.includes("title")}
             onSelect={(opts) => {
               pickKey("title", !!opts?.additive);
               onFocusChange?.("title");
             }}
             zIndex={10}
             label="메인 타이틀"
-            borderRadiusMode="auto"
+            borderRadiusMode="square"
             snapStepPx={snapPx}
             locked={isPlacard}
             onOverlayDoubleClick={() => {
@@ -1595,7 +1919,12 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                     const br = content.posterTitleBoldRanges;
                     const ir = content.posterTitleItalicRanges;
                     const ur = content.posterTitleUnderlineRanges;
-                    const hasTri = Boolean(br?.length || ir?.length || ur?.length);
+                    const cr = sanitizeColorRanges(
+                      (content.title ?? "").length,
+                      content.posterTitleColorRanges
+                    );
+                    const hasTri =
+                      Boolean(br?.length || ir?.length || ur?.length) || cr.length > 0;
                     if (!content.title?.trim() && !hasTri) {
                       return (
                         <span style={{ ...tw, color: "#C4C4C4", textShadow: "none" }}>
@@ -1606,11 +1935,21 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                     const endsDot = content.title.endsWith(".");
                     const mainText = endsDot ? content.title.slice(0, -1) : content.title;
                     if (hasTri) {
+                      const adjColors = endsDot
+                        ? cr
+                            .map((r) => ({
+                              start: Math.min(r.start, mainText.length),
+                              end: Math.min(r.end, mainText.length),
+                              color: r.color,
+                            }))
+                            .filter((r) => r.end > r.start)
+                        : cr;
                       return (
                         <>
                           {renderPlainWithTriStyleRanges(mainText, br, ir, ur, tw, {
                             defaultWeight: 800,
                             strongWeight: 900,
+                            colors: adjColors,
                           })}
                           {endsDot ? (
                             <span
@@ -1672,14 +2011,14 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               canvasW={displayW}
               canvasH={displayH}
               onRectChange={(next) => updateSubtitleRect(s.id, next)}
-              isSelected={selectedKeys.includes(`subtitle:${s.id}`)}
+              isSelected={expandedSelKeys.includes(`subtitle:${s.id}`)}
               onSelect={(opts) => {
                 pickKey(`subtitle:${s.id}`, !!opts?.additive);
                 onFocusChange?.(`subtitle:${s.id}`);
               }}
               zIndex={9}
               label="부제"
-              borderRadiusMode="auto"
+              borderRadiusMode="square"
               snapStepPx={snapPx}
               onOverlayDoubleClick={() => {
                 onBeginCanvasTextEdit?.();
@@ -1705,20 +2044,26 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                       inlineEditTarget?.kind === "subtitle" && inlineEditTarget.id === s.id ? 0 : 1,
                   }}
                 >
-                  {content.posterSubtitleBoldRanges?.[s.id]?.length ||
-                  content.posterSubtitleItalicRanges?.[s.id]?.length ||
-                  content.posterSubtitleUnderlineRanges?.[s.id]?.length ? (
-                    renderPlainWithTriStyleRanges(
+                  {(() => {
+                    const subColors = sanitizeColorRanges(
+                      s.text.length,
+                      content.posterSubtitleColorRanges?.[s.id]
+                    );
+                    const hasSubTri =
+                      Boolean(content.posterSubtitleBoldRanges?.[s.id]?.length) ||
+                      Boolean(content.posterSubtitleItalicRanges?.[s.id]?.length) ||
+                      Boolean(content.posterSubtitleUnderlineRanges?.[s.id]?.length) ||
+                      subColors.length > 0;
+                    if (!hasSubTri) return s.text;
+                    return renderPlainWithTriStyleRanges(
                       s.text,
                       content.posterSubtitleBoldRanges?.[s.id],
                       content.posterSubtitleItalicRanges?.[s.id],
                       content.posterSubtitleUnderlineRanges?.[s.id],
                       subtitleTextStyle(content, s.id, subtitleFontSize, subtitleColor),
-                      { defaultWeight: 680, strongWeight: 800 }
-                    )
-                  ) : (
-                    s.text
-                  )}
+                      { defaultWeight: 680, strongWeight: 800, colors: subColors }
+                    );
+                  })()}
                 </p>
               </div>
             </DraggableCanvasOverlay>
@@ -1730,10 +2075,15 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           const br = normBodyRect(b.id);
           const bodyKey = `body:${b.id}`;
           const bStyle = bodyTextStyle(content, b.id, bodyFontSize, bodyColor);
+          const bColorRanges = sanitizeColorRanges(
+            b.text.length,
+            content.posterBodyColorRanges?.[b.id]
+          );
           const hasTri =
             Boolean(content.posterBodyBoldRanges?.[b.id]?.length) ||
             Boolean(content.posterBodyItalicRanges?.[b.id]?.length) ||
-            Boolean(content.posterBodyUnderlineRanges?.[b.id]?.length);
+            Boolean(content.posterBodyUnderlineRanges?.[b.id]?.length) ||
+            bColorRanges.length > 0;
           return (
             <DraggableCanvasOverlay
               key={b.id}
@@ -1741,7 +2091,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               canvasW={displayW}
               canvasH={displayH}
               onRectChange={(next) => updateBodyBlockRect(b.id, next)}
-              isSelected={selectedKeys.includes(bodyKey) || (b.id === "body-1" && selectedKeys.includes("body"))}
+              isSelected={expandedSelKeys.includes(bodyKey) || (b.id === "body-1" && expandedSelKeys.includes("body"))}
               onSelect={(opts) => {
                 pickKey(bodyKey, !!opts?.additive);
                 const ft: DesignFocusTarget =
@@ -1750,7 +2100,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               }}
               zIndex={10}
               label={posterBodiesSafe.length > 1 ? `본문 (${bi + 1})` : "본문"}
-              borderRadiusMode="auto"
+              borderRadiusMode="square"
               snapStepPx={snapPx}
               locked={isPlacard}
               onOverlayDoubleClick={() => {
@@ -1777,7 +2127,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                     content.posterBodyItalicRanges?.[b.id],
                     content.posterBodyUnderlineRanges?.[b.id],
                     bStyle,
-                    { defaultWeight: 400, strongWeight: 700 }
+                    { defaultWeight: 400, strongWeight: 700, colors: bColorRanges }
                   )
                 ) : content.posterBodyBoldRanges?.[b.id]?.length ? (
                   renderPlainWithBoldRanges(b.text, content.posterBodyBoldRanges[b.id], bStyle)
@@ -1796,14 +2146,14 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             canvasW={displayW}
             canvasH={displayH}
             onRectChange={updateFooterRect}
-            isSelected={selectedKeys.includes("footer")}
+            isSelected={expandedSelKeys.includes("footer")}
             onSelect={(opts) => {
               pickKey("footer", !!opts?.additive);
               onFocusChange?.("footer");
             }}
             zIndex={10}
             label="유의사항"
-            borderRadiusMode="auto"
+            borderRadiusMode="square"
             snapStepPx={snapPx}
             locked={isPlacard}
             onOverlayDoubleClick={() => {
@@ -1824,10 +2174,15 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             >
               {(() => {
                 const ft = footerTextStyle(content, disclaimerSize);
+                const fColorRanges = sanitizeColorRanges(
+                  (content.emphasizedTitle ?? "").length,
+                  content.posterFooterColorRanges
+                );
                 const hasTriF =
                   Boolean(content.posterFooterBoldRanges?.length) ||
                   Boolean(content.posterFooterItalicRanges?.length) ||
-                  Boolean(content.posterFooterUnderlineRanges?.length);
+                  Boolean(content.posterFooterUnderlineRanges?.length) ||
+                  fColorRanges.length > 0;
                 if (!content.emphasizedTitle?.trim() && !hasTriF) {
                   return (
                     <span style={{ ...ft, color: "#C4C4C4" }}>유의사항을 입력하세요</span>
@@ -1840,7 +2195,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                     content.posterFooterItalicRanges,
                     content.posterFooterUnderlineRanges,
                     footerTextStyle(content, disclaimerSize),
-                    { defaultWeight: 400, strongWeight: 700 }
+                    { defaultWeight: 400, strongWeight: 700, colors: fColorRanges }
                   )
                 ) : (
                   content.emphasizedTitle
@@ -1912,7 +2267,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                       canvasW={displayW}
                       canvasH={displayH}
                       onRectChange={(next) => updateBadgeItemRect(b.id, next)}
-                      isSelected={selectedKeys.includes(`badge:${b.id}`) || (b.id === "legacy-1" && selectedKeys.includes("badge"))}
+                      isSelected={expandedSelKeys.includes(`badge:${b.id}`) || (b.id === "legacy-1" && expandedSelKeys.includes("badge"))}
                       onSelect={(opts) => {
                         pickKey(`badge:${b.id}`, !!opts?.additive);
                         onFocusChange?.("badge");
@@ -1963,7 +2318,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             canvasW={displayW}
             canvasH={displayH}
             snapStepPx={snapPx}
-            isSelected={selectedKeys.includes(`asset:${asset.id}`)}
+            isSelected={expandedSelKeys.includes(`asset:${asset.id}`)}
             onSelect={(id, opts) => {
               pickKey(`asset:${id}`, !!opts?.additive);
               onFocusChange?.({ assetId: id });
@@ -2159,6 +2514,10 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                     posterSubtitles: (content.posterSubtitles ?? []).map((x) =>
                       x.id === s.id ? { ...x, text: v } : x
                     ),
+                    posterSubtitleRectLocked: {
+                      ...(content.posterSubtitleRectLocked ?? {}),
+                      [s.id]: false,
+                    },
                   });
                 }}
                 onBlur={endTextEditIfBlurOutside}

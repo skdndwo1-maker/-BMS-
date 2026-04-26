@@ -965,6 +965,10 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                     posterSubtitles: (content.posterSubtitles ?? []).map((x) =>
                       x.id === s.id ? { ...x, text: v } : x
                     ),
+                    posterSubtitleRectLocked: {
+                      ...(content.posterSubtitleRectLocked ?? {}),
+                      [s.id]: false,
+                    },
                   });
                 }}
                 placeholder="부제 텍스트"

@@ -475,7 +475,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
 
   return (
     <TooltipProvider>
-      <div className="flex h-[100dvh] max-h-[100dvh] min-h-0 flex-col overflow-hidden bg-[#F5F5F5]">
+      <div className="flex h-screen max-h-screen min-h-0 flex-col overflow-hidden bg-[#F5F5F5]" style={{ height: "100dvh", maxHeight: "100dvh" }}>
 
         {/* ── Header ──────────────────────────────────────────────── */}
         <header className="flex-shrink-0 bg-white border-b border-gray-200">
@@ -674,6 +674,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                       selectionRenderTick={textFormatSelectionTick}
                       getSelection={() => designCanvasRef.current?.getInlineTextSelection() ?? null}
                       onTogglePartialStyle={(w) => designCanvasRef.current?.handleTogglePartialStyle(w)}
+                      onApplyPartialColor={(hex) => designCanvasRef.current?.handleApplyPartialColor(hex)}
                       onClose={() => setTextOptionsPanelOpen(false)}
                     />
                   )
@@ -751,6 +752,8 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                       content={content}
                       onApplyContent={setContentWithHistory}
                       templateId={actualTemplateId ?? ""}
+                      /* RCS(568×338)만 제외 — 그 외 온라인/오프라인은 우측 패널 부제·본문 슬롯과 동일 규칙 */
+                      panelSyncedTextSuggest={!isRcsTemplate}
                     />
                   </div>
                 </div>
