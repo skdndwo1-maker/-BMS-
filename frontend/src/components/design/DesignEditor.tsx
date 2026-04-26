@@ -475,10 +475,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
 
   return (
     <TooltipProvider>
-      <div
-        data-app-shell="design-editor"
-        className="fixed inset-0 flex min-h-0 flex-col overflow-hidden bg-[#F5F5F5]"
-      >
+      <div className="flex h-[100dvh] max-h-[100dvh] min-h-0 flex-col overflow-hidden bg-[#F5F5F5]">
 
         {/* ── Header ──────────────────────────────────────────────── */}
         <header className="flex-shrink-0 bg-white border-b border-gray-200">
@@ -677,82 +674,9 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                       selectionRenderTick={textFormatSelectionTick}
                       getSelection={() => designCanvasRef.current?.getInlineTextSelection() ?? null}
                       onTogglePartialStyle={(w) => designCanvasRef.current?.handleTogglePartialStyle(w)}
-                      onApplyPartialColor={(hex) => designCanvasRef.current?.handleApplyPartialColor(hex)}
                       onClose={() => setTextOptionsPanelOpen(false)}
                     />
                   )
-                ) : null}
-                {!isRcsTemplate ? (
-                  <div className="border border-gray-200 bg-white shadow-sm rounded-lg overflow-hidden">
-                    <div className="px-2 py-1.5 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-gray-800">정렬 · 그룹</span>
-                      <span className="text-[10px] text-gray-500 font-mono tabular-nums">
-                        {designCanvasRef.current?.getExpandedSelectionKeys()?.length ?? 0}개
-                      </span>
-                    </div>
-                    <div className="p-2 flex flex-col gap-2">
-                      <div className="grid grid-cols-4 gap-1.5">
-                        {(
-                          [
-                            ["left", "좌"],
-                            ["centerH", "중"],
-                            ["right", "우"],
-                            ["distributeH", "가로"],
-                            ["top", "상"],
-                            ["centerV", "중"],
-                            ["bottom", "하"],
-                            ["distributeV", "세로"],
-                          ] as const
-                        ).map(([mode, label]) => (
-                          <button
-                            key={mode}
-                            type="button"
-                            className="h-8 rounded-md border border-gray-200 bg-white text-[11px] font-medium text-gray-700 hover:border-[#F43182] hover:text-[#F43182]"
-                            onClick={() => {
-                              const n = designCanvasRef.current?.getExpandedSelectionKeys()?.length ?? 0;
-                              if (n < 2) return;
-                              pushUndoSnapshot();
-                              designCanvasRef.current?.alignSelected(mode as any);
-                            }}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <button
-                          type="button"
-                          className="h-8 rounded-md border border-gray-200 bg-white text-[11px] font-semibold text-gray-700 hover:border-[#F43182] hover:text-[#F43182]"
-                          onClick={() => {
-                            pushUndoSnapshot();
-                            designCanvasRef.current?.groupSelection();
-                          }}
-                        >
-                          그룹
-                        </button>
-                        <button
-                          type="button"
-                          className="h-8 rounded-md border border-gray-200 bg-white text-[11px] font-semibold text-gray-700 hover:border-[#F43182] hover:text-[#F43182]"
-                          onClick={() => {
-                            pushUndoSnapshot();
-                            designCanvasRef.current?.ungroupSelection();
-                          }}
-                        >
-                          그룹 해제
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        className="h-8 rounded-md border border-gray-300 bg-gray-50 text-[11px] font-medium text-gray-700 hover:border-[#F43182] hover:text-[#F43182]"
-                        onClick={() => designCanvasRef.current?.clearSelection()}
-                      >
-                        선택 해제
-                      </button>
-                      <p className="text-[10px] text-gray-500 leading-snug">
-                        Shift+클릭으로 여러 요소를 선택한 뒤 정렬/그룹을 적용하세요.
-                      </p>
-                    </div>
-                  </div>
                 ) : null}
                 <p className="text-[9px] text-gray-500 leading-snug px-0.5">
                   Shift+클릭으로 여러 요소를 추가·해제해 함께 이동·정렬할 수 있습니다. 빈 배경을 클릭하면 선택이 해제됩니다.

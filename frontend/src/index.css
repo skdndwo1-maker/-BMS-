@@ -6,8 +6,3 @@
   min-height: 100svh;
   width: 100%;
 }
-
-/* 디자인 에디터 전용 — 페이지 스크롤 차단(상태바 아래 빈 흰 영역 방지) */
-body:has([data-app-shell="design-editor"]) {
-  overflow: hidden;
-}

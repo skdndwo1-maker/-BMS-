@@ -42,7 +42,6 @@ import { persistRun, persistRunArtifact } from "./runPersistence.js";
 import { extractGuidelineText } from "./guidelineExtract.js";
 import { embedTextWithGemini } from "./geminiEmbeddings.js";
 import {
-  backfillMissingEmbeddings,
   deleteChunksForSource,
   fileSha256Hex,
   insertChunksWithEmbeddings,
@@ -129,7 +128,7 @@ async function buildPrimaryGuidelineBlock(guidelineId: string, queryText?: strin
   if (queryText?.trim() && process.env.GEMINI_API_KEY?.trim() && process.env.SUPABASE_URL?.trim()) {
     try {
       const q = queryText.trim().slice(0, 6000);
-      const qEmb = await embedTextWithGemini(q, { model: "gemini-embedding-001" });
+      const qEmb = await embedTextWithGemini(q, { model: "text-embedding-004" });
       const matches = await matchRagChunks({ queryEmbedding: qEmb, guidelineId, sourceType: "guideline", topK: 8 });
       const picked = matches.filter((m) => typeof m.similarity === "number" && m.similarity >= 0.2).slice(0, 6);
       if (picked.length > 0) {
@@ -512,8 +511,8 @@ app.post("/api/guidelines/:id/analyze", async (req, res) => {
           await insertChunksWithEmbeddings({
             sourceId: src.sourceId,
             chunks,
-            embeddingModel: "gemini-embedding-001",
-            embed: (t) => embedTextWithGemini(t, { model: "gemini-embedding-001" }),
+            embeddingModel: "text-embedding-004",
+            embed: (t) => embedTextWithGemini(t, { model: "text-embedding-004" }),
           });
         }
       } catch (e) {
@@ -1372,8 +1371,8 @@ app.post("/api/admin/runs/:id/approve", async (req, res) => {
           await insertChunksWithEmbeddings({
             sourceId: src.sourceId,
             chunks,
-            embeddingModel: "gemini-embedding-001",
-            embed: (t) => embedTextWithGemini(t, { model: "gemini-embedding-001" }),
+            embeddingModel: "text-embedding-004",
+            embed: (t) => embedTextWithGemini(t, { model: "text-embedding-004" }),
           });
         }
       } catch (e) {
@@ -1418,32 +1417,6 @@ app.post("/api/admin/runs/:id/reject", async (req, res) => {
     if (revErr) console.error("[supabase] insert review failed:", revErr.message);
 
     res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
-  }
-});
-
-/** Re-embed any rag_chunks that don't yet have a row in rag_embeddings. */
-app.post("/api/admin/rag/backfill-embeddings", async (req, res) => {
-  const auth = await requireAdmin(req);
-  if (!auth.ok) {
-    res.status(auth.status).json({ ok: false, error: auth.error });
-    return;
-  }
-  if (!process.env.GEMINI_API_KEY?.trim()) {
-    res.status(400).json({ ok: false, error: "GEMINI_API_KEY_missing" });
-    return;
-  }
-  try {
-    const limitRaw = req.body?.limit;
-    const limit = typeof limitRaw === "number" && Number.isFinite(limitRaw) ? Math.floor(limitRaw) : 500;
-    const result = await backfillMissingEmbeddings({
-      embed: (text: string) => embedTextWithGemini(text),
-      embeddingModel: "gemini-embedding-001",
-      expectedVectorDimensions: 768,
-      limit,
-    });
-    res.json({ ok: true, ...result });
   } catch (e) {
     res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
   }

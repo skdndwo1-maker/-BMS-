@@ -1,7 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { BoldRange } from "@/design/bodyBoldRanges";
 import type { CharRange } from "@/design/charStyleRanges";
-import type { ColorRange } from "@/design/colorStyleRanges";
 
 /**
  * plain 텍스트 + 굵게 구간(문자 오프셋)으로 렌더 (입력란에 ** 없음)
@@ -81,59 +80,6 @@ export function renderPlainWithTriStyleRanges(
     style.fontWeight = isB ? Math.max(dw, sw) : dw;
     style.fontStyle = isI ? "italic" : baseStyle.fontStyle ?? "normal";
     style.textDecoration = isU ? "underline" : baseStyle.textDecoration ?? "none";
-    nodes.push(
-      <span key={k++} style={style}>
-        {plain.slice(s, e)}
-      </span>
-    );
-  }
-  return <>{nodes}</>;
-}
-
-/** 굵게·기울임·밑줄·색상 구간을 겹쳐서 렌더 (부분 스타일) */
-export function renderPlainWithQuadStyleRanges(
-  plain: string,
-  bold: CharRange[] | undefined,
-  italic: CharRange[] | undefined,
-  underline: CharRange[] | undefined,
-  colors: ColorRange[] | undefined,
-  baseStyle: CSSProperties,
-  opts?: { defaultWeight?: number; strongWeight?: number }
-): ReactNode {
-  const dw =
-    opts?.defaultWeight ??
-    (typeof baseStyle.fontWeight === "number"
-      ? baseStyle.fontWeight
-      : Number(baseStyle.fontWeight) || 400);
-  const sw = opts?.strongWeight ?? 700;
-  const pts = new Set<number>([0, plain.length]);
-  const pushPts = (rs: Array<{ start: number; end: number }> | undefined) => {
-    for (const r of rs ?? []) {
-      pts.add(Math.max(0, Math.min(plain.length, r.start)));
-      pts.add(Math.max(0, Math.min(plain.length, r.end)));
-    }
-  };
-  pushPts(bold);
-  pushPts(italic);
-  pushPts(underline);
-  pushPts(colors);
-  const arr = [...pts].sort((a, b) => a - b);
-  const nodes: ReactNode[] = [];
-  let k = 0;
-  for (let i = 0; i < arr.length - 1; i++) {
-    const s = arr[i];
-    const e = arr[i + 1];
-    if (s >= e) continue;
-    const mid = s;
-    const isB = bold?.some((r) => mid >= r.start && mid < r.end) ?? false;
-    const isI = italic?.some((r) => mid >= r.start && mid < r.end) ?? false;
-    const isU = underline?.some((r) => mid >= r.start && mid < r.end) ?? false;
-    const col = colors?.find((r) => mid >= r.start && mid < r.end)?.hex;
-    const style: CSSProperties = { ...baseStyle };
-    style.fontWeight = isB ? Math.max(dw, sw) : dw;
-    style.fontStyle = isI ? "italic" : baseStyle.fontStyle ?? "normal";
-    style.textDecoration = isU ? "underline" : baseStyle.textDecoration ?? "none";
-    if (col) style.color = col;
     nodes.push(
       <span key={k++} style={style}>
         {plain.slice(s, e)}

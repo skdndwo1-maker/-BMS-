@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Download,
@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type AssetCategory =
   | "all"
@@ -48,12 +47,6 @@ interface Asset {
   tags: string[];
   format: string[];
   favorite?: boolean;
-
-  // storage
-  bucket?: string;
-  path?: string;
-  previewPath?: string | null;
-  mimeType?: string | null;
 }
 
 const categories = [
@@ -68,34 +61,154 @@ const categories = [
   { id: "guide" as AssetCategory, label: "가이드라인", icon: FolderOpen, count: 4 },
 ];
 
-function bytesToSize(bytes: number | null | undefined): string {
-  const b = typeof bytes === "number" && Number.isFinite(bytes) ? bytes : 0;
-  if (b <= 0) return "-";
-  const units = ["B", "KB", "MB", "GB"] as const;
-  let n = b;
-  let u = 0;
-  while (n >= 1024 && u < units.length - 1) {
-    n /= 1024;
-    u += 1;
-  }
-  return `${n.toFixed(u === 0 ? 0 : 1)} ${units[u]}`;
-}
-
-type BrandAssetRow = {
-  id: string;
-  created_at: string;
-  category: string;
-  name: string;
-  description: string | null;
-  tags: string[] | null;
-  bucket: string;
-  path: string;
-  preview_path: string | null;
-  mime_type: string | null;
-  ext: string | null;
-  size_bytes: number | null;
-  downloads: number;
-};
+const mockAssets: Asset[] = [
+  {
+    id: "1",
+    name: "LG U+ 공식 로고 (컬러)",
+    category: "logo",
+    type: "logo",
+    size: "2.4 MB",
+    thumbnail: "logo-color",
+    downloads: 1247,
+    uploadDate: "2024-03-15",
+    description: "LG U+ 공식 컬러 로고. PNG, SVG, AI 형식 포함.",
+    tags: ["로고", "BI", "CI", "공식"],
+    format: ["PNG", "SVG", "AI"],
+    favorite: true,
+  },
+  {
+    id: "2",
+    name: "LG U+ 로고 (단색)",
+    category: "logo",
+    type: "logo",
+    size: "1.8 MB",
+    thumbnail: "logo-mono",
+    downloads: 892,
+    uploadDate: "2024-03-15",
+    description: "LG U+ 단색 로고. 다양한 배경에서 사용 가능.",
+    tags: ["로고", "단색", "흑백"],
+    format: ["PNG", "SVG", "AI"],
+  },
+  {
+    id: "3",
+    name: "U+ 심볼 마크",
+    category: "logo",
+    type: "logo",
+    size: "1.2 MB",
+    thumbnail: "symbol",
+    downloads: 654,
+    uploadDate: "2024-03-10",
+    description: "U+ 심볼 마크. 앱 아이콘, 파비콘 등에 활용.",
+    tags: ["심볼", "아이콘", "U+"],
+    format: ["PNG", "SVG"],
+  },
+  {
+    id: "4",
+    name: "UI 아이콘 세트 v3",
+    category: "icon",
+    type: "icon-set",
+    size: "4.6 MB",
+    thumbnail: "icon-set",
+    downloads: 2103,
+    uploadDate: "2024-03-20",
+    description: "120개의 브랜드 아이콘. 모바일, 웹 환경 최적화.",
+    tags: ["아이콘", "UI", "인터페이스"],
+    format: ["SVG", "PNG", "Figma"],
+    favorite: true,
+  },
+  {
+    id: "5",
+    name: "5G 네트워크 아이콘",
+    category: "icon",
+    type: "icon",
+    size: "850 KB",
+    thumbnail: "5g-icon",
+    downloads: 456,
+    uploadDate: "2024-03-18",
+    description: "5G 서비스 관련 아이콘 모음.",
+    tags: ["5G", "네트워크", "통신"],
+    format: ["SVG", "PNG"],
+  },
+  {
+    id: "6",
+    name: "브랜드 캠페인 이미지 2024",
+    category: "image",
+    type: "image",
+    size: "12.3 MB",
+    thumbnail: "campaign-2024",
+    downloads: 328,
+    uploadDate: "2024-03-22",
+    description: "2024년 봄 캠페인 공식 이미지 소스.",
+    tags: ["캠페인", "2024", "마케팅"],
+    format: ["JPG", "PNG", "TIFF"],
+  },
+  {
+    id: "7",
+    name: "SNS 템플릿 팩",
+    category: "template",
+    type: "template",
+    size: "8.9 MB",
+    thumbnail: "sns-template",
+    downloads: 1876,
+    uploadDate: "2024-03-19",
+    description: "Instagram, Facebook용 템플릿 20종.",
+    tags: ["SNS", "템플릿", "소셜미디어"],
+    format: ["PSD", "AI", "Figma"],
+    favorite: true,
+  },
+  {
+    id: "8",
+    name: "LG Smart UI 폰트",
+    category: "font",
+    type: "font",
+    size: "3.2 MB",
+    thumbnail: "font-smart",
+    downloads: 743,
+    uploadDate: "2024-03-12",
+    description: "LG Smart UI 전용 폰트 패밀리.",
+    tags: ["폰트", "UI", "타이포그래피"],
+    format: ["TTF", "OTF", "WOFF2"],
+  },
+  {
+    id: "9",
+    name: "브랜드 가이드라인 2024",
+    category: "guide",
+    type: "document",
+    size: "25.4 MB",
+    thumbnail: "guideline",
+    downloads: 567,
+    uploadDate: "2024-03-01",
+    description: "LG U+ 브랜드 가이드라인 최신판 (PDF).",
+    tags: ["가이드라인", "BI", "CI", "브랜드북"],
+    format: ["PDF"],
+  },
+  {
+    id: "10",
+    name: "포스터 템플릿 A2",
+    category: "template",
+    type: "template",
+    size: "15.7 MB",
+    thumbnail: "poster-a2",
+    downloads: 892,
+    uploadDate: "2024-03-17",
+    description: "A2 사이즈 포스터 템플릿. 인쇄 품질 최적화.",
+    tags: ["포스터", "템플릿", "A2", "인쇄"],
+    format: ["AI", "PSD", "PDF"],
+  },
+  {
+    id: "11",
+    name: "명함 템플릿",
+    category: "template",
+    type: "template",
+    size: "2.1 MB",
+    thumbnail: "business-card",
+    downloads: 1456,
+    uploadDate: "2024-03-14",
+    description: "표준 명함 템플릿. 양면 디자인 포함.",
+    tags: ["명함", "템플릿", "인쇄"],
+    format: ["AI", "PSD"],
+  },
+];
 
 export function BrandLibrary() {
   const navigate = useNavigate();
@@ -105,96 +218,7 @@ export function BrandLibrary() {
   const [sortBy, setSortBy] = useState<SortBy>("recent");
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
 
-  const sb = useMemo(() => {
-    try {
-      return getSupabaseClient();
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const [rows, setRows] = useState<BrandAssetRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [uploadBusy, setUploadBusy] = useState(false);
-  const uploadFileRef = useRef<HTMLInputElement>(null);
-  const [uploadCategory, setUploadCategory] = useState<Exclude<AssetCategory, "all">>("logo");
-  const [uploadName, setUploadName] = useState("");
-  const [uploadDesc, setUploadDesc] = useState("");
-  const [uploadTags, setUploadTags] = useState("");
-  const [uploadPreviewFile, setUploadPreviewFile] = useState<File | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!sb) return;
-      try {
-        const { data } = await sb.auth.getSession();
-        const token = data.session?.access_token;
-        if (!token) return;
-        const r = await fetch("/api/admin/me", { headers: { Authorization: `Bearer ${token}` } });
-        const out = (await r.json().catch(() => ({}))) as { isAdmin?: boolean };
-        if (!cancelled) setIsAdmin(Boolean(out?.isAdmin));
-      } catch {
-        if (!cancelled) setIsAdmin(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [sb]);
-
-  const load = useMemo(() => {
-    return async () => {
-      if (!sb) {
-        setError("Supabase 설정이 필요합니다. (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)");
-        return;
-      }
-      setLoading(true);
-      setError(null);
-      try {
-        const { data, error } = await sb
-          .from("brand_assets")
-          .select("id, created_at, category, name, description, tags, bucket, path, preview_path, mime_type, ext, size_bytes, downloads")
-          .order("created_at", { ascending: false });
-        if (error) throw error;
-        setRows((data ?? []) as BrandAssetRow[]);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setLoading(false);
-      }
-    };
-  }, [sb]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const assets: Asset[] = useMemo(() => {
-    return rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      category: (r.category as AssetCategory) || "image",
-      type: r.category,
-      size: bytesToSize(r.size_bytes),
-      thumbnail: r.preview_path || r.path,
-      downloads: Number(r.downloads ?? 0),
-      uploadDate: r.created_at,
-      description: r.description ?? "",
-      tags: r.tags ?? [],
-      format: [String(r.ext ?? "").toUpperCase()].filter(Boolean),
-      bucket: r.bucket,
-      path: r.path,
-      previewPath: r.preview_path,
-      mimeType: r.mime_type,
-    }));
-  }, [rows]);
-
-  const filteredAssets = assets.filter((asset) => {
+  const filteredAssets = mockAssets.filter((asset) => {
     const matchesCategory = selectedCategory === "all" || asset.category === selectedCategory;
     const q = searchQuery.toLowerCase();
     const matchesSearch =
@@ -209,92 +233,6 @@ export function BrandLibrary() {
     if (sortBy === "popular") return b.downloads - a.downloads;
     return a.name.localeCompare(b.name, "ko");
   });
-
-  const getSignedUrl = async (asset: Asset, kind: "preview" | "original"): Promise<string> => {
-    if (!sb) throw new Error("supabase_not_configured");
-    const path = kind === "preview" ? (asset.previewPath || asset.path) : asset.path;
-    if (!path) throw new Error("asset_path_missing");
-    const bucket = asset.bucket || "brand-library";
-    const { data, error } = await sb.storage.from(bucket).createSignedUrl(path, 60 * 30);
-    if (error) throw error;
-    if (!data?.signedUrl) throw new Error("signed_url_missing");
-    return data.signedUrl;
-  };
-
-  const downloadAsset = async (asset: Asset) => {
-    try {
-      const url = await getSignedUrl(asset, "original");
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
-    }
-  };
-
-  const previewAsset = async (asset: Asset) => {
-    try {
-      const url = await getSignedUrl(asset, "preview");
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (e) {
-      alert(e instanceof Error ? e.message : String(e));
-    }
-  };
-
-  const doUpload = async (file: File) => {
-    if (!sb) throw new Error("supabase_not_configured");
-    setUploadBusy(true);
-    try {
-      const ext = (file.name.split(".").pop() || "").toLowerCase();
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const objectPath = `${uploadCategory}/${Date.now()}_${crypto.randomUUID()}_${safeName}`;
-
-      const up = await sb.storage.from("brand-library").upload(objectPath, file, {
-        upsert: false,
-        contentType: file.type || undefined,
-      });
-      if (up.error) throw up.error;
-
-      let previewPath: string | null = null;
-      if (uploadPreviewFile) {
-        const pSafe = uploadPreviewFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-        previewPath = `${uploadCategory}/preview_${Date.now()}_${crypto.randomUUID()}_${pSafe}`;
-        const pu = await sb.storage.from("brand-library").upload(previewPath, uploadPreviewFile, {
-          upsert: false,
-          contentType: uploadPreviewFile.type || undefined,
-        });
-        if (pu.error) throw pu.error;
-      }
-
-      const tags = uploadTags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean);
-
-      const ins = await sb.from("brand_assets").insert({
-        category: uploadCategory,
-        name: (uploadName || file.name).trim(),
-        description: uploadDesc.trim() || null,
-        tags,
-        bucket: "brand-library",
-        path: objectPath,
-        original_filename: file.name,
-        mime_type: file.type || null,
-        ext: ext || null,
-        size_bytes: file.size || null,
-        preview_path: previewPath,
-      });
-      if (ins.error) throw ins.error;
-
-      setUploadOpen(false);
-      setUploadName("");
-      setUploadDesc("");
-      setUploadTags("");
-      setUploadPreviewFile(null);
-      if (uploadFileRef.current) uploadFileRef.current.value = "";
-      await load();
-    } finally {
-      setUploadBusy(false);
-    }
-  };
 
   const getThumbnailColor = (category: string) => {
     switch (category) {
@@ -392,8 +330,6 @@ export function BrandLibrary() {
                 {categories.find((c) => c.id === selectedCategory)?.label || "전체 에셋"}
               </h2>
               <p className="text-sm text-gray-500 mt-0.5">{sortedAssets.length}개의 에셋을 찾았습니다</p>
-              {loading ? <p className="text-xs text-gray-400 mt-1">불러오는 중…</p> : null}
-              {error ? <p className="text-xs text-red-500 mt-1">{error}</p> : null}
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm">
@@ -404,11 +340,6 @@ export function BrandLibrary() {
                 <Star className="w-4 h-4 mr-2" />
                 즐겨찾기만
               </Button>
-              {isAdmin ? (
-                <Button size="sm" className="bg-[#F43182] text-white hover:bg-[#d41f6e]" onClick={() => setUploadOpen(true)}>
-                  업로드
-                </Button>
-              ) : null}
             </div>
           </div>
 
@@ -477,14 +408,7 @@ export function BrandLibrary() {
                       </div>
                     )}
                     <div className="absolute bottom-3 left-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        size="sm"
-                        className="flex-1 bg-white text-gray-900 hover:bg-gray-100"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void previewAsset(asset);
-                        }}
-                      >
+                      <Button size="sm" className="flex-1 bg-white text-gray-900 hover:bg-gray-100">
                         <Eye className="w-3 h-3 mr-1" />
                         미리보기
                       </Button>
@@ -493,7 +417,7 @@ export function BrandLibrary() {
                         className="bg-gray-800 text-white hover:bg-gray-900"
                         onClick={(e) => {
                           e.stopPropagation();
-                          void downloadAsset(asset);
+                          alert(`${asset.name} 다운로드 시작`);
                         }}
                       >
                         <Download className="w-3 h-3" />
@@ -559,14 +483,7 @@ export function BrandLibrary() {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void previewAsset(asset);
-                      }}
-                    >
+                    <Button variant="outline" size="sm">
                       <Eye className="w-4 h-4 mr-1" />
                       미리보기
                     </Button>
@@ -575,7 +492,7 @@ export function BrandLibrary() {
                       className="bg-gray-800 text-white hover:bg-gray-900"
                       onClick={(e) => {
                         e.stopPropagation();
-                        void downloadAsset(asset);
+                        alert(`${asset.name} 다운로드 시작`);
                       }}
                     >
                       <Download className="w-4 h-4 mr-1" />
@@ -615,10 +532,7 @@ export function BrandLibrary() {
                   <FileImage className="w-24 h-24 text-white opacity-30" />
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    className="flex-1 bg-[#F43182] text-white hover:bg-[#d41f6e]"
-                    onClick={() => void downloadAsset(selectedAsset)}
-                  >
+                  <Button className="flex-1 bg-[#F43182] text-white hover:bg-[#d41f6e]">
                     <Download className="w-4 h-4 mr-2" />
                     다운로드
                   </Button>
@@ -701,91 +615,6 @@ export function BrandLibrary() {
           </div>
         </div>
       )}
-
-      {uploadOpen ? (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6" onClick={() => (uploadBusy ? null : setUploadOpen(false))}>
-          <div className="bg-white rounded-2xl max-w-xl w-full overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">에셋 업로드 (관리자)</h2>
-              <button
-                type="button"
-                disabled={uploadBusy}
-                onClick={() => setUploadOpen(false)}
-                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${uploadBusy ? "opacity-40" : "hover:bg-gray-100"}`}
-              >
-                <span className="text-gray-400 text-2xl leading-none">&times;</span>
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">카테고리</label>
-                  <select
-                    value={uploadCategory}
-                    onChange={(e) => setUploadCategory(e.target.value as any)}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700"
-                    disabled={uploadBusy}
-                  >
-                    <option value="logo">logo</option>
-                    <option value="slogan">slogan</option>
-                    <option value="icon">icon</option>
-                    <option value="pictogram">pictogram</option>
-                    <option value="image">image</option>
-                    <option value="template">template</option>
-                    <option value="font">font</option>
-                    <option value="guide">guide</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">표시명 (선택)</label>
-                  <Input value={uploadName} onChange={(e) => setUploadName(e.target.value)} placeholder="비워두면 파일명" disabled={uploadBusy} />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">설명 (선택)</label>
-                <Input value={uploadDesc} onChange={(e) => setUploadDesc(e.target.value)} placeholder="설명" disabled={uploadBusy} />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">태그 (선택)</label>
-                <Input value={uploadTags} onChange={(e) => setUploadTags(e.target.value)} placeholder="쉼표로 구분 (예: 로고,BI,공식)" disabled={uploadBusy} />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">파일</label>
-                <input
-                  ref={uploadFileRef}
-                  type="file"
-                  disabled={uploadBusy}
-                  className="block w-full text-sm"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0] || null;
-                    if (!f) return;
-                    void doUpload(f).catch((err) => alert(err instanceof Error ? err.message : String(err)));
-                  }}
-                />
-                <p className="text-[11px] text-gray-400 mt-1">삭제는 정책상 불가합니다. 업로드 후 메타DB에 자동 등록됩니다.</p>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">미리보기 PNG/SVG (선택)</label>
-                <input
-                  type="file"
-                  accept="image/png,image/svg+xml"
-                  disabled={uploadBusy}
-                  className="block w-full text-sm"
-                  onChange={(e) => setUploadPreviewFile(e.target.files?.[0] || null)}
-                />
-                <p className="text-[11px] text-gray-400 mt-1">원본이 AI/TTF/PDF 등인 경우 캔버스에서 쓸 PNG/SVG 미리보기를 따로 넣을 수 있어요.</p>
-              </div>
-
-              {uploadBusy ? <p className="text-xs text-gray-500">업로드 중…</p> : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

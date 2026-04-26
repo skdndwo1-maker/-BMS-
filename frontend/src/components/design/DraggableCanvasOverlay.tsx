@@ -219,8 +219,6 @@ export function DraggableCanvasOverlay({
     { key: "w", style: { top: "50%", left: -HANDLE / 2, transform: "translateY(-50%)", cursor: "w-resize" } },
   ];
 
-  /** 선택 시 박스 전체를 다른 박스(badge·asset 등)보다 위로 올려, 8개 핸들이 가리지 않도록 함. */
-  const effectiveZ = isSelected ? Math.max(zIndex + 9000, 9000) : zIndex;
   return (
     <div
       style={{
@@ -231,7 +229,7 @@ export function DraggableCanvasOverlay({
         height: `${px.height}px`,
         borderRadius: `${rPx}px`,
         overflow: "visible",
-        zIndex: effectiveZ,
+        zIndex,
         outline: isSelected ? "2px solid #F43182" : "2px solid transparent",
         outlineOffset: "1px",
         boxSizing: "border-box",
@@ -276,13 +274,10 @@ export function DraggableCanvasOverlay({
               border: "1.5px solid #fff",
               borderRadius: "2px",
               ...h.style,
-              /** 핸들은 어떤 박스 위든 항상 위에 떠 있어야 함(다른 overlay/asset의 zIndex와 충돌 방지) */
-              zIndex: 100000,
+              zIndex: zIndex + 1,
               pointerEvents: "auto",
-              boxShadow: "0 0 0 1px rgba(0,0,0,0.04)",
             }}
             onMouseDown={(e) => onMouseDownResize(e, h.key)}
-            onClick={(e) => e.stopPropagation()}
           />
         ))}
       {(isSelected || hover) && (label || onRequestDelete) ? (
