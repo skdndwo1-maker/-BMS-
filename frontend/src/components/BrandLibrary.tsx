@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Download,
@@ -17,215 +17,158 @@ import {
   Package,
   Heart,
   Copy,
+  Loader2,
+  Trash2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getSupabaseClient } from "@/lib/supabaseClient";
+import {
+  deleteLibraryAsset,
+  extractExtensionLabel,
+  getLibraryDownloadUrl,
+  humanFileSize,
+  incrementLibraryDownload,
+  isCurrentUserAdmin,
+  listLibraryAssets,
+  type LibraryAssetRow,
+  type LibraryCategory,
+  type LibraryFilterCategory,
+} from "@/lib/libraryApi";
 
-type AssetCategory =
-  | "all"
-  | "logo"
-  | "slogan"
-  | "icon"
-  | "pictogram"
-  | "image"
-  | "template"
-  | "font"
-  | "guide";
 type ViewMode = "grid" | "list";
 type SortBy = "recent" | "popular" | "name";
 
-interface Asset {
+type Asset = {
   id: string;
   name: string;
-  category: AssetCategory;
-  type: string;
-  size: string;
-  thumbnail: string;
-  downloads: number;
-  uploadDate: string;
+  category: LibraryCategory;
   description: string;
   tags: string[];
-  format: string[];
-  favorite?: boolean;
+  formats: string[];
+  filePath: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  downloads: number;
+  uploadDate: string;
+  favorite: boolean;
+};
+
+const categories: Array<{
+  id: LibraryFilterCategory;
+  label: string;
+  icon: typeof Package;
+}> = [
+  { id: "all", label: "전체 에셋", icon: Package },
+  { id: "logo", label: "BI/CI 로고", icon: FileImage },
+  { id: "slogan", label: "Slogan", icon: FileText },
+  { id: "icon", label: "아이콘", icon: ImageIcon },
+  { id: "pictogram", label: "픽토그램", icon: ImageIcon },
+  { id: "image", label: "포토 라이브러리", icon: FileImage },
+  { id: "template", label: "템플릿 파일", icon: FileCode },
+  { id: "font", label: "폰트", icon: Type },
+  { id: "guide", label: "가이드라인", icon: FolderOpen },
+];
+
+function rowToAsset(row: LibraryAssetRow): Asset {
+  const tags = Array.isArray(row.tags) ? row.tags : [];
+  const formatsRaw = Array.isArray(row.formats) ? row.formats : [];
+  const formats = formatsRaw.length
+    ? formatsRaw.map((f) => f.toUpperCase())
+    : [extractExtensionLabel(row.file_path, row.mime_type)];
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    description: row.description ?? "",
+    tags,
+    formats,
+    filePath: row.file_path,
+    fileName: row.file_name || row.file_path.split("/").pop() || row.name,
+    fileSize: row.file_size ?? 0,
+    mimeType: row.mime_type ?? "",
+    downloads: row.downloads ?? 0,
+    uploadDate: row.created_at,
+    favorite: Boolean(row.is_favorite),
+  };
 }
-
-const categories = [
-  { id: "all" as AssetCategory, label: "전체 에셋", icon: Package, count: 127 },
-  { id: "logo" as AssetCategory, label: "BI/CI 로고", icon: FileImage, count: 24 },
-  { id: "slogan" as AssetCategory, label: "Slogan", icon: FileText, count: 10 },
-  { id: "icon" as AssetCategory, label: "아이콘", icon: ImageIcon, count: 48 },
-  { id: "pictogram" as AssetCategory, label: "픽토그램", icon: ImageIcon, count: 20 },
-  { id: "image" as AssetCategory, label: "포토 라이브러리", icon: FileImage, count: 35 },
-  { id: "template" as AssetCategory, label: "템플릿 파일", icon: FileCode, count: 12 },
-  { id: "font" as AssetCategory, label: "폰트", icon: Type, count: 6 },
-  { id: "guide" as AssetCategory, label: "가이드라인", icon: FolderOpen, count: 4 },
-];
-
-const mockAssets: Asset[] = [
-  {
-    id: "1",
-    name: "LG U+ 공식 로고 (컬러)",
-    category: "logo",
-    type: "logo",
-    size: "2.4 MB",
-    thumbnail: "logo-color",
-    downloads: 1247,
-    uploadDate: "2024-03-15",
-    description: "LG U+ 공식 컬러 로고. PNG, SVG, AI 형식 포함.",
-    tags: ["로고", "BI", "CI", "공식"],
-    format: ["PNG", "SVG", "AI"],
-    favorite: true,
-  },
-  {
-    id: "2",
-    name: "LG U+ 로고 (단색)",
-    category: "logo",
-    type: "logo",
-    size: "1.8 MB",
-    thumbnail: "logo-mono",
-    downloads: 892,
-    uploadDate: "2024-03-15",
-    description: "LG U+ 단색 로고. 다양한 배경에서 사용 가능.",
-    tags: ["로고", "단색", "흑백"],
-    format: ["PNG", "SVG", "AI"],
-  },
-  {
-    id: "3",
-    name: "U+ 심볼 마크",
-    category: "logo",
-    type: "logo",
-    size: "1.2 MB",
-    thumbnail: "symbol",
-    downloads: 654,
-    uploadDate: "2024-03-10",
-    description: "U+ 심볼 마크. 앱 아이콘, 파비콘 등에 활용.",
-    tags: ["심볼", "아이콘", "U+"],
-    format: ["PNG", "SVG"],
-  },
-  {
-    id: "4",
-    name: "UI 아이콘 세트 v3",
-    category: "icon",
-    type: "icon-set",
-    size: "4.6 MB",
-    thumbnail: "icon-set",
-    downloads: 2103,
-    uploadDate: "2024-03-20",
-    description: "120개의 브랜드 아이콘. 모바일, 웹 환경 최적화.",
-    tags: ["아이콘", "UI", "인터페이스"],
-    format: ["SVG", "PNG", "Figma"],
-    favorite: true,
-  },
-  {
-    id: "5",
-    name: "5G 네트워크 아이콘",
-    category: "icon",
-    type: "icon",
-    size: "850 KB",
-    thumbnail: "5g-icon",
-    downloads: 456,
-    uploadDate: "2024-03-18",
-    description: "5G 서비스 관련 아이콘 모음.",
-    tags: ["5G", "네트워크", "통신"],
-    format: ["SVG", "PNG"],
-  },
-  {
-    id: "6",
-    name: "브랜드 캠페인 이미지 2024",
-    category: "image",
-    type: "image",
-    size: "12.3 MB",
-    thumbnail: "campaign-2024",
-    downloads: 328,
-    uploadDate: "2024-03-22",
-    description: "2024년 봄 캠페인 공식 이미지 소스.",
-    tags: ["캠페인", "2024", "마케팅"],
-    format: ["JPG", "PNG", "TIFF"],
-  },
-  {
-    id: "7",
-    name: "SNS 템플릿 팩",
-    category: "template",
-    type: "template",
-    size: "8.9 MB",
-    thumbnail: "sns-template",
-    downloads: 1876,
-    uploadDate: "2024-03-19",
-    description: "Instagram, Facebook용 템플릿 20종.",
-    tags: ["SNS", "템플릿", "소셜미디어"],
-    format: ["PSD", "AI", "Figma"],
-    favorite: true,
-  },
-  {
-    id: "8",
-    name: "LG Smart UI 폰트",
-    category: "font",
-    type: "font",
-    size: "3.2 MB",
-    thumbnail: "font-smart",
-    downloads: 743,
-    uploadDate: "2024-03-12",
-    description: "LG Smart UI 전용 폰트 패밀리.",
-    tags: ["폰트", "UI", "타이포그래피"],
-    format: ["TTF", "OTF", "WOFF2"],
-  },
-  {
-    id: "9",
-    name: "브랜드 가이드라인 2024",
-    category: "guide",
-    type: "document",
-    size: "25.4 MB",
-    thumbnail: "guideline",
-    downloads: 567,
-    uploadDate: "2024-03-01",
-    description: "LG U+ 브랜드 가이드라인 최신판 (PDF).",
-    tags: ["가이드라인", "BI", "CI", "브랜드북"],
-    format: ["PDF"],
-  },
-  {
-    id: "10",
-    name: "포스터 템플릿 A2",
-    category: "template",
-    type: "template",
-    size: "15.7 MB",
-    thumbnail: "poster-a2",
-    downloads: 892,
-    uploadDate: "2024-03-17",
-    description: "A2 사이즈 포스터 템플릿. 인쇄 품질 최적화.",
-    tags: ["포스터", "템플릿", "A2", "인쇄"],
-    format: ["AI", "PSD", "PDF"],
-  },
-  {
-    id: "11",
-    name: "명함 템플릿",
-    category: "template",
-    type: "template",
-    size: "2.1 MB",
-    thumbnail: "business-card",
-    downloads: 1456,
-    uploadDate: "2024-03-14",
-    description: "표준 명함 템플릿. 양면 디자인 포함.",
-    tags: ["명함", "템플릿", "인쇄"],
-    format: ["AI", "PSD"],
-  },
-];
 
 export function BrandLibrary() {
   const navigate = useNavigate();
-  const [selectedCategory, setSelectedCategory] = useState<AssetCategory>("all");
+  const sb = useMemo(() => {
+    try {
+      return getSupabaseClient();
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const [selectedCategory, setSelectedCategory] = useState<LibraryFilterCategory>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [sortBy, setSortBy] = useState<SortBy>("recent");
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
 
-  const filteredAssets = mockAssets.filter((asset) => {
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  const reload = async () => {
+    if (!sb) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const rows = await listLibraryAssets(sb);
+      setAssets(rows.map(rowToAsset));
+    } catch (e) {
+      console.error(e);
+      const msg = e instanceof Error ? e.message : "라이브러리 로딩 실패";
+      toast.error(msg);
+      setAssets([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void reload();
+    if (sb) void isCurrentUserAdmin(sb).then(setIsAdmin);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sb]);
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<LibraryFilterCategory, number> = {
+      all: assets.length,
+      logo: 0,
+      slogan: 0,
+      icon: 0,
+      pictogram: 0,
+      image: 0,
+      template: 0,
+      font: 0,
+      guide: 0,
+    };
+    for (const a of assets) {
+      counts[a.category] = (counts[a.category] ?? 0) + 1;
+    }
+    return counts;
+  }, [assets]);
+
+  const filteredAssets = assets.filter((asset) => {
     const matchesCategory = selectedCategory === "all" || asset.category === selectedCategory;
+    const matchesFavorite = !favoritesOnly || asset.favorite;
     const q = searchQuery.toLowerCase();
     const matchesSearch =
+      !q ||
       asset.name.toLowerCase().includes(q) ||
       asset.description.toLowerCase().includes(q) ||
       asset.tags.some((tag) => tag.toLowerCase().includes(q));
-    return matchesCategory && matchesSearch;
+    return matchesCategory && matchesFavorite && matchesSearch;
   });
 
   const sortedAssets = [...filteredAssets].sort((a, b) => {
@@ -252,6 +195,50 @@ export function BrandLibrary() {
         return "from-gray-500 to-gray-700";
       default:
         return "from-gray-400 to-gray-600";
+    }
+  };
+
+  const handleDownload = async (asset: Asset) => {
+    if (!sb) {
+      toast.error("Supabase 설정이 필요합니다.");
+      return;
+    }
+    try {
+      const url = await getLibraryDownloadUrl(sb, asset.filePath, 3600);
+      void incrementLibraryDownload(sb, asset.id);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = asset.fileName || asset.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setAssets((prev) =>
+        prev.map((x) => (x.id === asset.id ? { ...x, downloads: x.downloads + 1 } : x))
+      );
+      toast.success(`${asset.name} 다운로드를 시작했습니다.`);
+    } catch (e) {
+      console.error(e);
+      toast.error(`다운로드 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  const handleDelete = async (asset: Asset) => {
+    if (!sb) return;
+    if (!isAdmin) {
+      toast.error("관리자만 삭제할 수 있습니다.");
+      return;
+    }
+    if (!confirm(`'${asset.name}'을(를) 삭제하시겠습니까?\nSupabase Storage 파일도 함께 삭제됩니다.`)) {
+      return;
+    }
+    try {
+      await deleteLibraryAsset(sb, { id: asset.id, filePath: asset.filePath });
+      setAssets((prev) => prev.filter((x) => x.id !== asset.id));
+      if (selectedAsset?.id === asset.id) setSelectedAsset(null);
+      toast.success("삭제되었습니다.");
+    } catch (e) {
+      console.error(e);
+      toast.error(`삭제 실패: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -283,6 +270,7 @@ export function BrandLibrary() {
             {categories.map((category) => {
               const Icon = category.icon;
               const isActive = selectedCategory === category.id;
+              const count = categoryCounts[category.id] ?? 0;
               return (
                 <button
                   key={category.id}
@@ -296,11 +284,13 @@ export function BrandLibrary() {
                     <Icon className="w-4 h-4" />
                     <span className="text-sm font-medium">{category.label}</span>
                   </div>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${isActive ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}
-                  >
-                    {category.count}
-                  </span>
+                  {count > 0 && (
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full ${isActive ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}
+                    >
+                      {count}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -329,14 +319,16 @@ export function BrandLibrary() {
               <h2 className="text-xl font-semibold text-gray-900">
                 {categories.find((c) => c.id === selectedCategory)?.label || "전체 에셋"}
               </h2>
-              <p className="text-sm text-gray-500 mt-0.5">{sortedAssets.length}개의 에셋을 찾았습니다</p>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {loading ? "불러오는 중..." : `${sortedAssets.length}개의 에셋을 찾았습니다`}
+              </p>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm">
-                <Download className="w-4 h-4 mr-2" />
-                전체 다운로드
-              </Button>
-              <Button variant="outline" size="sm">
+              <Button
+                variant={favoritesOnly ? "default" : "outline"}
+                size="sm"
+                onClick={() => setFavoritesOnly((v) => !v)}
+              >
                 <Star className="w-4 h-4 mr-2" />
                 즐겨찾기만
               </Button>
@@ -387,7 +379,12 @@ export function BrandLibrary() {
         </header>
 
         <div className="flex-1 overflow-y-auto p-8">
-          {viewMode === "grid" ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-20 text-gray-500">
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              <span className="text-sm">에셋을 불러오는 중...</span>
+            </div>
+          ) : viewMode === "grid" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {sortedAssets.map((asset) => (
                 <div
@@ -417,20 +414,34 @@ export function BrandLibrary() {
                         className="bg-gray-800 text-white hover:bg-gray-900"
                         onClick={(e) => {
                           e.stopPropagation();
-                          alert(`${asset.name} 다운로드 시작`);
+                          void handleDownload(asset);
                         }}
                       >
                         <Download className="w-3 h-3" />
                       </Button>
+                      {isAdmin && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="bg-white/90 text-red-600 hover:bg-white border-red-200"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDelete(asset);
+                          }}
+                          title="삭제 (관리자)"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      )}
                     </div>
                   </div>
 
                   <div className="p-4">
                     <h3 className="font-medium text-gray-900 mb-1 line-clamp-1">{asset.name}</h3>
-                    <p className="text-xs text-gray-500 mb-3 line-clamp-2">{asset.description}</p>
+                    <p className="text-xs text-gray-500 mb-3 line-clamp-2">{asset.description || "—"}</p>
 
                     <div className="flex flex-wrap gap-1 mb-3">
-                      {asset.format.slice(0, 3).map((format) => (
+                      {asset.formats.slice(0, 3).map((format) => (
                         <span key={format} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
                           {format}
                         </span>
@@ -442,7 +453,7 @@ export function BrandLibrary() {
                         <Download className="w-3 h-3" />
                         <span>{asset.downloads.toLocaleString()}</span>
                       </div>
-                      <span>{asset.size}</span>
+                      <span>{humanFileSize(asset.fileSize)}</span>
                     </div>
                   </div>
                 </div>
@@ -465,15 +476,15 @@ export function BrandLibrary() {
                       <h3 className="font-medium text-gray-900">{asset.name}</h3>
                       {asset.favorite && <Heart className="w-4 h-4 text-red-500 fill-red-500 shrink-0" />}
                     </div>
-                    <p className="text-sm text-gray-500 mb-2 line-clamp-1">{asset.description}</p>
+                    <p className="text-sm text-gray-500 mb-2 line-clamp-1">{asset.description || "—"}</p>
                     <div className="flex items-center gap-4 text-xs text-gray-400">
                       <div className="flex items-center gap-1">
                         <Download className="w-3 h-3" />
                         <span>{asset.downloads.toLocaleString()}회</span>
                       </div>
-                      <span>{asset.size}</span>
+                      <span>{humanFileSize(asset.fileSize)}</span>
                       <div className="flex gap-1">
-                        {asset.format.map((format) => (
+                        {asset.formats.map((format) => (
                           <span key={format} className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
                             {format}
                           </span>
@@ -492,25 +503,44 @@ export function BrandLibrary() {
                       className="bg-gray-800 text-white hover:bg-gray-900"
                       onClick={(e) => {
                         e.stopPropagation();
-                        alert(`${asset.name} 다운로드 시작`);
+                        void handleDownload(asset);
                       }}
                     >
                       <Download className="w-4 h-4 mr-1" />
                       다운로드
                     </Button>
+                    {isAdmin && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600 border-red-200 hover:bg-red-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleDelete(asset);
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           )}
 
-          {sortedAssets.length === 0 && (
+          {!loading && sortedAssets.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20">
               <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center mb-4">
                 <Search className="w-10 h-10 text-gray-300" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">검색 결과가 없습니다</h3>
-              <p className="text-gray-500 text-center max-w-md">다른 검색어를 시도하거나 카테고리를 변경해보세요.</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {assets.length === 0 ? "아직 등록된 에셋이 없습니다" : "검색 결과가 없습니다"}
+              </h3>
+              <p className="text-gray-500 text-center max-w-md">
+                {assets.length === 0
+                  ? "관리자가 Supabase Storage에 자료를 업로드하면 이곳에 표시됩니다."
+                  : "다른 검색어를 시도하거나 카테고리를 변경해보세요."}
+              </p>
             </div>
           )}
         </div>
@@ -532,16 +562,33 @@ export function BrandLibrary() {
                   <FileImage className="w-24 h-24 text-white opacity-30" />
                 </div>
                 <div className="flex gap-2">
-                  <Button className="flex-1 bg-[#F43182] text-white hover:bg-[#d41f6e]">
+                  <Button
+                    className="flex-1 bg-[#F43182] text-white hover:bg-[#d41f6e]"
+                    onClick={() => void handleDownload(selectedAsset)}
+                  >
                     <Download className="w-4 h-4 mr-2" />
                     다운로드
                   </Button>
-                  <Button variant="outline">
+                  <Button variant="outline" title="파일 경로 복사" onClick={() => {
+                    navigator.clipboard.writeText(selectedAsset.filePath).then(
+                      () => toast.success("경로를 복사했습니다."),
+                      () => toast.error("클립보드 복사 실패")
+                    );
+                  }}>
                     <Copy className="w-4 h-4" />
                   </Button>
                   <Button variant="outline">
-                    <Heart className="w-4 h-4" />
+                    <Heart className={`w-4 h-4 ${selectedAsset.favorite ? "text-red-500 fill-red-500" : ""}`} />
                   </Button>
+                  {isAdmin && (
+                    <Button
+                      variant="outline"
+                      className="text-red-600 border-red-200 hover:bg-red-50"
+                      onClick={() => void handleDelete(selectedAsset)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -549,13 +596,13 @@ export function BrandLibrary() {
                 <div className="space-y-4">
                   <div>
                     <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">설명</label>
-                    <p className="text-sm text-gray-700 leading-relaxed">{selectedAsset.description}</p>
+                    <p className="text-sm text-gray-700 leading-relaxed">{selectedAsset.description || "—"}</p>
                   </div>
 
                   <div>
                     <label className="text-xs font-medium text-gray-500 uppercase mb-2 block">포함 형식</label>
                     <div className="flex flex-wrap gap-2">
-                      {selectedAsset.format.map((format) => (
+                      {selectedAsset.formats.map((format) => (
                         <span key={format} className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium">
                           {format}
                         </span>
@@ -566,7 +613,7 @@ export function BrandLibrary() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">파일 크기</label>
-                      <p className="text-sm text-gray-900 font-medium">{selectedAsset.size}</p>
+                      <p className="text-sm text-gray-900 font-medium">{humanFileSize(selectedAsset.fileSize)}</p>
                     </div>
                     <div>
                       <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">다운로드</label>
@@ -585,16 +632,18 @@ export function BrandLibrary() {
                     </p>
                   </div>
 
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 uppercase mb-2 block">태그</label>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedAsset.tags.map((tag) => (
-                        <span key={tag} className="bg-[#F43182]/10 text-[#F43182] px-3 py-1 rounded-full text-xs font-medium">
-                          #{tag}
-                        </span>
-                      ))}
+                  {selectedAsset.tags.length > 0 && (
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase mb-2 block">태그</label>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedAsset.tags.map((tag) => (
+                          <span key={tag} className="bg-[#F43182]/10 text-[#F43182] px-3 py-1 rounded-full text-xs font-medium">
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div className="pt-4 border-t border-gray-200">
                     <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -618,4 +667,3 @@ export function BrandLibrary() {
     </div>
   );
 }
-
