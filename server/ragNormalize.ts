@@ -4,6 +4,8 @@
  * 그 외 타입은 outputText/outputJson 폴백을 그대로 반환합니다.
  */
 
+console.log("[ragNormalize] loaded");
+
 type AnyRec = Record<string, unknown>;
 
 const GUIDELINE_LABELS: Record<string, string> = {
