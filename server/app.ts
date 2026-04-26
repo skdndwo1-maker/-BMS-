@@ -50,6 +50,7 @@ import {
   upsertGuidelineSource,
   upsertRunQaSource
 } from "./rag.js";
+import { normalizeRunForRag } from "./ragNormalize.js";
 import { requireAdmin } from "./adminAuth.js";
 import { getSupabaseAnonClient, getSupabaseServiceClient, isSupabaseInvalidApiKeyError } from "./supabase.js";
 
@@ -1359,14 +1360,34 @@ app.post("/api/admin/runs/:id/approve", async (req, res) => {
     });
     if (revErr) console.error("[supabase] insert review failed:", revErr.message);
 
-    // Approved run -> optional RAG run_qa indexing (output_text preferred)
+    // Approved run -> RAG run_qa indexing
+    // 승인된 산출물은 type별 표준 MD 양식으로 정제한 뒤 청크 → 임베딩 → rag_*에 적재합니다.
     if (process.env.GEMINI_API_KEY?.trim()) {
       try {
         const title = `Approved ${String(run.type)} — ${id.slice(0, 8)}`;
         const src = await upsertRunQaSource({ runId: id, title, guidelineId: run.guideline_id ?? null });
         if (src?.sourceId) {
-          const corpus = String(run.output_text ?? "").trim() || JSON.stringify(run.output_json ?? {});
+          const normalized = normalizeRunForRag({
+            type: String(run.type ?? ""),
+            guidelineId: run.guideline_id ?? null,
+            outputJson: run.output_json,
+            outputText: run.output_text,
+            inputJson: run.input_json,
+            inputText: run.input_text,
+          });
+          const normalizedTrim = normalized.trim();
+          const fallbackText = String(run.output_text ?? "").trim();
+          const fallbackJson = JSON.stringify(run.output_json ?? {});
+          const corpus = normalizedTrim || fallbackText || fallbackJson;
+          const corpusSource = normalizedTrim
+            ? "normalized"
+            : fallbackText
+              ? "output_text"
+              : "output_json_string";
           const chunks = splitIntoChunks(corpus, { chunkChars: 1000, overlapChars: 140 });
+          console.log(
+            `[rag] approve indexing run=${id.slice(0, 8)} type=${String(run.type)} corpus=${corpusSource} chars=${corpus.length} chunks=${chunks.length}`
+          );
           await deleteChunksForSource(src.sourceId);
           await insertChunksWithEmbeddings({
             sourceId: src.sourceId,
