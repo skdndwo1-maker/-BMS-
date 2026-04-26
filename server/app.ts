@@ -45,6 +45,7 @@ import {
   deleteChunksForSource,
   fileSha256Hex,
   insertChunksWithEmbeddings,
+  isSupabaseRagEnabled,
   matchRagChunks,
   splitIntoChunks,
   upsertGuidelineSource,
@@ -129,7 +130,7 @@ async function buildPrimaryGuidelineBlock(guidelineId: string, queryText?: strin
   if (queryText?.trim() && process.env.GEMINI_API_KEY?.trim() && process.env.SUPABASE_URL?.trim()) {
     try {
       const q = queryText.trim().slice(0, 6000);
-      const qEmb = await embedTextWithGemini(q, { model: "text-embedding-004" });
+      const qEmb = await embedTextWithGemini(q, { model: "gemini-embedding-001" });
       const matches = await matchRagChunks({ queryEmbedding: qEmb, guidelineId, sourceType: "guideline", topK: 8 });
       const picked = matches.filter((m) => typeof m.similarity === "number" && m.similarity >= 0.2).slice(0, 6);
       if (picked.length > 0) {
@@ -512,8 +513,8 @@ app.post("/api/guidelines/:id/analyze", async (req, res) => {
           await insertChunksWithEmbeddings({
             sourceId: src.sourceId,
             chunks,
-            embeddingModel: "text-embedding-004",
-            embed: (t) => embedTextWithGemini(t, { model: "text-embedding-004" }),
+            embeddingModel: "gemini-embedding-001",
+            embed: (t) => embedTextWithGemini(t, { model: "gemini-embedding-001" }),
           });
         }
       } catch (e) {
@@ -1362,10 +1363,17 @@ app.post("/api/admin/runs/:id/approve", async (req, res) => {
 
     // Approved run -> RAG run_qa indexing
     // 승인된 산출물은 type별 표준 MD 양식으로 정제한 뒤 청크 → 임베딩 → rag_*에 적재합니다.
-    if (process.env.GEMINI_API_KEY?.trim()) {
+    const geminiKeyPresent = Boolean(process.env.GEMINI_API_KEY?.trim());
+    const ragEnabled = isSupabaseRagEnabled();
+    if (geminiKeyPresent) {
       try {
         const title = `Approved ${String(run.type)} — ${id.slice(0, 8)}`;
         const src = await upsertRunQaSource({ runId: id, title, guidelineId: run.guideline_id ?? null });
+        if (!ragEnabled) {
+          console.warn("[rag] approve: Supabase RAG env missing — skipped indexing (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY required)");
+        } else if (!src?.sourceId) {
+          console.warn(`[rag] approve: upsertRunQaSource returned no sourceId for run=${id.slice(0, 8)}`);
+        }
         if (src?.sourceId) {
           const normalized = normalizeRunForRag({
             type: String(run.type ?? ""),
@@ -1388,22 +1396,31 @@ app.post("/api/admin/runs/:id/approve", async (req, res) => {
           console.log(
             `[rag] approve indexing run=${id.slice(0, 8)} type=${String(run.type)} corpus=${corpusSource} chars=${corpus.length} chunks=${chunks.length}`
           );
+          if (chunks.length === 0) {
+            console.warn(
+              `[rag] approve: empty corpus after chunking — run=${id.slice(0, 8)} type=${String(run.type)} (no rag_chunks will be written)`
+            );
+          }
           await deleteChunksForSource(src.sourceId);
           const result = await insertChunksWithEmbeddings({
             sourceId: src.sourceId,
             chunks,
-            embeddingModel: "text-embedding-004",
-            embed: (t) => embedTextWithGemini(t, { model: "text-embedding-004" }),
+            embeddingModel: "gemini-embedding-001",
+            embed: (t) => embedTextWithGemini(t, { model: "gemini-embedding-001" }),
           });
           if (result) {
             console.log(
               `[rag] approve persisted run=${id.slice(0, 8)} type=${String(run.type)} requested=${chunks.length} inserted=${result.inserted} embedded=${result.embedded} failed=${result.failed}`
             );
+          } else {
+            console.warn(`[rag] approve: insertChunksWithEmbeddings returned null (isSupabaseRagEnabled=false?) run=${id.slice(0, 8)}`);
           }
         }
       } catch (e) {
         console.error("[rag] run approve indexing failed:", e instanceof Error ? e.message : String(e));
       }
+    } else {
+      console.warn("[rag] approve: GEMINI_API_KEY unset — RAG indexing skipped after approval");
     }
 
     res.json({ ok: true });

@@ -164,7 +164,7 @@ export async function insertChunksWithEmbeddings(args: {
 }): Promise<{ chunkCount: number; embedded: number; inserted: number; failed: number } | null> {
   if (!isSupabaseRagEnabled()) return null;
   const sb = getSupabaseServiceClient();
-  const model = args.embeddingModel ?? "text-embedding-004";
+  const model = args.embeddingModel ?? "gemini-embedding-001";
   const total = args.chunks.length;
 
   let inserted = 0;
