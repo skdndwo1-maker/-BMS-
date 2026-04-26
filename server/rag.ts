@@ -161,14 +161,23 @@ export async function insertChunksWithEmbeddings(args: {
   chunks: string[];
   embeddingModel?: string;
   embed: (text: string) => Promise<number[]>;
-}): Promise<{ chunkCount: number } | null> {
+}): Promise<{ chunkCount: number; embedded: number; inserted: number; failed: number } | null> {
   if (!isSupabaseRagEnabled()) return null;
   const sb = getSupabaseServiceClient();
   const model = args.embeddingModel ?? "text-embedding-004";
+  const total = args.chunks.length;
 
-  for (let idx = 0; idx < args.chunks.length; idx++) {
+  let inserted = 0;
+  let embedded = 0;
+  let failed = 0;
+
+  console.log(`[rag] insertChunksWithEmbeddings start source=${args.sourceId.slice(0, 8)} total=${total}`);
+
+  for (let idx = 0; idx < total; idx++) {
     const content = args.chunks[idx];
     const contentHash = sha256Hex(content);
+
+    // 1) chunk row 적재
     const { data: chunkRow, error: chunkErr } = await sb
       .from("rag_chunks")
       .insert({
@@ -180,24 +189,68 @@ export async function insertChunksWithEmbeddings(args: {
       })
       .select("id")
       .single();
-    if (chunkErr) {
-      console.error("[supabase] insert chunk failed:", chunkErr.message);
+    if (chunkErr || !chunkRow?.id) {
+      failed += 1;
+      console.error(`[rag] insert chunk ${idx}/${total} failed:`, chunkErr?.message ?? "no row returned");
+      continue;
+    }
+    inserted += 1;
+    const chunkId = chunkRow.id as string;
+
+    // 2) embedding (1회 자동 재시도 — Gemini 일시 오류 대응)
+    //    embed가 throw해도 루프가 끊기지 않도록 반드시 try/catch로 감싼다.
+    let vec: number[] | null = null;
+    let lastErr: string | null = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        vec = await args.embed(content);
+        break;
+      } catch (e) {
+        lastErr = e instanceof Error ? e.message : String(e);
+        if (attempt === 0) {
+          await new Promise((r) => setTimeout(r, 600));
+        }
+      }
+    }
+
+    if (!vec) {
+      failed += 1;
+      console.error(`[rag] embed chunk ${idx}/${total} failed:`, lastErr);
+      // orphan chunk 정리 (embedding 없으면 검색에 잡히지 않으므로 DB를 깨끗이 유지)
+      const { error: delErr } = await sb.from("rag_chunks").delete().eq("id", chunkId);
+      if (delErr) console.error(`[rag] cleanup orphan chunk ${idx} failed:`, delErr.message);
+      else inserted -= 1;
       continue;
     }
 
-    const vec = await args.embed(content);
+    // 3) embedding 행 적재
     const vecText = `[${vec.join(",")}]`;
     const { error: embErr } = await sb.rpc("insert_rag_embedding", {
-      p_chunk_id: chunkRow.id,
+      p_chunk_id: chunkId,
       p_model: model,
       p_embedding: vecText,
     });
     if (embErr) {
-      console.error("[supabase] insert embedding failed:", embErr.message);
+      failed += 1;
+      console.error(`[rag] insert embedding ${idx}/${total} failed:`, embErr.message);
+      const { error: delErr } = await sb.from("rag_chunks").delete().eq("id", chunkId);
+      if (delErr) console.error(`[rag] cleanup orphan chunk ${idx} failed:`, delErr.message);
+      else inserted -= 1;
+      continue;
+    }
+    embedded += 1;
+
+    // 4) rate-limit 회피용 짧은 간격
+    if (idx + 1 < total) {
+      await new Promise((r) => setTimeout(r, 150));
     }
   }
 
-  return { chunkCount: args.chunks.length };
+  console.log(
+    `[rag] insertChunksWithEmbeddings done source=${args.sourceId.slice(0, 8)} total=${total} inserted=${inserted} embedded=${embedded} failed=${failed}`
+  );
+
+  return { chunkCount: embedded, embedded, inserted, failed };
 }
 
 export async function matchRagChunks(args: {
