@@ -190,6 +190,8 @@ export function DesignAssistantChat({
   } | null>(null);
 
   const [inspection, setInspection] = useState<DesignEditorInspectResponse | null>(null);
+  /** 검수 결과를 별도 팝업으로 보여줌 */
+  const [inspectDialogOpen, setInspectDialogOpen] = useState(false);
   const [lastCapture, setLastCapture] = useState<{ base64: string; mime: string } | null>(null);
 
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -201,8 +203,6 @@ export function DesignAssistantChat({
   const [imageTargetViolation, setImageTargetViolation] = useState<DesignEditorViolation | null>(null);
   const [imageBusy, setImageBusy] = useState(false);
 
-  const [correctPreviewUrl, setCorrectPreviewUrl] = useState<string | null>(null);
-  const [correctCaption, setCorrectCaption] = useState("");
   /** 텍스트 제안 탭 하위(카테고리·미리보기) 접기 */
   const [textSuggestSectionOpen, setTextSuggestSectionOpen] = useState(false);
 
@@ -320,6 +320,7 @@ export function DesignAssistantChat({
         creativeTopic: creativeTopic.trim() || undefined,
       });
       setInspection(res);
+      setInspectDialogOpen(true);
       toast.success("디자인 검수가 완료되었습니다.");
     } catch (e) {
       console.error(e);
@@ -329,6 +330,7 @@ export function DesignAssistantChat({
     }
   };
 
+  /** 검수 후 후속 교정: 결과 이미지를 즉시 캔버스에 적용 (사용자는 그대로 추가 편집 가능) */
   const runInspectCorrection = async () => {
     if (!inspection) {
       toast.error("먼저 캔버스 검수를 실행해 주세요.");
@@ -354,9 +356,16 @@ export function DesignAssistantChat({
             : undefined,
       });
       const url = `data:${out.mimeType};base64,${out.data}`;
-      setCorrectPreviewUrl(url);
-      setCorrectCaption(out.caption);
-      toast.success("교정 이미지가 생성되었습니다. 미리보기에서 적용하세요.");
+      onApplyContent({
+        ...content,
+        image: url,
+        posterBackgroundImageRect: { x: 0, y: 0, width: 1, height: 1 },
+        posterImageOpacity: 100,
+        posterImagePosX: 50,
+        posterImagePosY: 50,
+      });
+      setInspectDialogOpen(false);
+      toast.success("교정안을 캔버스에 적용했습니다. 필요 시 추가 편집이 가능합니다.");
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "교정 생성에 실패했습니다.");
@@ -365,6 +374,7 @@ export function DesignAssistantChat({
     }
   };
 
+  /** 전체 VI 교정: 결과 이미지를 즉시 캔버스에 적용 */
   const runHolisticCorrection = async () => {
     setLoading(true);
     try {
@@ -377,30 +387,21 @@ export function DesignAssistantChat({
         creativeTopic: creativeTopic.trim() || undefined,
       });
       const url = `data:${out.mimeType};base64,${out.data}`;
-      setCorrectPreviewUrl(url);
-      setCorrectCaption(out.caption);
-      toast.success("전체 교정 이미지가 생성되었습니다.");
+      onApplyContent({
+        ...content,
+        image: url,
+        posterBackgroundImageRect: { x: 0, y: 0, width: 1, height: 1 },
+        posterImageOpacity: 100,
+        posterImagePosX: 50,
+        posterImagePosY: 50,
+      });
+      toast.success("전체 VI 교정안을 캔버스에 적용했습니다. 필요 시 추가 편집이 가능합니다.");
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "교정에 실패했습니다.");
     } finally {
       setLoading(false);
     }
-  };
-
-  const applyCorrectedImage = () => {
-    if (!correctPreviewUrl) return;
-    onApplyContent({
-      ...content,
-      image: correctPreviewUrl,
-      posterBackgroundImageRect: { x: 0, y: 0, width: 1, height: 1 },
-      posterImageOpacity: 100,
-      posterImagePosX: 50,
-      posterImagePosY: 50,
-    });
-    setCorrectPreviewUrl(null);
-    setCorrectCaption("");
-    toast.success("교정 이미지를 배경으로 적용했습니다. 필요 시 텍스트 레이어를 조정하세요.");
   };
 
   const openTextPreview = (v: DesignEditorViolation) => {
@@ -581,7 +582,9 @@ export function DesignAssistantChat({
 
       {tab === "inspect" && (
         <div className="space-y-2">
-          <p className="text-[11px] text-gray-600">캔버스 캡처를 VI 가이드와 비교해 위반·교정 포인트를 나열합니다.</p>
+          <p className="text-[11px] text-gray-600">
+            캔버스 캡처를 VI 가이드와 비교해 위반·교정 포인트를 검수합니다. 결과는 팝업으로 표시됩니다.
+          </p>
           <Button
             type="button"
             size="sm"
@@ -592,59 +595,24 @@ export function DesignAssistantChat({
             {loading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Scan className="mr-2 h-3.5 w-3.5" />}
             캔버스 검수 실행
           </Button>
-          {inspection && (
-            <div className="space-y-2 rounded-lg border border-violet-100 bg-violet-50/50 p-2 text-[11px]">
-              <p className="font-medium text-violet-900">점수 {inspection.score}점</p>
-              <p className="whitespace-pre-wrap text-gray-800">{inspection.overallSummary}</p>
-              {inspection.violations.length > 0 && (
-                <ul className="space-y-1.5 border-t border-violet-100 pt-2">
-                  {inspection.violations.map((v, i) => (
-                    <li key={i} className="rounded bg-white/90 p-2 text-gray-800">
-                      <span className="font-medium">{v.category}</span> · {v.issue}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <Button
-                type="button"
-                size="sm"
-                className="mt-1 w-full bg-[#F43182] hover:bg-[#F43182]/90"
-                disabled={loading || !inspection}
-                onClick={() => void runInspectCorrection()}
-              >
-                <Wand2 className="mr-2 h-3.5 w-3.5" />
-                교정 (검수 반영 이미지)
-              </Button>
-            </div>
-          )}
-
-          {inspection && inspection.violations.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-[10px] font-medium text-gray-700">항목별 조치</p>
-              {inspection.violations.map((v, idx) => (
-                <div key={idx} className="rounded border bg-white p-2 text-[10px]">
-                  <p className="mb-1 text-gray-800">{v.issue}</p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-[10px]"
-                    disabled={loading || imageBusy}
-                    onClick={() => handleFixClick(v)}
-                  >
-                    {v.fixKind === "image" ? "이미지 수정" : "부분 수정"}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
+          {inspection ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="w-full"
+              onClick={() => setInspectDialogOpen(true)}
+            >
+              직전 검수 결과 다시 보기
+            </Button>
+          ) : null}
         </div>
       )}
 
       {tab === "correct" && (
         <div className="space-y-2">
           <p className="text-[11px] text-gray-600">
-            뱃지·타이틀·본문·유의·이미지·픽토그램·일러스트 등을 VI에 맞게 한 번에 시각 교정합니다.
+            뱃지·타이틀·본문·유의·이미지·픽토그램·일러스트 등을 VI에 맞게 한 번에 시각 교정해 캔버스에 즉시 반영합니다. 적용 후 추가 편집이 가능합니다.
           </p>
           <Button
             type="button"
@@ -659,28 +627,91 @@ export function DesignAssistantChat({
         </div>
       )}
 
-      {correctPreviewUrl && (
-        <div className="rounded-lg border border-[#F43182]/20 bg-white p-2">
-          <p className="mb-1 text-[10px] font-medium text-gray-800">교정 이미지 미리보기</p>
-          <img src={correctPreviewUrl} alt="교정 미리보기" className="max-h-48 w-full rounded object-contain" />
-          {correctCaption && <p className="mt-1 text-[10px] text-gray-600">{correctCaption}</p>}
-          <div className="mt-2 flex gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => setCorrectPreviewUrl(null)}>
-              닫기
-            </Button>
-            <Button type="button" size="sm" className="bg-[#F43182]" onClick={applyCorrectedImage}>
-              캔버스에 적용
-            </Button>
-          </div>
-        </div>
-      )}
-
       {loading && tab !== "inspect" && (
         <div className="flex items-center gap-2 text-[11px] text-gray-500">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           처리 중…
         </div>
       )}
+
+      <Dialog open={inspectDialogOpen} onOpenChange={setInspectDialogOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>디자인 검수 결과</DialogTitle>
+          </DialogHeader>
+          {inspection ? (
+            <div className="space-y-3 text-sm text-gray-800">
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-700">
+                  점수 {inspection.score}점
+                </span>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-[13px] leading-relaxed whitespace-pre-wrap">
+                {inspection.overallSummary || "요약 정보가 없습니다."}
+              </div>
+              {inspection.violations.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-700">검수 항목 ({inspection.violations.length})</p>
+                  <ul className="space-y-1.5">
+                    {inspection.violations.map((v, i) => (
+                      <li
+                        key={i}
+                        className="rounded-lg border border-gray-200 bg-white p-2.5 text-[12px] leading-relaxed"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[11px] font-medium text-violet-700">
+                            {v.category}
+                          </span>
+                          {v.severity ? (
+                            <span className="text-[11px] text-gray-500">[{v.severity}]</span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-gray-800">{v.issue}</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-[11px]"
+                            disabled={loading || imageBusy}
+                            onClick={() => handleFixClick(v)}
+                          >
+                            {v.fixKind === "image" ? "이미지 수정" : "부분 수정"}
+                          </Button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">중요한 위반 사항이 발견되지 않았습니다.</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500">검수 결과가 없습니다.</p>
+          )}
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setInspectDialogOpen(false)}
+            >
+              닫기
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="bg-[#F43182] hover:bg-[#F43182]/90"
+              disabled={loading || !inspection}
+              onClick={() => void runInspectCorrection()}
+            >
+              {loading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Wand2 className="mr-2 h-3.5 w-3.5" />}
+              검수 반영해 캔버스 교정
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
