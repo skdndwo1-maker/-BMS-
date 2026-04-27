@@ -311,12 +311,26 @@ export function normalizeNamingProposal(raw: unknown): BrandNamingProposal {
   const legalityScore = clampNamingScore(
     pickFirstDefined(r, ["legalScore", "legal_score", "legalityScore", "legality_score"])
   );
-  const publicAppealScore = clampNamingScore(
-    pickFirstDefined(r, ["publicAppealScore", "public_appeal_score", "massAppealScore", "popularityScore"])
-  );
-  const scalabilityScore = clampNamingScore(
-    pickFirstDefined(r, ["scalabilityScore", "scalability_score", "extensionScore"])
-  );
+  const publicAppealRaw = pickFirstDefined(r, [
+    "publicAppealScore",
+    "public_appeal_score",
+    "massAppealScore",
+    "popularityScore",
+  ]);
+  const scalabilityRaw = pickFirstDefined(r, ["scalabilityScore", "scalability_score", "extensionScore"]);
+  const overallHint = pickFirstDefined(r, ["overallScore"]);
+  const publicAppealScore =
+    publicAppealRaw !== undefined
+      ? clampNamingScore(publicAppealRaw)
+      : overallHint !== undefined
+        ? clampNamingScore(overallHint)
+        : 50;
+  const scalabilityScore =
+    scalabilityRaw !== undefined
+      ? clampNamingScore(scalabilityRaw)
+      : overallHint !== undefined
+        ? clampNamingScore(overallHint)
+        : 50;
 
   const proposalDetailLogic = {
     hierarchy: firstNonEmptyString(
