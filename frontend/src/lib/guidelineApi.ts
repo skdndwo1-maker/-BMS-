@@ -225,7 +225,7 @@ export async function runAdditionalRevisionImage(opts: {
 
 export type BrandNamingMode = "generate" | "audit";
 
-/** 생성 모드: 네이밍 대안 1건 — 검수와 동일 4축(각 0~100) + 항목별 상세 근거 */
+/** 생성 모드: 네이밍 대안 1건 — 검수와 동일 6축(각 0~100) + 항목별 상세 근거 */
 export type BrandNamingProposal = {
   name: string;
   rationale: string;
@@ -233,11 +233,15 @@ export type BrandNamingProposal = {
   originalityDimensionScore: number;
   pronunciationScore: number;
   legalityScore: number;
+  publicAppealScore: number;
+  scalabilityScore: number;
   proposalDetailLogic: {
     hierarchy: string;
     originality: string;
     pronunciationLanguage: string;
     legality: string;
+    publicAppeal: string;
+    scalability: string;
   };
 };
 
@@ -265,7 +269,7 @@ function firstNonEmptyString(...candidates: unknown[]): string {
 }
 
 /**
- * API·모델이 키 이름을 달리 넘겨도 UI 4축(브랜드 계층 정렬·독창성·발음·언어·적법성) 점수·상세에 맞춤.
+ * API·모델이 키 이름을 달리 넘겨도 UI 6축 점수·상세에 맞춤.
  */
 export function normalizeNamingProposal(raw: unknown): BrandNamingProposal {
   const r = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
@@ -307,6 +311,12 @@ export function normalizeNamingProposal(raw: unknown): BrandNamingProposal {
   const legalityScore = clampNamingScore(
     pickFirstDefined(r, ["legalScore", "legal_score", "legalityScore", "legality_score"])
   );
+  const publicAppealScore = clampNamingScore(
+    pickFirstDefined(r, ["publicAppealScore", "public_appeal_score", "massAppealScore", "popularityScore"])
+  );
+  const scalabilityScore = clampNamingScore(
+    pickFirstDefined(r, ["scalabilityScore", "scalability_score", "extensionScore"])
+  );
 
   const proposalDetailLogic = {
     hierarchy: firstNonEmptyString(
@@ -341,6 +351,20 @@ export function normalizeNamingProposal(raw: unknown): BrandNamingProposal {
       nested.legality,
       nested.detailLegality
     ),
+    publicAppeal: firstNonEmptyString(
+      r.publicAppealDetail,
+      r.detailPublicAppeal,
+      r.detailLogicPublicAppeal,
+      nested.publicAppeal,
+      nested.detailPublicAppeal
+    ),
+    scalability: firstNonEmptyString(
+      r.scalabilityDetail,
+      r.detailScalability,
+      r.detailLogicScalability,
+      nested.scalability,
+      nested.detailScalability
+    ),
   };
 
   return {
@@ -350,16 +374,20 @@ export function normalizeNamingProposal(raw: unknown): BrandNamingProposal {
     originalityDimensionScore,
     pronunciationScore,
     legalityScore,
+    publicAppealScore,
+    scalabilityScore,
     proposalDetailLogic,
   };
 }
 
-/** 단계별 생성: N개 네이밍을 하나의 패키지로 본 4대 평가(통합) */
+/** 단계별 생성: N개 네이밍을 하나의 패키지로 본 6대 평가(통합) */
 export type TierPackageEvaluation = {
   hierarchyScore: number;
   legalityScore: number;
   originalityDimensionScore: number;
   pronunciationScore: number;
+  publicAppealScore: number;
+  scalabilityScore: number;
   proposalDetailLogic: BrandNamingProposal["proposalDetailLogic"];
 };
 
@@ -369,7 +397,7 @@ export type TierStepRow = {
   rationale: string;
 };
 
-/** 단계별 생성: 대안 1개 = N단계 전체 + 세계관 + 패키지 4축 평가 */
+/** 단계별 생성: 대안 1개 = N단계 전체 + 세계관 + 패키지 6축 평가 */
 export type TierNamingAlternative = {
   storyline: string;
   tierSteps: TierStepRow[];
@@ -392,6 +420,10 @@ export type BrandNamingRunResult = {
   pronunciationLanguageScore?: number;
   /** 검수: 적법성(10%) */
   legalityScore?: number;
+  /** 검수·생성: 대중성(종합 1/6) */
+  publicAppealScore?: number;
+  /** 검수·생성: 확장성(종합 1/6) */
+  scalabilityScore?: number;
   trademarkScore: number;
   copyrightScore: number;
   /** 검수: 항목별 상세 논리(상세 보기·확대) */
@@ -400,6 +432,9 @@ export type BrandNamingRunResult = {
     originality: string;
     pronunciationLanguage: string;
     legality: string;
+    /** 구버전 응답에는 없을 수 있음 */
+    publicAppeal?: string;
+    scalability?: string;
   };
   hierarchy: {
     status: "aligned" | "misaligned" | "warning";

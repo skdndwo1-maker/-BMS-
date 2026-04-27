@@ -1679,15 +1679,15 @@ const brandNamingResponseSchema = {
     overallScore: {
       type: SchemaType.NUMBER,
       description:
-        "0~100 종합. 검수 시 서버에서 창의성·직관성 50%+50%로 재계산되므로, 모델은 네 항목 점수와 논리적으로 맞게 채점",
+        "0~100 종합. 검수 시 서버에서 브랜드계층·적법성·창의성·직관성·대중성·확장성 **6항목 균등(각 1/6)** 으로 재계산되므로, 여섯 점수와 논리적으로 맞게 채점",
     },
     hierarchyScore: {
       type: SchemaType.NUMBER,
-      description: "브랜드 계층 정렬 0~100 (검수: 종합 가중합에는 미포함, 70 미만이면 Pass/Fail상 Fail·NO-GO 요건)",
+      description: "브랜드 계층 정렬 0~100 (검수: 종합 1/6 반영, 70 미만이면 Pass/Fail상 Fail·NO-GO 요건)",
     },
     originalityDimensionScore: {
       type: SchemaType.NUMBER,
-      description: "창의성 0~100 (검수: 종합 점수의 50% 가중). 가이드·요청·참고 정보만으로 Gemini 추론",
+      description: "창의성 0~100 (검수: 종합 1/6). 가이드·요청·참고 정보만으로 Gemini 추론",
     },
     pronunciationScore: {
       type: SchemaType.INTEGER,
@@ -1697,11 +1697,21 @@ const brandNamingResponseSchema = {
     pronunciationLanguageScore: {
       type: SchemaType.NUMBER,
       description:
-        "직관성(발음·언어) 0~100 (검수: 종합 점수의 50% 가중). **pronunciationScore와 동일한 정수 값**으로 맞출 것",
+        "직관성(발음·언어) 0~100 (검수: 종합 1/6). **pronunciationScore와 동일한 정수 값**으로 맞출 것",
     },
     legalityScore: {
       type: SchemaType.NUMBER,
-      description: "적법성 0~100 (검수: 종합 가중합에는 미포함, 70 미만이면 Pass/Fail상 Fail·NO-GO 요건). 국가법령정보 요약이 있으면 반영",
+      description: "적법성 0~100 (검수: 종합 1/6 반영, 70 미만이면 Pass/Fail상 Fail·NO-GO 요건). 국가법령정보 요약이 있으면 반영",
+    },
+    publicAppealScore: {
+      type: SchemaType.INTEGER,
+      description:
+        "대중성(사회·문화적 수용 가능성) 0~100. 부정 연상·세대·문화권 범용성·특정 집단 편향 여부 등을 Gemini 추론으로 채점 (검수: 종합 1/6)",
+    },
+    scalabilityScore: {
+      type: SchemaType.INTEGER,
+      description:
+        "확장성(브랜드 생태계 확장 잠재력) 0~100. 패밀리 네이밍·글로벌 발음·파생·시간 내구성 등을 Gemini 추론으로 채점 (검수: 종합 1/6)",
     },
     trademarkScore: { type: SchemaType.NUMBER, description: "레거시: 상표 관점. 검수에서는 originalityDimensionScore와 유사 목적으로 채울 수 있음" },
     copyrightScore: { type: SchemaType.NUMBER, description: "레거시: 저작권. 검수에서는 legalityScore 보조로 채울 수 있음" },
@@ -1776,6 +1786,16 @@ const brandNamingResponseSchema = {
       description:
         "검수: 적법성 항목 상세 논리. 국가법령정보 API 요약이 있으면 발췌·출처(국가법령정보센터 등) 명시. 상표법·저작권법 관점. 생성: 짧은 요약"
     },
+    detailLogicPublicAppeal: {
+      type: SchemaType.STRING,
+      description:
+        "대중성 상세 논리(한국어): 부정적 연상·문화권 오해·세대·글로벌 발음/의미·특정 집단 편향 등. 검수 최소 수백 자 권장. 생성: 3줄 이상"
+    },
+    detailLogicScalability: {
+      type: SchemaType.STRING,
+      description:
+        "확장성 상세 논리(한국어): 패밀리 네이밍(Pro/Lite/+ 등)·글로벌 왜곡·파생·슬로건 확장·시간 내구성. 검수 최소 수백 자 권장. 생성: 3줄 이상"
+    },
     finalSummary: {
       type: SchemaType.STRING,
       description: "최종 GO/NO-GO 근거 요약 2~4문장 (한국어)"
@@ -1827,6 +1847,16 @@ const brandNamingResponseSchema = {
           legalDetail: {
             type: SchemaType.STRING,
             description: "적법성 평가 상세 서술 (한국어, 3줄 이상)"
+          },
+          publicAppealScore: { type: SchemaType.INTEGER, description: "대중성 0~100" },
+          publicAppealDetail: {
+            type: SchemaType.STRING,
+            description: "대중성 평가 상세 (한국어, 3줄 이상)"
+          },
+          scalabilityScore: { type: SchemaType.INTEGER, description: "확장성 0~100" },
+          scalabilityDetail: {
+            type: SchemaType.STRING,
+            description: "확장성 평가 상세 (한국어, 3줄 이상)"
           }
         },
         required: [
@@ -1839,7 +1869,11 @@ const brandNamingResponseSchema = {
           "pronunciationScore",
           "pronunciationDetail",
           "legalScore",
-          "legalDetail"
+          "legalDetail",
+          "publicAppealScore",
+          "publicAppealDetail",
+          "scalabilityScore",
+          "scalabilityDetail"
         ]
       }
     },
@@ -1878,6 +1912,16 @@ const brandNamingResponseSchema = {
           legalDetail: {
             type: SchemaType.STRING,
             description: "적법성 평가 상세 서술 (한국어, 3줄 이상)"
+          },
+          publicAppealScore: { type: SchemaType.INTEGER, description: "대중성 0~100" },
+          publicAppealDetail: {
+            type: SchemaType.STRING,
+            description: "대중성 평가 상세 (한국어, 3줄 이상)"
+          },
+          scalabilityScore: { type: SchemaType.INTEGER, description: "확장성 0~100" },
+          scalabilityDetail: {
+            type: SchemaType.STRING,
+            description: "확장성 평가 상세 (한국어, 3줄 이상)"
           }
         },
         required: [
@@ -1890,14 +1934,18 @@ const brandNamingResponseSchema = {
           "pronunciationScore",
           "pronunciationDetail",
           "legalScore",
-          "legalDetail"
+          "legalDetail",
+          "publicAppealScore",
+          "publicAppealDetail",
+          "scalabilityScore",
+          "scalabilityDetail"
         ]
       }
     },
     tierNamingAlternatives: {
       type: SchemaType.ARRAY,
       description:
-        "**단계별 생성 시 필수: 정확히 4개**. 각 원소 = **대안 1개** = 한 패키지(요청한 N단계 전부 + 세계관 + 패키지 단위 4대 평가). 일반 생성(단일 네이밍 4안)에서는 빈 배열 []",
+        "**단계별 생성 시 필수: 정확히 4개**. 각 원소 = **대안 1개** = 한 패키지(요청한 N단계 전부 + 세계관 + 패키지 단위 **6대 평가**). 일반 생성(단일 네이밍 4안)에서는 빈 배열 []",
       items: {
         type: SchemaType.OBJECT,
         properties: {
@@ -1921,29 +1969,37 @@ const brandNamingResponseSchema = {
           },
           tierPackageEvaluation: {
             type: SchemaType.OBJECT,
-            description: "이 패키지(N단계 전체)에 대한 통합 4대 평가. 창의성 근거에는 storyline 반영 필수",
+            description: "이 패키지(N단계 전체)에 대한 통합 6대 평가. 창의성 근거에는 storyline 반영 필수",
             properties: {
               hierarchyScore: { type: SchemaType.INTEGER },
               legalityScore: { type: SchemaType.INTEGER },
               originalityDimensionScore: { type: SchemaType.INTEGER },
               pronunciationScore: { type: SchemaType.INTEGER },
+              publicAppealScore: { type: SchemaType.INTEGER, description: "대중성 0~100" },
+              scalabilityScore: { type: SchemaType.INTEGER, description: "확장성 0~100" },
               hierarchyDetail: { type: SchemaType.STRING },
               legalityDetail: { type: SchemaType.STRING },
               originalityDetail: {
                 type: SchemaType.STRING,
                 description: "창의성: 반드시 storyline과 각 단계 네이밍의 연결을 구체적으로 서술"
               },
-              pronunciationDetail: { type: SchemaType.STRING }
+              pronunciationDetail: { type: SchemaType.STRING },
+              publicAppealDetail: { type: SchemaType.STRING, description: "대중성 근거 3줄 이상" },
+              scalabilityDetail: { type: SchemaType.STRING, description: "확장성 근거 3줄 이상" }
             },
             required: [
               "hierarchyScore",
               "legalityScore",
               "originalityDimensionScore",
               "pronunciationScore",
+              "publicAppealScore",
+              "scalabilityScore",
               "hierarchyDetail",
               "legalityDetail",
               "originalityDetail",
-              "pronunciationDetail"
+              "pronunciationDetail",
+              "publicAppealDetail",
+              "scalabilityDetail"
             ]
           }
         },
@@ -1959,13 +2015,17 @@ const brandNamingResponseSchema = {
         legalityScore: { type: SchemaType.INTEGER, description: "패키지 기준 적법성 0~100" },
         originalityDimensionScore: { type: SchemaType.INTEGER, description: "패키지 기준 창의성 0~100" },
         pronunciationScore: { type: SchemaType.INTEGER, description: "패키지 기준 직관성(발음·언어) 0~100" },
+        publicAppealScore: { type: SchemaType.INTEGER, description: "패키지 기준 대중성 0~100" },
+        scalabilityScore: { type: SchemaType.INTEGER, description: "패키지 기준 확장성 0~100" },
         hierarchyDetail: {
           type: SchemaType.STRING,
           description: "패키지 전체에 대한 브랜드 계층 정렬 근거 한국어 3줄 이상"
         },
         legalityDetail: { type: SchemaType.STRING, description: "패키지 기준 적법성 근거 3줄 이상" },
         originalityDetail: { type: SchemaType.STRING, description: "패키지 기준 창의성 근거 3줄 이상" },
-        pronunciationDetail: { type: SchemaType.STRING, description: "패키지 기준 직관성 근거 3줄 이상" }
+        pronunciationDetail: { type: SchemaType.STRING, description: "패키지 기준 직관성 근거 3줄 이상" },
+        publicAppealDetail: { type: SchemaType.STRING, description: "패키지 기준 대중성 근거 3줄 이상" },
+        scalabilityDetail: { type: SchemaType.STRING, description: "패키지 기준 확장성 근거 3줄 이상" }
       }
     },
     additionalNamingSuggestions: {
@@ -1998,6 +2058,10 @@ const brandNamingResponseSchema = {
     "detailLogicOriginality",
     "detailLogicPronunciation",
     "detailLogicLegality",
+    "detailLogicPublicAppeal",
+    "detailLogicScalability",
+    "publicAppealScore",
+    "scalabilityScore",
     "finalSummary",
     "goRecommendation",
     "suggestedNames",
@@ -2163,6 +2227,10 @@ export type ProposalDetailLogicGemini = {
   originality: string;
   pronunciationLanguage: string;
   legality: string;
+  /** 대중성(사회·문화적 수용 가능성) 근거 */
+  publicAppeal: string;
+  /** 확장성(브랜드 생태계 확장) 근거 */
+  scalability: string;
 };
 
 export type BrandNamingProposalGemini = {
@@ -2172,6 +2240,8 @@ export type BrandNamingProposalGemini = {
   originalityDimensionScore: number;
   pronunciationScore: number;
   legalityScore: number;
+  publicAppealScore: number;
+  scalabilityScore: number;
   proposalDetailLogic: ProposalDetailLogicGemini;
 };
 
@@ -2183,6 +2253,8 @@ export type BrandNamingGeminiResult = {
   pronunciationScore: number;
   pronunciationLanguageScore: number;
   legalityScore: number;
+  publicAppealScore: number;
+  scalabilityScore: number;
   trademarkScore: number;
   copyrightScore: number;
   detailLogic: {
@@ -2190,6 +2262,8 @@ export type BrandNamingGeminiResult = {
     originality: string;
     pronunciationLanguage: string;
     legality: string;
+    publicAppeal: string;
+    scalability: string;
   };
   hierarchy: {
     status: "aligned" | "misaligned" | "warning";
@@ -2224,6 +2298,8 @@ export type TierPackageEvaluationGemini = {
   legalityScore: number;
   originalityDimensionScore: number;
   pronunciationScore: number;
+  publicAppealScore: number;
+  scalabilityScore: number;
   proposalDetailLogic: ProposalDetailLogicGemini;
 };
 
@@ -2281,7 +2357,9 @@ function parseTierPackageEvaluation(p: Record<string, unknown>): TierPackageEval
   const ls = clamp(t.legalityScore ?? t.legalScore ?? 0);
   const os = clamp(t.originalityDimensionScore ?? t.uniquenessScore ?? 0);
   const ps = clamp(t.pronunciationScore ?? 0);
-  if (hs + ls + os + ps === 0) return undefined;
+  const pas = clamp(t.publicAppealScore ?? 0);
+  const scs = clamp(t.scalabilityScore ?? 0);
+  if (hs + ls + os + ps + pas + scs === 0) return undefined;
   const detail: ProposalDetailLogicGemini = {
     hierarchy:
       firstStr(t.hierarchyDetail, t.detailHierarchy, (t as { proposalDetailLogic?: { hierarchy?: string } }).proposalDetailLogic?.hierarchy) ||
@@ -2299,21 +2377,37 @@ function parseTierPackageEvaluation(p: Record<string, unknown>): TierPackageEval
       ) || "(상세 근거 문단 없음)",
     legality:
       firstStr(t.legalityDetail, t.legalDetail, (t as { proposalDetailLogic?: { legality?: string } }).proposalDetailLogic?.legality) ||
-      "(상세 근거 문단 없음)"
+      "(상세 근거 문단 없음)",
+    publicAppeal:
+      firstStr(
+        t.publicAppealDetail,
+        (t as { proposalDetailLogic?: { publicAppeal?: string } }).proposalDetailLogic?.publicAppeal
+      ) || "(상세 근거 문단 없음)",
+    scalability:
+      firstStr(
+        t.scalabilityDetail,
+        (t as { proposalDetailLogic?: { scalability?: string } }).proposalDetailLogic?.scalability
+      ) || "(상세 근거 문단 없음)"
   };
   return {
     hierarchyScore: hs,
     legalityScore: ls,
     originalityDimensionScore: os,
     pronunciationScore: ps,
+    publicAppealScore: pas,
+    scalabilityScore: scs,
     proposalDetailLogic: detail
   };
 }
 
 function weightedTierPackageOverall(tp: TierPackageEvaluationGemini): number {
-  return Math.min(
-    100,
-    Math.max(0, Math.round(tp.originalityDimensionScore * 0.5 + tp.pronunciationScore * 0.5))
+  return averageNamingOverallSix(
+    tp.hierarchyScore,
+    tp.originalityDimensionScore,
+    tp.pronunciationScore,
+    tp.legalityScore,
+    tp.publicAppealScore,
+    tp.scalabilityScore
   );
 }
 
@@ -2336,11 +2430,15 @@ function synthesizeTierAlternativePlaceholder(
       legalityScore: 50,
       originalityDimensionScore: 50,
       pronunciationScore: 50,
+      publicAppealScore: 50,
+      scalabilityScore: 50,
       proposalDetailLogic: {
         hierarchy: "자동 보완입니다.",
         originality: "자동 보완입니다. 세계관·스토리라인과 단계 네이밍의 연계는 재생성 시 모델 응답에 포함됩니다.",
         pronunciationLanguage: "자동 보완입니다.",
-        legality: "자동 보완입니다."
+        legality: "자동 보완입니다.",
+        publicAppeal: "자동 보완입니다.",
+        scalability: "자동 보완입니다."
       }
     }
   };
@@ -2368,18 +2466,24 @@ function normalizeTierAlternativeShape(
     (tierPackageEvaluation?.hierarchyScore ?? 0) +
     (tierPackageEvaluation?.legalityScore ?? 0) +
     (tierPackageEvaluation?.originalityDimensionScore ?? 0) +
-    (tierPackageEvaluation?.pronunciationScore ?? 0);
+    (tierPackageEvaluation?.pronunciationScore ?? 0) +
+    (tierPackageEvaluation?.publicAppealScore ?? 0) +
+    (tierPackageEvaluation?.scalabilityScore ?? 0);
   if (!tierPackageEvaluation || sumScores === 0) {
     tierPackageEvaluation = {
       hierarchyScore: 50,
       legalityScore: 50,
       originalityDimensionScore: 50,
       pronunciationScore: 50,
+      publicAppealScore: 50,
+      scalabilityScore: 50,
       proposalDetailLogic: {
         hierarchy: "(자동 보완)",
         originality: "(자동 보완) 스토리라인·단계 네이밍 연계 평가가 비었습니다.",
         pronunciationLanguage: "(자동 보완)",
-        legality: "(자동 보완)"
+        legality: "(자동 보완)",
+        publicAppeal: "(자동 보완)",
+        scalability: "(자동 보완)"
       }
     };
   }
@@ -2396,12 +2500,16 @@ function synthesizeTierPackageFromProposals(proposals: BrandNamingProposalGemini
     legalityScore: avg((p) => p.legalityScore),
     originalityDimensionScore: avg((p) => p.originalityDimensionScore),
     pronunciationScore: avg((p) => p.pronunciationScore),
+    publicAppealScore: avg((p) => p.publicAppealScore),
+    scalabilityScore: avg((p) => p.scalabilityScore),
     proposalDetailLogic: {
       hierarchy:
         "모델이 패키지 통합 평가 객체를 내보내지 않아, 단계별 후보 점수의 산술 평균으로 대체했습니다. 동일 요청으로 재생성하면 통합 근거 문단이 채워질 수 있습니다.",
       originality: "—",
       pronunciationLanguage: "—",
-      legality: "—"
+      legality: "—",
+      publicAppeal: "—",
+      scalability: "—"
     }
   };
 }
@@ -2422,9 +2530,15 @@ function parseBrandNamingPayload(raw: string): BrandNamingGeminiResult | null {
   }
 }
 
-function weightedAuditOverall(_h: number, o: number, pr: number, _l: number): number {
-  // 가중합: 창의성(=originalityDimensionScore) 50% + 직관성(=pronunciationScore) 50%
-  return Math.min(100, Math.max(0, Math.round(o * 0.5 + pr * 0.5)));
+/** 종합: 브랜드계층·창의성·직관성·적법성·대중성·확장성 — 6항목 균등(각 1/6) */
+function averageNamingOverallSix(h: number, o: number, pr: number, l: number, pa: number, sc: number): number {
+  const hh = Math.min(100, Math.max(0, Math.round(Number(h) || 0)));
+  const oo = Math.min(100, Math.max(0, Math.round(Number(o) || 0)));
+  const ppr = Math.min(100, Math.max(0, Math.round(Number(pr) || 0)));
+  const ll = Math.min(100, Math.max(0, Math.round(Number(l) || 0)));
+  const ppa = Math.min(100, Math.max(0, Math.round(Number(pa) || 0)));
+  const ssc = Math.min(100, Math.max(0, Math.round(Number(sc) || 0)));
+  return Math.min(100, Math.max(0, Math.round((hh + oo + ppr + ll + ppa + ssc) / 6)));
 }
 
 /** 검수: 발음·언어 상세가 너무 짧거나 비어 있으면 기본 안내 문구 보강 */
@@ -2451,16 +2565,19 @@ function normalizeBrandNamingResult(p: Record<string, unknown>): BrandNamingGemi
   const pronNum =
     finite(p.pronunciationScore) ?? finite(p.pronunciationLanguageScore) ?? finite(p.overallScore) ?? 70;
   const legNum = finite(p.legalityScore) ?? finite(p.copyrightScore) ?? finite(p.overallScore) ?? 0;
+  const paNum = finite(p.publicAppealScore) ?? finite(p.overallScore) ?? 50;
+  const scNum = finite(p.scalabilityScore) ?? finite(p.overallScore) ?? 50;
   const tmLegacy = finite(p.trademarkScore) ?? origNum;
   const crLegacy = finite(p.copyrightScore) ?? legNum;
-  const overallScore = finite(p.overallScore) ?? weightedAuditOverall(hsNum, origNum, pronNum, legNum);
+  const overallScore =
+    finite(p.overallScore) ?? averageNamingOverallSix(hsNum, origNum, pronNum, legNum, paNum, scNum);
   const hs = ["aligned", "misaligned", "warning"].includes(String(p.hierarchyStatus))
     ? (String(p.hierarchyStatus) as "aligned" | "misaligned" | "warning")
     : "warning";
   const tr = ["low", "medium", "high"].includes(String(p.trademarkRisk))
     ? (String(p.trademarkRisk) as "low" | "medium" | "high")
     : "medium";
-  // Pass/Fail: 브랜드 계층 정렬, 적법성은 가중합에서 제외하고, fail이면 무조건 사용 불가
+  // Pass/Fail: 브랜드 계층 정렬·적법성 70 미만이면 NO-GO(점수는 종합 1/6에도 반영)
   const passHierarchy = hsNum >= 70;
   const passLegality = legNum >= 70;
   const gr =
@@ -2529,6 +2646,10 @@ function normalizeBrandNamingResult(p: Record<string, unknown>): BrandNamingGemi
       ])
     );
     const leg = clampScore(pick(row, ["legalScore", "legal_score", "legalityScore", "legality_score"]));
+    const pa = clampScore(
+      pick(row, ["publicAppealScore", "public_appeal_score", "massAppealScore", "popularityScore"])
+    );
+    const sc = clampScore(pick(row, ["scalabilityScore", "scalability_score", "extensionScore"]));
     const nested =
       row.proposalDetailLogic && typeof row.proposalDetailLogic === "object" && !Array.isArray(row.proposalDetailLogic)
         ? (row.proposalDetailLogic as Record<string, unknown>)
@@ -2573,6 +2694,20 @@ function normalizeBrandNamingResult(p: Record<string, unknown>): BrandNamingGemi
         nested.legality,
         nested.detailLegality
       ),
+      publicAppeal: firstStr(
+        row.publicAppealDetail,
+        row.detailPublicAppeal,
+        row.detailLogicPublicAppeal,
+        nested.publicAppeal,
+        nested.detailPublicAppeal
+      ),
+      scalability: firstStr(
+        row.scalabilityDetail,
+        row.detailScalability,
+        row.detailLogicScalability,
+        nested.scalability,
+        nested.detailScalability
+      ),
     };
     return {
       name: String(row?.name ?? "").trim(),
@@ -2581,6 +2716,8 @@ function normalizeBrandNamingResult(p: Record<string, unknown>): BrandNamingGemi
       originalityDimensionScore: o,
       pronunciationScore: pr,
       legalityScore: leg,
+      publicAppealScore: pa,
+      scalabilityScore: sc,
       proposalDetailLogic: detail
     };
   };
@@ -2597,13 +2734,17 @@ function normalizeBrandNamingResult(p: Record<string, unknown>): BrandNamingGemi
     pronunciationScore: pronNum,
     pronunciationLanguageScore: pronNum,
     legalityScore: legNum,
+    publicAppealScore: paNum,
+    scalabilityScore: scNum,
     trademarkScore: tmLegacy,
     copyrightScore: crLegacy,
     detailLogic: {
       hierarchy: String(p.detailLogicHierarchy ?? ""),
       originality: String(p.detailLogicOriginality ?? ""),
       pronunciationLanguage: String(p.detailLogicPronunciation ?? ""),
-      legality: String(p.detailLogicLegality ?? "")
+      legality: String(p.detailLogicLegality ?? ""),
+      publicAppeal: String(p.detailLogicPublicAppeal ?? ""),
+      scalability: String(p.detailLogicScalability ?? "")
     },
     hierarchy: {
       status: hs,
@@ -2643,11 +2784,15 @@ function mockBrandNamingNoKey(
     originalityDimensionScore: 60,
     pronunciationScore: 70,
     legalityScore: 68,
+    publicAppealScore: 66,
+    scalabilityScore: 67,
     proposalDetailLogic: {
       hierarchy: "API 키 미설정 자리 표시입니다.",
       originality: "API 키 미설정 자리 표시입니다.",
       pronunciationLanguage: "API 키 미설정 자리 표시입니다.",
-      legality: "API 키 미설정 자리 표시입니다."
+      legality: "API 키 미설정 자리 표시입니다.",
+      publicAppeal: "API 키 미설정 자리 표시입니다.",
+      scalability: "API 키 미설정 자리 표시입니다."
     }
   });
 
@@ -2671,12 +2816,16 @@ function mockBrandNamingNoKey(
           legalityScore: 64,
           originalityDimensionScore: 60,
           pronunciationScore: 70,
+          publicAppealScore: 66,
+          scalabilityScore: 67,
           proposalDetailLogic: {
             hierarchy: "API 키 미설정 자리 표시입니다.",
             originality:
               "창의성(예시): 위 스토리라인과 각 단계 네이밍의 연결을 설명하는 자리입니다. 실제 생성 시 본문에 반영됩니다.",
             pronunciationLanguage: "API 키 미설정 자리 표시입니다.",
-            legality: "API 키 미설정 자리 표시입니다."
+            legality: "API 키 미설정 자리 표시입니다.",
+            publicAppeal: "API 키 미설정 자리 표시입니다.",
+            scalability: "API 키 미설정 자리 표시입니다."
           }
         }
       };
@@ -2688,6 +2837,8 @@ function mockBrandNamingNoKey(
       legalityScore: a.tierPackageEvaluation.legalityScore,
       originalityDimensionScore: a.tierPackageEvaluation.originalityDimensionScore,
       pronunciationScore: a.tierPackageEvaluation.pronunciationScore,
+      publicAppealScore: a.tierPackageEvaluation.publicAppealScore,
+      scalabilityScore: a.tierPackageEvaluation.scalabilityScore,
       proposalDetailLogic: { ...a.tierPackageEvaluation.proposalDetailLogic }
     }));
     return {
@@ -2697,13 +2848,17 @@ function mockBrandNamingNoKey(
       pronunciationScore: 72,
       pronunciationLanguageScore: 72,
       legalityScore: 64,
+      publicAppealScore: 66,
+      scalabilityScore: 67,
       trademarkScore: 58,
       copyrightScore: 64,
       detailLogic: {
         hierarchy: "GEMINI_API_KEY가 없어 상세 논리는 자리 표시입니다.",
         originality: "API 키 설정 후 창의성 추론 근거가 채워집니다.",
         pronunciationLanguage: "API 키 설정 후 발음·언어 분석이 채워집니다.",
-        legality: "API 키 설정 후 법령 연동 분석이 채워집니다."
+        legality: "API 키 설정 후 법령 연동 분석이 채워집니다.",
+        publicAppeal: "API 키 설정 후 대중성 분석이 채워집니다.",
+        scalability: "API 키 설정 후 확장성 분석이 채워집니다."
       },
       hierarchy: {
         status: "warning",
@@ -2739,13 +2894,17 @@ function mockBrandNamingNoKey(
     pronunciationScore: 72,
     pronunciationLanguageScore: 72,
     legalityScore: 64,
+    publicAppealScore: 66,
+    scalabilityScore: 67,
     trademarkScore: 58,
     copyrightScore: 64,
     detailLogic: {
       hierarchy: "GEMINI_API_KEY가 없어 상세 논리는 자리 표시입니다.",
       originality: "API 키 설정 후 창의성 추론 근거가 채워집니다.",
       pronunciationLanguage: "API 키 설정 후 발음·언어 분석이 채워집니다.",
-      legality: "API 키 설정 후 법령 연동 분석이 채워집니다."
+      legality: "API 키 설정 후 법령 연동 분석이 채워집니다.",
+      publicAppeal: "API 키 설정 후 대중성 분석이 채워집니다.",
+      scalability: "API 키 설정 후 확장성 분석이 채워집니다."
     },
     hierarchy: {
       status: "warning",
@@ -2790,11 +2949,13 @@ function finalizeNamingResult(
 ): BrandNamingGeminiResult {
   const reqCtx = (opts?.requestText ?? "").trim();
   if (mode === "audit") {
-    const overallScore = weightedAuditOverall(
+    const overallScore = averageNamingOverallSix(
       r.hierarchyScore,
       r.originalityDimensionScore,
       r.pronunciationLanguageScore,
-      r.legalityScore
+      r.legalityScore,
+      r.publicAppealScore,
+      r.scalabilityScore
     );
     const additionalNamingSuggestions = Array.isArray(r.additionalNamingSuggestions)
       ? r.additionalNamingSuggestions.map((x) => String(x).trim()).filter(Boolean).slice(0, 3)
@@ -2821,7 +2982,7 @@ function finalizeNamingResult(
     checklist: [] as string[]
   };
 
-  /** 단계별(요금제): 대안 4개 × (N단계 + 세계관 + 패키지 4축) */
+  /** 단계별(요금제): 대안 4개 × (N단계 + 세계관 + 패키지 6대 평가) */
   if (opts?.tieredPackage) {
     const nSteps = Math.min(6, Math.max(1, opts.tierStepCount ?? 3));
     const labels: string[] = [];
@@ -2864,6 +3025,8 @@ function finalizeNamingResult(
       legalityScore: alt.tierPackageEvaluation.legalityScore,
       originalityDimensionScore: alt.tierPackageEvaluation.originalityDimensionScore,
       pronunciationScore: alt.tierPackageEvaluation.pronunciationScore,
+      publicAppealScore: alt.tierPackageEvaluation.publicAppealScore,
+      scalabilityScore: alt.tierPackageEvaluation.scalabilityScore,
       proposalDetailLogic: { ...alt.tierPackageEvaluation.proposalDetailLogic }
     }));
 
@@ -2885,7 +3048,9 @@ function finalizeNamingResult(
         hierarchy: "",
         originality: "",
         pronunciationLanguage: "",
-        legality: ""
+        legality: "",
+        publicAppeal: "",
+        scalability: ""
       },
       hierarchy: emptyHierarchy,
       trademark: { risk: "low" as const, conflicts: [], recommendation: "" },
@@ -2913,11 +3078,15 @@ function finalizeNamingResult(
     originalityDimensionScore: 50,
     pronunciationScore: 50,
     legalityScore: 50,
+    publicAppealScore: 50,
+    scalabilityScore: 50,
     proposalDetailLogic: {
       hierarchy: "자동 보완 항목입니다.",
       originality: "자동 보완 항목입니다.",
       pronunciationLanguage: "자동 보완 항목입니다.",
-      legality: "자동 보완 항목입니다."
+      legality: "자동 보완 항목입니다.",
+      publicAppeal: "자동 보완 항목입니다.",
+      scalability: "자동 보완 항목입니다."
     }
   });
   while (proposals.length < expected) {
@@ -2940,7 +3109,9 @@ function finalizeNamingResult(
       hierarchy: "",
       originality: "",
       pronunciationLanguage: "",
-      legality: ""
+      legality: "",
+      publicAppeal: "",
+      scalability: ""
     },
     hierarchy: emptyHierarchy,
     trademark: { risk: "low" as const, conflicts: [], recommendation: "" },
@@ -3017,7 +3188,7 @@ export async function runBrandNamingWithGemini(opts: {
   - **storyline**: 이 대안에서 ${stepCountForTier}개 단계 네이밍이 **공유하는 하나의 세계관·스토리라인**(한국어 3~6문장). 모든 단계 이름이 이 서사에서 **일관되게 파생**되도록 서술(기본 전제). 아래 **【세계관·스토리라인 톤】** 블록을 **반드시** 따를 것.
 ${tierStorylineToneBlock ? `\n${tierStorylineToneBlock}\n` : ""}
   - **tierSteps**: 길이 **정확히 ${stepCountForTier}**, 순서는 [요청 내용] **[단계별 생성]** 단계 라벨과 동일. 각 원소: tierLabel, name, rationale.
-  - **tierPackageEvaluation**: 이 대안 패키지 전체에 대한 통합 4축(0~100) 및 hierarchyDetail·legalityDetail·originalityDetail·pronunciationDetail(각 한국어 3줄 이상). **창의성(originalityDetail)**에는 반드시 **storyline과 각 단계 name의 연결**을 구체적으로 서술. Enterprise 선택 시 스토리라인의 **진중함·무게감**이 평가 근거에도 반영되도록 서술하고, Personal 선택 시 **커머셜·일상 맥락**과의 연결을 드러낼 것.
+  - **tierPackageEvaluation**: 이 대안 패키지 전체에 대한 통합 **6대 평가**(0~100) 및 hierarchyDetail·legalityDetail·originalityDetail·pronunciationDetail·**publicAppealDetail**·**scalabilityDetail**(각 한국어 3줄 이상). **창의성(originalityDetail)**에는 반드시 **storyline과 각 단계 name의 연결**을 구체적으로 서술. **대중성**은 부정 연상·문화권 오해·세대·글로벌 발음/의미·특정 집단 편향을, **확장성**은 패밀리 네이밍(Pro/Lite/+ 등)·글로벌 왜곡·파생·내구성을 반영. Enterprise 선택 시 스토리라인의 **진중함·무게감**이 평가 근거에도 반영되도록 서술하고, Personal 선택 시 **커머셜·일상 맥락**과의 연결을 드러낼 것.
 - **names**·**namingProposals**·**suggestedNames**: 각각 **정확히 4**. i번째 항목은 **tierNamingAlternatives[i]의 요약 행**(name은 대안 식별 제목, description/rationale은 storyline 요약 또는 동일 복제). 후보별 점수·Detail은 **tierNamingAlternatives[i].tierPackageEvaluation**과 **일치**시킬 것.
 - 루트 **tierPackageEvaluation**은 **쓰지 말 것**(레거시 단일 패키지용). 일반 생성과 혼동 금지.
 - **additionalNamingSuggestions**: [].
@@ -3032,13 +3203,15 @@ ${tierStorylineToneBlock ? `\n${tierStorylineToneBlock}\n` : ""}
   \`name\`, \`description\` (네이밍 설명·창작 근거, 한국어 3문장 이상),
   \`hierarchyScore\`, \`hierarchyDetail\` (브랜드 계층 평가 상세, **한국어 3줄 이상**),
   \`uniquenessScore\`, \`uniquenessDetail\` (창의성 상세, **3줄 이상** — 가이드·요청·참고 정보만으로 유사·식별력 관점을 **Gemini 추론**으로 서술. 외부 상표 DB·연동 여부는 **언급하지 말 것**),
-  \`pronunciationScore\`, \`pronunciationDetail\` (발음·언어 상세, **3줄 이상**),
-  \`legalScore\`, \`legalDetail\` (적법성 상세, **3줄 이상**).
+  \`pronunciationScore\`, \`pronunciationDetail\` (직관성·발음·언어 상세, **3줄 이상**),
+  \`legalScore\`, \`legalDetail\` (적법성 상세, **3줄 이상**),
+  \`publicAppealScore\`, \`publicAppealDetail\` (**대중성**: 부정 연상·문화권 오해·세대·글로벌 발음/의미·편향 — **3줄 이상**),
+  \`scalabilityScore\`, \`scalabilityDetail\` (**확장성**: 패밀리 네이밍·글로벌 왜곡·파생·내구성 — **3줄 이상**).
 - **namingProposals**의 각 원소에도 위와 동일한 값을 넣되, 스키마상 **description** 필드는 **반드시** 채우고, **rationale**이 있으면 **description과 동일 문자열**로 맞추어도 됩니다.
 - **tierNamingAlternatives**는 일반 생성에서 **빈 배열 []**.
 - **적법성(legalScore·legalDetail)**: [참고 정보]에 **국가법령정보센터 법령 검색** 결과가 있으면 **반드시 인용·요약**하고, 상표법·표시광고법 위반 가능성·일반명칭·저작권 이슈를 기준으로 **반드시** 평가합니다. **0점은 정보가 없어 평가 자체가 불가능할 때만** 사용합니다. **평가가 가능하면 반드시 10점 이상** 부여하고, 그 근거를 **legalDetail**에 3줄 이상 서술합니다.
-- 네 점수의 가중 해석은 검수와 동일(계층 40%·독창 30%·발음·언어 20%·적법 10%)입니다. 루트 **pronunciationLanguageScore**는 **pronunciationScore와 동일 정수**로 맞출 것.
-- **발음·언어**: ${genCount}개 후보 각각에 대해 한국어·영어 호명 용이성·외국어 부정 연상 등을 반영해 후보별 점수·Detail을 채웁니다.
+- **후보별 종합 해석**: 브랜드계층·창의성·직관성·적법성·대중성·확장성 **6항목 균등(각 1/6)** 과 검수 모드와 동일한 관점입니다. 루트 **pronunciationLanguageScore**는 **pronunciationScore와 동일 정수**로 맞출 것.
+- **직관성·대중성·확장성**: 각 후보마다 호명 용이성·사회문화 수용·브랜드 생태계 확장을 반영해 점수·Detail을 채웁니다.
 - **suggestedNames**는 **names** 또는 **namingProposals**의 **name**과 같은 순서·같은 ${genCount}개 문자열 배열.
 - **additionalNamingSuggestions**는 생성 모드에서 **반드시 빈 배열 []**.
 - 아래 [종합 검토 필드](overallScore, hierarchy, trademark, copyright 등)는 생성 맥락 요약으로 채웁니다.${
@@ -3046,14 +3219,16 @@ ${tierStorylineToneBlock ? `\n${tierStorylineToneBlock}\n` : ""}
               ? `\n- **브랜드 계층 컨텍스트**: 아래 **[브랜드 계층 컨텍스트]** 블록이 있으면 ${genCount}개 네이밍 제안을 만들 때 **반드시** 그 계층·접두·독립 작명 룰을 따를 것. 룰과 충돌하는 상위 브랜드 접두를 임의로 붙이지 말 것.`
               : ""
           }`
-      : `작업 유형: **검수**. [요청 내용]의 네이밍·슬로건을 아래 **4개 항목**으로 채점합니다. 각 항목은 0~100점입니다. **종합 overallScore는 서버에서 창의성(originalityDimensionScore)·직관성(pronunciationScore)만 각 50%로 재계산**합니다. **브랜드 계층 정렬·적법성 점수는 종합 가중합에 들어가지 않으며**, 70점 미만이면 해당 항목은 Fail로 간주되어 NO-GO 조건에 쓰입니다.
-- **(1) hierarchyScore 브랜드 계층 정렬** — 오직 [U+ 브랜드 가이드라인 및 참고 문맥] 안의 **가이드라인 PDF 요약** + [참고 정보]의 **업로드 파일 요약** + **참고 정보 직접 입력**만 근거로 분석·채점. 법령 검색 블록은 이 항목에 **넣지 마세요**. (종합 %에 미포함, Pass/Fail 판정용)
-- **(2) originalityDimensionScore 창의성** — **오직 Gemini 추론**으로 가이드·요청·참고 정보를 바탕으로 유사·식별력 관점에서 채점. **외부 데이터베이스 연동·조회 여부는 결과에 절대 언급하지 말 것.** trademarkConflicts는 분석 보조용 추론 결과로만 채움. (**종합의 50%**)
-- **(3) pronunciationScore / pronunciationLanguageScore 직관성(발음·언어)** — 검수 대상 네이밍·슬로건에 대해 (가) 한국어·영어로 읽을 때 **발음의 자연스러움·호명 용이성** (나) 주요 외국어에서 **부정·비하·불쾌·금기 의미** 연상 여부를 평가하세요. **pronunciationLanguageScore**는 **pronunciationScore와 동일한 정수**로 맞추세요. **detailLogicPronunciation**에는 위 근거·보완·유의사항을 최소 수백 자 한국어로 서술. 녹음·발음기호 출력 불요. (**종합의 50%**)
-- **(4) legalityScore 적법성** — 참고 정보에 **국가법령정보·법령 검색** 요약이 있으면 인용·출처를 밝히고 상표법·저작권법 관점 적법성·이슈 자유도를 채점. 없으면 일반론으로 보완. (종합 %에 미포함, Pass/Fail 판정용)
+      : `작업 유형: **검수**. [요청 내용]의 네이밍·슬로건을 아래 **6개 항목**으로 채점합니다. 각 항목은 0~100점입니다. **종합 overallScore는 서버에서 브랜드계층·적법성·창의성·직관성·대중성·확장성 여섯 점수를 균등(각 1/6) 산술 평균으로 재계산**합니다. **브랜드 계층 정렬·적법성은 70점 미만이면 Fail·NO-GO 조건**에 반드시 포함합니다(점수는 종합에도 1/6 반영).
+- **(1) hierarchyScore 브랜드 계층 정렬** — 오직 [U+ 브랜드 가이드라인 및 참고 문맥] 안의 **가이드라인 PDF 요약** + [참고 정보]의 **업로드 파일 요약** + **참고 정보 직접 입력**만 근거로 분석·채점. 법령 검색 블록은 이 항목에 **넣지 마세요**. (**종합 1/6**, 70 미만 NO-GO)
+- **(2) originalityDimensionScore 창의성** — **오직 Gemini 추론**으로 가이드·요청·참고 정보를 바탕으로 유사·식별력 관점에서 채점. **외부 데이터베이스 연동·조회 여부는 결과에 절대 언급하지 말 것.** trademarkConflicts는 분석 보조용 추론 결과로만 채움. (**종합 1/6**)
+- **(3) pronunciationScore / pronunciationLanguageScore 직관성(발음·언어)** — 검수 대상 네이밍·슬로건에 대해 (가) 한국어·영어로 읽을 때 **발음의 자연스러움·호명 용이성** (나) 주요 외국어에서 **부정·비하·불쾌·금기 의미** 연상 여부를 평가하세요. **pronunciationLanguageScore**는 **pronunciationScore와 동일한 정수**로 맞추세요. **detailLogicPronunciation**에는 위 근거·보완·유의사항을 최소 수백 자 한국어로 서술. 녹음·발음기호 출력 불요. (**종합 1/6**)
+- **(4) legalityScore 적법성** — 참고 정보에 **국가법령정보·법령 검색** 요약이 있으면 인용·출처를 밝히고 상표법·저작권법 관점 적법성·이슈 자유도를 채점. 없으면 일반론으로 보완. (**종합 1/6**, 70 미만 NO-GO)
+- **(5) publicAppealScore 대중성(사회·문화적 수용 가능성)** — **Gemini 추론**으로 (가) 특정 문화권·언어에서 **오해·불쾌·부정적 연상** (나) **세대 범용성** (다) **글로벌 발음·의미** 문제 (라) **특정 집단·계층 편향** 여부를 평가. **detailLogicPublicAppeal**에 근거를 최소 수백 자 한국어로. (**종합 1/6**)
+- **(6) scalabilityScore 확장성(브랜드 생태계)** — **Gemini 추론**으로 (가) **하위/상위·패밀리 네이밍**(Pro, Lite, + 등) 연동 가능성 (나) 글로벌 확장 시 **발음·의미 왜곡** (다) **파생 네이밍·슬로건·캠페인**으로의 확장 (라) **시간이 지나도 촌스럽지 않은 내구성**을 평가. **detailLogicScalability**에 근거를 최소 수백 자 한국어로. (**종합 1/6**)
 - **names**·**namingProposals**·**suggestedNames**는 모두 빈 배열 [].
 - **additionalNamingSuggestions** (검수 필수): 위 평가 맥락(가이드·작명 의도·검토 결과)을 반영한 **대안 네이밍을 정확히 3개**, 배열로만 제시하세요. 검수명·슬로건과 **다른** 실제 후보명(한글·영문 등). 안내 문구·주석·※ 같은 비이름 문자열 금지. 빈 배열 금지.
-- **detailLogicHierarchy** ~ **detailLogicLegality**: 각 항목에 대해 **상세 논리**를 한국어로 길게 서술. **detailLogicHierarchy**에는 외부 상표 DB·연동 출처를 **넣지 말 것**(가이드·업로드·직접입력만). **detailLogicOriginality**에는 외부 API 연동·조회 성공/실패를 **절대 넣지 말 것.** 적법성에서 국가법령정보 요약을 썼다면 **출처를 문장 안에 명시**할 수 있음. trademark·copyright 하위 필드는 요약·충돌 목록용으로 유지.${
+- **detailLogicHierarchy** ~ **detailLogicScalability**: 각 항목에 대해 **상세 논리**를 한국어로 길게 서술. **detailLogicHierarchy**에는 외부 상표 DB·연동 출처를 **넣지 말 것**(가이드·업로드·직접입력만). **detailLogicOriginality**에는 외부 API 연동·조회 성공/실패를 **절대 넣지 말 것.** 적법성에서 국가법령정보 요약을 썼다면 **출처를 문장 안에 명시**할 수 있음. trademark·copyright 하위 필드는 요약·충돌 목록용으로 유지.${
         auditCategoryPromptSection
           ? "\n- **브랜드 계층 컨텍스트 우선**: 아래 **[브랜드 계층 컨텍스트]** 블록이 있으면 계층 정렬·마스터브랜드(U+) 해석에 그 룰을 가이드 PDF 요약과 함께 적용하고, 룰·마지막 불릿이 허용하는 독립 네이밍은 **U+ 미포함만으로** 위반·감점·NO-GO로 연결하지 말 것."
           : ""
@@ -3062,8 +3237,8 @@ ${tierStorylineToneBlock ? `\n${tierStorylineToneBlock}\n` : ""}
   const generateExtraRule =
     opts.mode === "generate"
       ? tierPlan
-        ? `\n5) **tierNamingAlternatives** 길이는 반드시 **4**입니다.\n6) 각 대안의 **tierSteps** 길이는 **${stepCountForTier}**입니다.\n7) 각 **tierPackageEvaluation**의 네 Detail은 **한국어 3줄 이상**.\n8) **names·namingProposals·suggestedNames** 길이는 각각 **4**(대안 패키지 요약).\n9) **additionalNamingSuggestions**는 [].\n10) 루트 **tierPackageEvaluation**은 출력하지 마세요.`
-        : `\n5) **names**·**namingProposals** 길이는 각각 반드시 ${genCount}입니다.\n6) 각 후보의 hierarchyDetail·uniquenessDetail·pronunciationDetail·legalDetail은 **한국어 3줄 이상**으로 반드시 채웁니다.\n7) **additionalNamingSuggestions**는 반드시 빈 배열 [].\n8) **tierNamingAlternatives**는 빈 배열 [].`
+        ? `\n5) **tierNamingAlternatives** 길이는 반드시 **4**입니다.\n6) 각 대안의 **tierSteps** 길이는 **${stepCountForTier}**입니다.\n7) 각 **tierPackageEvaluation**의 여섯 Detail은 **한국어 3줄 이상**.\n8) **names·namingProposals·suggestedNames** 길이는 각각 **4**(대안 패키지 요약).\n9) **additionalNamingSuggestions**는 [].\n10) 루트 **tierPackageEvaluation**은 출력하지 마세요.`
+        : `\n5) **names**·**namingProposals** 길이는 각각 반드시 ${genCount}입니다.\n6) 각 후보의 hierarchyDetail·uniquenessDetail·pronunciationDetail·legalDetail·publicAppealDetail·scalabilityDetail은 **한국어 3줄 이상**으로 반드시 채웁니다.\n7) **additionalNamingSuggestions**는 반드시 빈 배열 [].\n8) **tierNamingAlternatives**는 빈 배열 [].`
       : "";
 
   const jsonOnlyFooter = "\n\n반드시 JSON 형식으로만 응답하고 다른 텍스트는 포함하지 마세요.";
@@ -3090,7 +3265,7 @@ ${notes}
 ${req}
 
 규칙:
-1) 점수는 0~100 정수. 검수 시 **hierarchyScore, originalityDimensionScore, pronunciationScore, pronunciationLanguageScore(=pronunciationScore와 동일), legalityScore**를 채우고, trademarkScore·copyrightScore는 레거시 호환용으로 네 점수와 맞게 채웁니다.
+1) 점수는 0~100 정수. 검수 시 **hierarchyScore, originalityDimensionScore, pronunciationScore, pronunciationLanguageScore(=pronunciationScore와 동일), legalityScore, publicAppealScore, scalabilityScore**를 채우고, trademarkScore·copyrightScore는 레거시 호환용으로 맞게 채웁니다.
 2) 상표법·저작권은 **참고 수준**이며 법률 자문이 아님.
 3) 국가법령정보 블록이 있으면 **적법성** 항목 서술에 반영할 수 있습니다. **창의성**은 국가법령정보와 무관하게 가이드·요청·Gemini 추론만으로 서술합니다. 창의성 보완은 trademarkConflicts 등 **추론 결과**로만 합니다.
 4) 출력은 JSON 한 개만. 스키마 키 이름을 정확히 맞추세요.${generateExtraRule}${jsonOnlyFooter}`;

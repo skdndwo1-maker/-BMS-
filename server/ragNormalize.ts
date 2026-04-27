@@ -167,6 +167,8 @@ function formatNamingAudit(p: { out: AnyRec; inp: AnyRec; guidelineId: string | 
   lines.push(`- 법적 검토: ${numStr(o.legalityScore)}`);
   lines.push(`- 상표: ${numStr(o.trademarkScore)}`);
   lines.push(`- 독창성: ${numStr(o.originalityDimensionScore)}`);
+  lines.push(`- 대중성: ${numStr(o.publicAppealScore)}`);
+  lines.push(`- 확장성: ${numStr(o.scalabilityScore)}`);
   lines.push("");
 
   lines.push("### 브랜드 위계 평가");
@@ -187,6 +189,14 @@ function formatNamingAudit(p: { out: AnyRec; inp: AnyRec; guidelineId: string | 
   lines.push(`- 어감/뉘앙스: `);
   lines.push(`- 외래어 결합: `);
   lines.push(`- 외국어 발음: `);
+  lines.push("");
+
+  lines.push("### 대중성 평가");
+  lines.push(`- 사회·문화적 수용: ${text(detail.publicAppeal)}`);
+  lines.push("");
+
+  lines.push("### 확장성 평가");
+  lines.push(`- 브랜드 생태계·파생: ${text(detail.scalability)}`);
   lines.push("");
 
   lines.push("### 상표 리스크");
@@ -243,6 +253,8 @@ function formatNamingGenerate(p: { out: AnyRec; inp: AnyRec; guidelineId: string
     originalityScore: string;
     pronunciationScore: string;
     legalityScore: string;
+    publicAppealScore: string;
+    scalabilityScore: string;
   };
   const entries: ProposalRow[] = [];
 
@@ -260,6 +272,8 @@ function formatNamingGenerate(p: { out: AnyRec; inp: AnyRec; guidelineId: string
         originalityScore: numStr(r.originalityDimensionScore),
         pronunciationScore: numStr(r.pronunciationScore),
         legalityScore: numStr(r.legalityScore),
+        publicAppealScore: numStr(r.publicAppealScore),
+        scalabilityScore: numStr(r.scalabilityScore),
       });
     }
   } else if (tierAlts.length) {
@@ -284,6 +298,8 @@ function formatNamingGenerate(p: { out: AnyRec; inp: AnyRec; guidelineId: string
           originalityScore: numStr(pkg.originalityDimensionScore),
           pronunciationScore: numStr(pkg.pronunciationScore),
           legalityScore: numStr(pkg.legalityScore),
+          publicAppealScore: numStr(pkg.publicAppealScore),
+          scalabilityScore: numStr(pkg.scalabilityScore),
         });
       }
     }
@@ -316,10 +332,14 @@ function formatNamingGenerate(p: { out: AnyRec; inp: AnyRec; guidelineId: string
       lines.push(`- 독창성: ${text(e.detail.originality)}`);
       lines.push(`- 발음: ${text(e.detail.pronunciationLanguage)}`);
       lines.push(`- 법적 검토: ${text(e.detail.legality)}`);
+      lines.push(`- 대중성: ${text(e.detail.publicAppeal)}`);
+      lines.push(`- 확장성: ${text(e.detail.scalability)}`);
       lines.push(`- 위계 점수: ${e.hierarchyScore}`);
       lines.push(`- 독창성 점수: ${e.originalityScore}`);
       lines.push(`- 발음 점수: ${e.pronunciationScore}`);
       lines.push(`- 법적 점수: ${e.legalityScore}`);
+      lines.push(`- 대중성 점수: ${e.publicAppealScore}`);
+      lines.push(`- 확장성 점수: ${e.scalabilityScore}`);
       lines.push("");
     }
   }
