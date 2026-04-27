@@ -126,6 +126,55 @@ function normalizeLogoPosition(pos: string | undefined): LogoPosition {
   return "top-left";
 }
 
+/** 직접 업로드 로고: 코너 프리셋과 동일한 기준으로 초기 정규화 rect (한 번만 저장) */
+function computeDefaultCustomUploadedLogoRect(args: {
+  displayW: number;
+  displayH: number;
+  W: number;
+  logoPosition: LogoPosition;
+  isXBanner: boolean;
+  realAspect: number;
+  effectiveLogoWidth: number;
+}): { x: number; y: number; width: number; height: number } {
+  const { displayW, displayH, W, logoPosition, isXBanner, realAspect, effectiveLogoWidth } = args;
+  const basePadRatio = realAspect >= 3 ? 0.02 : 0.04;
+  const padRatio = isXBanner ? basePadRatio * 2 : basePadRatio;
+  const pad = W * padRatio;
+  const approxLogoH = Math.min(displayH * 0.18, Math.max(18, effectiveLogoWidth * 0.3));
+  const wN = effectiveLogoWidth / displayW;
+  const hN = approxLogoH / displayH;
+  let xN: number;
+  let yN: number;
+  switch (logoPosition) {
+    case "top-right":
+      xN = (displayW - pad - effectiveLogoWidth) / displayW;
+      yN = pad / displayH;
+      break;
+    case "top-center":
+      xN = (displayW / 2 - effectiveLogoWidth / 2) / displayW;
+      yN = pad / displayH;
+      break;
+    case "bottom-left":
+      xN = pad / displayW;
+      yN = (displayH - pad - approxLogoH) / displayH;
+      break;
+    case "bottom-right":
+      xN = (displayW - pad - effectiveLogoWidth) / displayW;
+      yN = (displayH - pad - approxLogoH) / displayH;
+      break;
+    case "bottom-center":
+      xN = (displayW / 2 - effectiveLogoWidth / 2) / displayW;
+      yN = (displayH - pad - approxLogoH) / displayH;
+      break;
+    case "top-left":
+    default:
+      xN = pad / displayW;
+      yN = pad / displayH;
+      break;
+  }
+  return clampNormRect({ x: xN, y: yN, width: wN, height: hN });
+}
+
 /** 단일 선택 시 문자 툴바 대상 (클릭 한 번으로 표시) */
 function selectedKeyToFormatTarget(key: string | undefined): CanvasTextEditTarget | null {
   if (!key) return null;
@@ -440,6 +489,51 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   // X배너: 로고 기본 2배, 단 CI는 20% 축소
   const xbannerCiScale = isXBanner && content.logoOption === "CI" ? 0.8 : 1.0;
   const effectiveLogoWidth = isXBanner ? logoWidth * 2 * xbannerCiScale : logoWidth;
+
+  const hasUploadedLogo = Boolean(content.logo);
+  const fallbackCustomLogoRect = useMemo(
+    () =>
+      hasUploadedLogo
+        ? computeDefaultCustomUploadedLogoRect({
+            displayW,
+            displayH,
+            W,
+            logoPosition,
+            isXBanner,
+            realAspect,
+            effectiveLogoWidth,
+          })
+        : null,
+    [hasUploadedLogo, displayW, displayH, W, logoPosition, isXBanner, realAspect, effectiveLogoWidth]
+  );
+  const uploadedLogoRect = hasUploadedLogo ? (content.customUploadedLogoRect ?? fallbackCustomLogoRect) : null;
+
+  useLayoutEffect(() => {
+    if (!onContentChange) return;
+    const c = contentRef.current;
+    if (!c.logo || c.customUploadedLogoRect) return;
+    const r = computeDefaultCustomUploadedLogoRect({
+      displayW,
+      displayH,
+      W,
+      logoPosition,
+      isXBanner,
+      realAspect,
+      effectiveLogoWidth,
+    });
+    onContentChange({ ...c, customUploadedLogoRect: r });
+  }, [
+    onContentChange,
+    content.logo,
+    content.customUploadedLogoRect,
+    displayW,
+    displayH,
+    W,
+    logoPosition,
+    isXBanner,
+    realAspect,
+    effectiveLogoWidth,
+  ]);
 
   // 로고/텍스트 여백을 기존의 약 50% 수준으로 축소
   const padRatio = realAspect >= 3 ? 0.02 : 0.04;
@@ -798,6 +892,17 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     setSelectedKeys((prev) => prev.filter((k) => k !== "image"));
   }, [onContentChange]);
 
+  const removeUploadedLogo = useCallback(() => {
+    if (!onContentChange) return;
+    const c = contentRef.current;
+    onContentChange({
+      ...c,
+      logo: undefined,
+      customUploadedLogoRect: undefined,
+    });
+    setSelectedKeys((prev) => prev.filter((k) => k !== "uploadedLogo"));
+  }, [onContentChange]);
+
   useEffect(() => {
     if (!onContentChange) return;
     const onKey = (e: KeyboardEvent) => {
@@ -810,12 +915,13 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       const removeTitle = keys.includes("title");
       const removeFooter = keys.includes("footer");
       const removeImage = keys.includes("image");
+      const removeUploadedLogoKey = keys.includes("uploadedLogo") && Boolean(c0.logo);
       const bodyIds = new Set<string>();
       for (const k of keys) {
         if (k === "body") bodyIds.add("body-1");
         else if (k.startsWith("body:")) bodyIds.add(k.slice(5));
       }
-      if (!removeTitle && !removeFooter && !removeImage && bodyIds.size === 0) return;
+      if (!removeTitle && !removeFooter && !removeImage && !removeUploadedLogoKey && bodyIds.size === 0) return;
       e.preventDefault();
       if (removeImage) imagePanSessionRef.current = null;
       const c = contentRef.current;
@@ -829,11 +935,16 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         next.posterImagePosX = undefined;
         next.posterImagePosY = undefined;
       }
+      if (removeUploadedLogoKey) {
+        next.logo = undefined;
+        next.customUploadedLogoRect = undefined;
+      }
       if (bodyIds.size > 0) next = applyRemoveBodyBlockIds(next, bodyIds);
       const removedKeys: string[] = [];
       if (removeTitle) removedKeys.push("title");
       if (removeFooter) removedKeys.push("footer");
       if (removeImage) removedKeys.push("image");
+      if (removeUploadedLogoKey) removedKeys.push("uploadedLogo");
       for (const id of bodyIds) removedKeys.push(id === "body-1" ? "body" : `body:${id}`);
       next = removeGroupsTouchingKeys(next, [...removedKeys, ...selectedKeysRef.current.filter(isGroupSelectionKey)]);
       onContentChange(next);
@@ -842,6 +953,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           if (removeTitle && k === "title") return false;
           if (removeFooter && k === "footer") return false;
           if (removeImage && k === "image") return false;
+          if (removeUploadedLogoKey && k === "uploadedLogo") return false;
           if (k === "body" || k.startsWith("body:")) {
             const id = k === "body" ? "body-1" : k.slice(5);
             return !bodyIds.has(id);
@@ -2205,7 +2317,47 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           </DraggableCanvasOverlay>
         ) : null}
 
-        {content.logoOption && (
+        {hasUploadedLogo && uploadedLogoRect && logoUrl ? (
+          <DraggableCanvasOverlay
+            rect={uploadedLogoRect}
+            canvasW={displayW}
+            canvasH={displayH}
+            onRectChange={(next) => {
+              if (!onContentChange) return;
+              onContentChange({
+                ...contentRef.current,
+                customUploadedLogoRect: clampNormRect(next),
+              });
+            }}
+            isSelected={expandedSelKeys.includes("uploadedLogo")}
+            onSelect={(opts) => {
+              pickKey("uploadedLogo", !!opts?.additive);
+              onFocusChange?.("logo");
+            }}
+            zIndex={15}
+            label="업로드 로고"
+            borderRadiusMode="square"
+            snapStepPx={snapPx}
+            onRequestDelete={onContentChange ? removeUploadedLogo : undefined}
+          >
+            <img
+              src={logoUrl}
+              alt="업로드 로고"
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                display: "block",
+                userSelect: "none",
+                pointerEvents: "none",
+              }}
+            />
+          </DraggableCanvasOverlay>
+        ) : null}
+
+        {content.logoOption ? (
           <div
             style={{
               position: "absolute",
@@ -2225,7 +2377,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             }}
           >
             <img
-              src={logoUrl || brandLogoSrc}
+              src={brandLogoSrc}
               alt="Brand Logo"
               draggable={false}
               onDragStart={(e) => e.preventDefault()}
@@ -2238,7 +2390,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               }}
             />
           </div>
-        )}
+        ) : null}
 
         {/* 뱃지: 현수막 제외, 최대 3개 */}
         {!isPlacard

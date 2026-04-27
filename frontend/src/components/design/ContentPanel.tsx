@@ -176,6 +176,14 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     if (content.image == null) setImagePreview(null);
   }, [content.image]);
 
+  useEffect(() => {
+    if (content.logo == null) {
+      setLogoPreview(null);
+      return;
+    }
+    if (typeof content.logo === "string") setLogoPreview(content.logo);
+  }, [content.logo]);
+
   /** posterBodies.body-1 텍스트가 비어 있는데 bodyText만 남아 있으면(레거시 불일치) 본문 입력란이 비어 보이는 문제 방지 */
   useEffect(() => {
     const blocks = content.posterBodies;
@@ -237,7 +245,31 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     });
     setImagePreview(URL.createObjectURL(f[0]));
   }}, accept:{"image/*":[".png",".jpg",".jpeg",".webp"]}, multiple:false });
-  const { getRootProps:getLogoRP,   getInputProps:getLogoIP,   isDragActive:isLogoDrag   } = useDropzone({ onDrop:(f)=>{ if(f[0]){ onContentChange({...content,logo:f[0]});  setLogoPreview(URL.createObjectURL(f[0]));  }}, accept:{"image/*":[".png",".jpg",".jpeg",".svg"]},  multiple:false });
+  /**
+   * 로고 업로드: react-dropzone 대신 ref 기반 hidden input을 쓴다.
+   * `LogoSelector`가 ContentPanel 안에서 매 렌더마다 재생성되며 remount되기 때문에
+   * dropzone 내부 input ref가 분리되어 onDrop이 누락되는 케이스를 피하기 위함.
+   */
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const openLogoPicker = useCallback(() => {
+    logoInputRef.current?.click();
+  }, []);
+  const handleLogoFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      onContentChange({ ...content, logo: file });
+      setLogoPreview(URL.createObjectURL(file));
+      e.target.value = "";
+    },
+    [content, onContentChange]
+  );
+
+  const clearUploadedLogo = () => {
+    onContentChange({ ...content, logo: undefined, customUploadedLogoRect: undefined });
+    setLogoPreview(null);
+    if (logoInputRef.current) logoInputRef.current.value = "";
+  };
 
   const handleCategorySelect = (cat: typeof POSTER_CATEGORIES[number]) => {
     const bt = cat.preset.bodyText ?? "";
@@ -291,11 +323,29 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           );
         })}
       </div>
-      <div {...getLogoRP()} className={`border border-dashed rounded-lg p-3 text-center cursor-pointer transition-colors ${isLogoDrag?"border-[#F43182] bg-[#F43182]/5":"border-gray-300 hover:border-gray-400"}`}>
-        <input {...getLogoIP()} />
-        {logoPreview
-          ? <div className="flex items-center justify-center gap-3"><img src={logoPreview} alt="Logo" className="max-h-10"/><p className="text-xs text-gray-500">클릭하여 교체</p></div>
-          : <div className="flex items-center justify-center gap-2 text-gray-400"><Upload className="w-4 h-4"/><p className="text-xs">직접 업로드 (위 옵션 덮어씌움)</p></div>}
+      <div className="space-y-2">
+        <p className="text-[11px] text-gray-500">직접 업로드한 로고는 위 CI/BI/SLOGAN 프리셋과 함께 표시되며, 캔버스에서 자유롭게 위치·크기 조절 및 삭제가 가능합니다.</p>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full gap-2 border-gray-300"
+          onClick={openLogoPicker}
+        >
+          <Upload className="w-4 h-4" />
+          로고 이미지 불러오기
+        </Button>
+        {content.logo && logoPreview ? (
+          <div className="flex items-center justify-center gap-3 rounded-lg border border-gray-200 bg-gray-50/50 p-2">
+            <img src={logoPreview} alt="선택한 로고" className="max-h-10 object-contain" />
+            <p className="text-[11px] text-gray-500">캔버스에서 끌어 위치·크기를 조정하세요</p>
+          </div>
+        ) : null}
+        {content.logo ? (
+          <Button type="button" variant="outline" size="sm" className="w-full gap-1.5 text-gray-600" onClick={clearUploadedLogo}>
+            <Trash2 className="w-3.5 h-3.5" />
+            업로드 로고 제거
+          </Button>
+        ) : null}
       </div>
     </div>
   );
@@ -303,6 +353,9 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const LogoPositionSelector = () => (
     <div className="space-y-3">
       <Label className="text-sm font-semibold text-gray-700">로고 배치 위치</Label>
+      <p className="text-[11px] text-gray-500 leading-relaxed">
+        CI/BI/SLOGAN 프리셋 로고의 코너 위치입니다. 직접 업로드한 로고는 캔버스에서 자유롭게 끌어 옮기고 크기를 바꿀 수 있습니다.
+      </p>
       <div
         className={
           isXBanner
@@ -427,6 +480,13 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     const currentCat=POSTER_CATEGORIES.find(c=>c.key===normalizePosterCategory(content.posterCategory))??POSTER_CATEGORIES[0];
     return (
       <div data-design-content-panel className="h-full overflow-y-auto p-6 space-y-6">
+        <input
+          ref={logoInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+          className="hidden"
+          onChange={handleLogoFileChange}
+        />
         <AssetPresetPickerDialog
           open={illustDialogOpen}
           onOpenChange={setIllustDialogOpen}
@@ -1278,6 +1338,13 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   return (
     <TooltipProvider>
       <div data-design-content-panel className="h-full overflow-y-auto p-6 space-y-6">
+      <input
+        ref={logoInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+        className="hidden"
+        onChange={handleLogoFileChange}
+      />
       <AssetPresetPickerDialog
         open={pictoDialogOpen}
         onOpenChange={setPictoDialogOpen}

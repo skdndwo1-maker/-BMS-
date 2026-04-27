@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { templates } from "@/design/templates";
 import type { DesignContent } from "@/design/types";
@@ -75,6 +75,12 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   const [loadItems, setLoadItems] = useState<DesignListItem[]>([]);
 
   const [bootBusy, setBootBusy] = useState(false);
+  /**
+   * URL designId 자동 복원이 "방금 저장/불러오기"로 들어온 변경 때문에 다시 돌지 않도록 추적.
+   * 저장 직후 setSearchParams로 designId를 갱신하면 useEffect가 다시 트리거되어
+   * 이미 캔버스에 있는 동일 데이터를 서버에서 또 받아와 "불러오기 완료" 토스트가 뜨는 것을 막는다.
+   */
+  const lastLoadedIdRef = useRef<string | null>(null);
 
 
   function formatDefaultDesignName(): string {
@@ -154,31 +160,84 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     });
   }, [isXBannerTemplate]);
 
-  // Undo stack (Ctrl/Cmd+Z)
+  /**
+   * Undo (Cmd/Ctrl+Z) — 모든 content 변경을 자동으로 스냅샷.
+   *
+   * 핵심 설계:
+   *  - 어떤 경로(setContentWithHistory, raw setContent, 자식 컴포넌트의 onContentChange 등)로
+   *    content가 바뀌든 단일 useEffect가 변경 직전 값을 undo 스택에 push.
+   *  - 드래그/리사이즈/슬라이더처럼 짧은 시간 안에 수십~수백 회 변경이 일어나는 경우는
+   *    burst의 "시작 직전 상태" 하나만 기록(coalescing)되도록 함 → 1회 Cmd+Z로 직전 상태 복원.
+   *  - undo 적용 자체로 발생하는 setContent는 isApplyingUndoRef 플래그로 스택에 들어가지 않게 함.
+   */
+  const UNDO_LIMIT = 200;
+  const COALESCE_MS = 250;
   const undoRef = useRef<{ stack: DesignContent[]; idx: number }>({ stack: [], idx: -1 });
+  const lastSnapshotAtRef = useRef<number>(0);
+  const isApplyingUndoRef = useRef<boolean>(false);
+  const prevContentRef = useRef<DesignContent | null>(null);
+  /** 텍스트 입력처럼 매 글자 push가 부담스러운 경우, 같은 키 안에서는 burst로만 합쳐 1회 push 보장 */
+  const lastBurstKeyRef = useRef<string | null>(null);
 
-  const setContentWithHistory = (next: DesignContent | ((prev: DesignContent) => DesignContent)) => {
-    setContent((prev) => {
-      const resolved = typeof next === "function" ? (next as (p: DesignContent) => DesignContent)(prev) : next;
-      // push prev into undo stack
-      const u = undoRef.current;
-      const trimmed = u.stack.slice(0, u.idx + 1);
-      trimmed.push(prev);
-      undoRef.current = { stack: trimmed, idx: trimmed.length - 1 };
-      return resolved;
-    });
-  };
+  /** 내부 helper: content 변화를 history에 반영 */
+  const pushHistorySnapshot = useCallback((prev: DesignContent) => {
+    const u = undoRef.current;
+    const trimmed = u.stack.slice(0, u.idx + 1);
+    trimmed.push(prev);
+    while (trimmed.length > UNDO_LIMIT) trimmed.shift();
+    undoRef.current = { stack: trimmed, idx: trimmed.length - 1 };
+  }, []);
 
+  // content 자동 추적: 모든 변경 경로를 일관되게 기록
+  useEffect(() => {
+    if (prevContentRef.current === null) {
+      prevContentRef.current = content;
+      return;
+    }
+    if (prevContentRef.current === content) return;
+
+    if (isApplyingUndoRef.current) {
+      prevContentRef.current = content;
+      isApplyingUndoRef.current = false;
+      return;
+    }
+
+    const now = Date.now();
+    const inBurst =
+      lastBurstKeyRef.current !== null ||
+      now - lastSnapshotAtRef.current < COALESCE_MS;
+    if (!inBurst) {
+      pushHistorySnapshot(prevContentRef.current);
+    }
+    lastSnapshotAtRef.current = now;
+    prevContentRef.current = content;
+  }, [content, pushHistorySnapshot]);
+
+  /** 기존 호환을 위한 별칭. 이제 일반 setContent와 같다 — 스냅샷은 useEffect가 처리 */
+  const setContentWithHistory = setContent;
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      const isUndo = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z";
-      if (!isUndo) return;
+      const key = e.key.toLowerCase();
+      const isMod = e.ctrlKey || e.metaKey;
+      if (!isMod || key !== "z") return;
+      const ae = document.activeElement;
+      const inEditable =
+        ae instanceof HTMLInputElement ||
+        ae instanceof HTMLTextAreaElement ||
+        (ae as HTMLElement | null)?.isContentEditable;
+      if (inEditable) {
+        // 텍스트 입력 자체의 undo는 브라우저에 위임
+        return;
+      }
       e.preventDefault();
       const u = undoRef.current;
       if (u.idx < 0) return;
       const prev = u.stack[u.idx];
-      undoRef.current = { stack: u.stack, idx: u.idx - 1 };
+      undoRef.current = { stack: u.stack.slice(0, u.idx), idx: u.idx - 1 };
+      isApplyingUndoRef.current = true;
+      lastBurstKeyRef.current = null;
+      lastSnapshotAtRef.current = 0;
       setContent(prev);
     };
     window.addEventListener("keydown", onKeyDown);
@@ -220,8 +279,15 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   // designId로 진입 시 Supabase에서 자동 복원
   useEffect(() => {
     const id = searchParams.get("designId")?.trim() || "";
-    if (!id) return;
+    if (!id) {
+      lastLoadedIdRef.current = null;
+      return;
+    }
     if (!sb) return;
+    if (id === lastLoadedIdRef.current) {
+      // 동일 디자인은 이미 캔버스에 반영되어 있으므로 재로딩하지 않는다 (저장 직후 트리거 방지)
+      return;
+    }
     let cancelled = false;
     (async () => {
       setBootBusy(true);
@@ -238,6 +304,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
           return;
         }
         if (cancelled) return;
+        lastLoadedIdRef.current = row.id;
         setDesignId(row.id);
         setDesignName(row.name || "");
         setContentWithHistory(() => row.canvas_data as DesignContent);
@@ -262,14 +329,14 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sb, actualTemplateId, searchParams]);
 
+  /**
+   * 자동 history 도입 이후에는 별도 호출이 불필요. (호환을 위해 noop으로 유지)
+   * 텍스트 인라인 편집 시작 시점 등 "burst 시작" 신호로만 사용 가능.
+   */
   const pushUndoSnapshot = () => {
-    setContent((prev) => {
-      const u = undoRef.current;
-      const trimmed = u.stack.slice(0, u.idx + 1);
-      trimmed.push(prev);
-      undoRef.current = { stack: trimmed, idx: trimmed.length - 1 };
-      return prev;
-    });
+    // useEffect가 다음 변경 시 직전 상태를 자동 push 한다.
+    lastBurstKeyRef.current = null;
+    lastSnapshotAtRef.current = 0;
   };
 
   if (!template) {
@@ -369,13 +436,18 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
         content,
         thumbnailUrl,
       });
+      // 저장한 결과를 URL에 반영하되, 자동 복원 useEffect가 다시 돌지 않게 가드.
+      lastLoadedIdRef.current = row.id;
       setDesignId(row.id);
       setDesignName(row.name || name);
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("designId", row.id);
-        return next;
-      });
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("designId", row.id);
+          return next;
+        },
+        { replace: true }
+      );
       toast.success("저장 완료");
     } finally {
       setSaveBusy(false);
@@ -887,13 +959,17 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                               toast.error("저장된 디자인을 찾을 수 없습니다.");
                               return;
                             }
+                            lastLoadedIdRef.current = row.id;
                             setDesignId(row.id);
                             setDesignName(row.name || "");
-                            setSearchParams((prev) => {
-                              const next = new URLSearchParams(prev);
-                              next.set("designId", row.id);
-                              return next;
-                            });
+                            setSearchParams(
+                              (prev) => {
+                                const next = new URLSearchParams(prev);
+                                next.set("designId", row.id);
+                                return next;
+                              },
+                              { replace: true }
+                            );
                             setContentWithHistory(() => row.canvas_data as DesignContent);
                             toast.success("불러오기 완료");
                             setActiveDialog("none");

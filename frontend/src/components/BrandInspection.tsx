@@ -1,11 +1,10 @@
-import { Fragment, useState, useRef, useEffect, useMemo, type ChangeEvent } from "react";
+import { Fragment, useState, useRef, useEffect, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   analyzeGuideline,
   fetchGuideline,
   fetchHealth,
   runInspection,
-  runAdditionalRevisionImage,
   syncGuidelineFromFixed,
   type GuidelineInfo,
 } from "@/lib/guidelineApi";
@@ -100,21 +99,11 @@ export function BrandInspection() {
   const [geminiConfigured, setGeminiConfigured] = useState<boolean | null>(null);
   const [violations, setViolations] = useState<Violation[]>([]);
   const [inspectionOverallSummary, setInspectionOverallSummary] = useState<string | null>(null);
-  /** AI 수정 이미지 버전 순서 (0: 최초 생성, 이후 추가 수정마다 append) */
-  const [revisionHistory, setRevisionHistory] = useState<{ mimeType: string; dataUrl: string }[]>([]);
-  const [revisionViewIndex, setRevisionViewIndex] = useState(0);
+  /** 검수 응답의 AI 교정 이미지 1회분만 유지 (추가 생성 없음) */
+  const [revisedImageAsset, setRevisedImageAsset] = useState<{ mimeType: string; dataUrl: string } | null>(null);
   const [revisionNote, setRevisionNote] = useState<string | null>(null);
 
-  const latestRevision =
-    revisionHistory.length > 0 ? revisionHistory[revisionHistory.length - 1]! : null;
-  const displayedRevision = useMemo(() => {
-    if (revisionHistory.length === 0) return null;
-    const i = Math.min(Math.max(0, revisionViewIndex), revisionHistory.length - 1);
-    return revisionHistory[i] ?? null;
-  }, [revisionHistory, revisionViewIndex]);
   const [guidelineDetailOpen, setGuidelineDetailOpen] = useState(false);
-  const [additionalRevisionBusy, setAdditionalRevisionBusy] = useState(false);
-  const [additionalRevisionError, setAdditionalRevisionError] = useState<string | null>(null);
   const [reportExportFormat, setReportExportFormat] = useState<ExportFormat>("png");
   const [revisedExportFormat, setRevisedExportFormat] = useState<ExportFormat>("png");
 
@@ -223,17 +212,14 @@ export function BrandInspection() {
 
   const handleStopAndResetFromProgress = () => {
     inspectionEpochRef.current += 1;
-    setAdditionalRevisionBusy(false);
     setCurrentStep("idle");
     setShowResults(false);
     setBrandScore(null);
     setInspectionError(null);
     setViolations([]);
     setInspectionOverallSummary(null);
-    setRevisionHistory([]);
-    setRevisionViewIndex(0);
+    setRevisedImageAsset(null);
     setRevisionNote(null);
-    setAdditionalRevisionError(null);
     handleDesignUploadCancel();
     setGuidelineFile(null);
     setGuidelineUploadError(null);
@@ -249,9 +235,7 @@ export function BrandInspection() {
 
     setInspectionError(null);
     setShowResults(false);
-    setAdditionalRevisionError(null);
-    setRevisionHistory([]);
-    setRevisionViewIndex(0);
+    setRevisedImageAsset(null);
     setCurrentStep("analyzing");
 
     void (async () => {
@@ -275,10 +259,9 @@ export function BrandInspection() {
             mimeType: res.revisedImage.mimeType,
             dataUrl: `data:${res.revisedImage.mimeType};base64,${res.revisedImage.data}`,
           };
-          setRevisionHistory([asset]);
-          setRevisionViewIndex(0);
+          setRevisedImageAsset(asset);
         } else {
-          setRevisionHistory([]);
+          setRevisedImageAsset(null);
         }
         setRevisionNote(res.revisionNote?.trim() ? res.revisionNote.trim() : null);
         setViolations(
@@ -308,56 +291,11 @@ export function BrandInspection() {
       setInspectionError(null);
       setViolations([]);
       setInspectionOverallSummary(null);
-      setRevisionHistory([]);
-      setRevisionViewIndex(0);
+      setRevisedImageAsset(null);
       setRevisionNote(null);
-      setAdditionalRevisionError(null);
       return;
     }
     handleRunAudit();
-  };
-
-  const handleAdditionalRevision = async () => {
-    if (!designFile || !designFile.type.startsWith("image/") || additionalRevisionBusy) return;
-
-    setAdditionalRevisionBusy(true);
-    setAdditionalRevisionError(null);
-    try {
-      const res = await runAdditionalRevisionImage({
-        guidelineId: selectedGuidelineLibrary,
-        designFile,
-        revisionDataUrl: latestRevision?.dataUrl ?? null,
-        overallSummary: inspectionOverallSummary ?? "",
-        violations: violations.map((v) => ({
-          category: v.category,
-          issue: v.issue,
-          severity: v.severity,
-        })),
-        additionalNotes: guidelineText,
-        supplementaryFile: guidelineFile,
-      });
-      if (res.imageUpdated && res.revisedImage?.data) {
-        const asset = {
-          mimeType: res.revisedImage.mimeType,
-          dataUrl: `data:${res.revisedImage.mimeType};base64,${res.revisedImage.data}`,
-        };
-        setRevisionHistory((prev) => {
-          const next = [...prev, asset];
-          setRevisionViewIndex(next.length - 1);
-          return next;
-        });
-        setRevisionNote(null);
-      } else {
-        setAdditionalRevisionError(
-          res.revisionNote?.trim() ||
-            "추가 수정 이미지를 생성하지 못했습니다. API 키·이미지 모델 설정을 확인하세요."
-        );
-      }
-    } catch (err) {
-      setAdditionalRevisionError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setAdditionalRevisionBusy(false);
-    }
   };
 
   const getStepIndex = (step: InspectionStep) => {
@@ -999,7 +937,7 @@ export function BrandInspection() {
                 <div>
                   <h2 className="font-semibold text-gray-900">AI 수정본 (Gemini 이미지)</h2>
                   <p className="text-xs text-gray-500">
-                    참조 가이드라인·검수 결과·검수 사항 직접 입력을 반영해 생성합니다. (PNG/JPEG 검수 대상만)
+                    검수 1회에 대해 교정 이미지를 1번만 생성합니다. (PNG/JPEG 검수 대상만)
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1010,7 +948,7 @@ export function BrandInspection() {
                     id="revised-export-format"
                     value={revisedExportFormat}
                     onChange={(e) => setRevisedExportFormat(e.target.value as ExportFormat)}
-                    disabled={!displayedRevision}
+                    disabled={!revisedImageAsset}
                     className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-800 focus:border-[#F43182] focus:ring-2 focus:ring-[#F43182]/20 disabled:opacity-50"
                   >
                     <option value="png">PNG</option>
@@ -1021,10 +959,10 @@ export function BrandInspection() {
                     variant="outline"
                     size="sm"
                     type="button"
-                    disabled={!displayedRevision}
+                    disabled={!revisedImageAsset}
                     onClick={() =>
-                      displayedRevision &&
-                      downloadRevisedImageInFormat(displayedRevision.dataUrl, revisedExportFormat)
+                      revisedImageAsset &&
+                      downloadRevisedImageInFormat(revisedImageAsset.dataUrl, revisedExportFormat)
                     }
                   >
                     <Download className="mr-2 h-4 w-4" />
@@ -1032,7 +970,7 @@ export function BrandInspection() {
                   </Button>
                 </div>
               </div>
-              {revisionNote && !displayedRevision && (
+              {revisionNote && !revisedImageAsset && (
                 <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                   {revisionNote}
                 </p>
@@ -1045,36 +983,11 @@ export function BrandInspection() {
                   </div>
                 </div>
                 <div>
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-gray-700">AI 수정 버전</p>
-                    {revisionHistory.length >= 2 && (
-                      <div
-                        className="flex shrink-0 items-center justify-end gap-1.5"
-                        role="group"
-                        aria-label="수정 버전 선택"
-                      >
-                        {revisionHistory.map((_, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => setRevisionViewIndex(i)}
-                            title={`${i + 1}차 수정본 보기`}
-                            className={`rounded border px-2 py-0.5 text-sm font-medium transition-colors ${
-                              revisionViewIndex === i
-                                ? "border-[#F43182] bg-[#F43182]/10 text-[#F43182]"
-                                : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50"
-                            }`}
-                          >
-                            ver {i + 1}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <p className="mb-3 text-sm font-medium text-gray-700">AI 수정본</p>
                   <div className="relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
-                    {displayedRevision ? (
+                    {revisedImageAsset ? (
                       <>
-                        <img src={displayedRevision.dataUrl} alt="AI 수정본" className="w-full" />
+                        <img src={revisedImageAsset.dataUrl} alt="AI 수정본" className="w-full" />
                         <div className="absolute right-2 top-2">
                           <span className="rounded-full bg-[#F43182] px-2 py-1 text-xs text-white">AI 생성</span>
                         </div>
@@ -1087,31 +1000,6 @@ export function BrandInspection() {
                   </div>
                 </div>
               </div>
-              {designFile?.type.startsWith("image/") && (
-                <div className="mt-6 space-y-2">
-                  <Button
-                    type="button"
-                    onClick={handleAdditionalRevision}
-                    disabled={additionalRevisionBusy}
-                    className="h-14 w-full bg-[#F43182] text-base font-semibold text-white shadow-lg hover:bg-[#d41f6e] disabled:opacity-50"
-                  >
-                    {additionalRevisionBusy ? (
-                      <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        추가 수정 생성 중…
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="mr-2 h-5 w-5" />
-                        추가 수정
-                      </>
-                    )}
-                  </Button>
-                  {additionalRevisionError && (
-                    <p className="text-center text-xs text-red-600">{additionalRevisionError}</p>
-                  )}
-                </div>
-              )}
             </div>
           )}
         </div>

@@ -137,6 +137,8 @@ export interface DesignContent {
   venue?: string;
   rightPanelBg?: 'white' | 'light-grey' | 'ivory' | 'light-pink';
   logoOption?: 'CI' | 'BI' | 'SLOGAN' | null;
+  /** 직접 업로드한 로고의 캔버스 영역(0~1). 프리셋 로고만 쓸 때는 미사용 */
+  customUploadedLogoRect?: { x: number; y: number; width: number; height: number };
 
   // ── 배경 및 텍스트 색상 옵션 ───────────────────────────────────
   backgroundColor?: string;
