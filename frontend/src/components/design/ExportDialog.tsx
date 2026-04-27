@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Download, FileText, ImageIcon, Loader2 } from "lucide-react";
-import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { toast } from 'sonner';
+import { captureDesignCanvas } from '@/lib/designCanvasCapture';
 
 function canvasToBlob(
   canvas: HTMLCanvasElement,
@@ -23,11 +23,7 @@ function canvasToBlob(
   });
 }
 
-const html2canvasOpts = {
-  scale: 2,
-  logging: false,
-  useCORS: true,
-} as const;
+const CAPTURE_SCALE = 2;
 
 interface ExportDialogProps {
   open: boolean;
@@ -49,8 +45,8 @@ export function ExportDialog({ open, onOpenChange, templateName }: ExportDialogP
         throw new Error('Canvas not found');
       }
 
-      const exportCanvas = await html2canvas(canvas, {
-        ...html2canvasOpts,
+      const exportCanvas = await captureDesignCanvas(canvas as HTMLElement, {
+        scale: CAPTURE_SCALE,
         backgroundColor: null,
       });
 
@@ -83,8 +79,8 @@ export function ExportDialog({ open, onOpenChange, templateName }: ExportDialogP
         throw new Error('Canvas not found');
       }
 
-      const exportCanvas = await html2canvas(canvas, {
-        ...html2canvasOpts,
+      const exportCanvas = await captureDesignCanvas(canvas as HTMLElement, {
+        scale: CAPTURE_SCALE,
         backgroundColor: '#ffffff',
       });
 
@@ -117,8 +113,8 @@ export function ExportDialog({ open, onOpenChange, templateName }: ExportDialogP
       const canvas = document.getElementById("design-canvas");
       if (!canvas) throw new Error("Canvas not found");
 
-      const exportCanvas = await html2canvas(canvas, {
-        ...html2canvasOpts,
+      const exportCanvas = await captureDesignCanvas(canvas as HTMLElement, {
+        scale: CAPTURE_SCALE,
         backgroundColor: "#ffffff",
       });
 

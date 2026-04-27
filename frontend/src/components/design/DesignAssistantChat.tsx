@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import html2canvas from "html2canvas";
-import { buildDesignCanvasCaptureOptions } from "@/lib/html2canvasDesignCapture";
+import { captureDesignCanvas } from "@/lib/designCanvasCapture";
 import { toast } from "sonner";
 import { Loader2, Type, Scan, Wand2, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -36,12 +35,6 @@ import {
   DEFAULT_POSTER_BODY_EXTRA_2,
 } from "@/design/posterDefaults";
 import { resolvePosterBodyBlocksForRender } from "@/design/posterBodyDisplay";
-
-const html2canvasOpts = {
-  scale: 2,
-  logging: false,
-  useCORS: true,
-} as const;
 
 function sanitizeDesignContent(c: DesignContent): Record<string, unknown> {
   const o = { ...c } as Record<string, unknown>;
@@ -220,13 +213,7 @@ export function DesignAssistantChat({
   const captureCanvas = useCallback(async () => {
     const el = document.getElementById("design-canvas");
     if (!el) throw new Error("canvas_missing");
-    const canvas = await html2canvas(
-      el,
-      buildDesignCanvasCaptureOptions({
-        ...html2canvasOpts,
-        backgroundColor: "#ffffff",
-      }) as Parameters<typeof html2canvas>[1]
-    );
+    const canvas = await captureDesignCanvas(el, { scale: 2, backgroundColor: "#ffffff" });
     const dataUrl = canvas.toDataURL("image/png");
     const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, "");
     const cap = { base64, mime: "image/png" as const };
@@ -635,39 +622,53 @@ export function DesignAssistantChat({
       )}
 
       <Dialog open={inspectDialogOpen} onOpenChange={setInspectDialogOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>디자인 검수 결과</DialogTitle>
-          </DialogHeader>
-          {inspection ? (
-            <div className="space-y-3 text-sm text-gray-800">
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-700">
+        <DialogContent
+          className="w-[min(96vw,920px)] max-h-[88vh] overflow-y-auto sm:!max-w-[920px] p-5 !grid-cols-1"
+          style={{ backgroundColor: "#f3f4f6", isolation: "isolate" }}
+        >
+          <DialogHeader className="!text-left">
+            <div className="flex flex-wrap items-center justify-between gap-3 pr-8">
+              <DialogTitle className="text-base">디자인 검수 결과</DialogTitle>
+              {inspection ? (
+                <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700">
                   점수 {inspection.score}점
                 </span>
-              </div>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-[13px] leading-relaxed whitespace-pre-wrap">
+              ) : null}
+            </div>
+          </DialogHeader>
+
+          {inspection ? (
+            <div className="flex flex-col gap-4 text-sm text-gray-800">
+              <div
+                className="w-full rounded-lg border border-gray-200 p-4 text-[13px] leading-relaxed whitespace-pre-wrap shadow-sm"
+                style={{ backgroundColor: "#ffffff" }}
+              >
                 {inspection.overallSummary || "요약 정보가 없습니다."}
               </div>
+
               {inspection.violations.length > 0 ? (
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2">
                   <p className="text-xs font-semibold text-gray-700">검수 항목 ({inspection.violations.length})</p>
-                  <ul className="space-y-1.5">
+                  <ul
+                    className="!grid !grid-cols-1 gap-3 md:!grid-cols-2"
+                    style={{ display: "grid" }}
+                  >
                     {inspection.violations.map((v, i) => (
                       <li
                         key={i}
-                        className="rounded-lg border border-gray-200 bg-white p-2.5 text-[12px] leading-relaxed"
+                        className="flex flex-col rounded-lg border border-gray-200 p-3 text-[12px] leading-relaxed shadow-sm"
+                        style={{ backgroundColor: "#ffffff" }}
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[11px] font-medium text-violet-700">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">
                             {v.category}
                           </span>
                           {v.severity ? (
                             <span className="text-[11px] text-gray-500">[{v.severity}]</span>
                           ) : null}
                         </div>
-                        <p className="mt-1 text-gray-800">{v.issue}</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
+                        <p className="mt-1.5 text-[12px] text-gray-800">{v.issue}</p>
+                        <div className="mt-auto pt-2">
                           <Button
                             type="button"
                             size="sm"
@@ -684,17 +685,24 @@ export function DesignAssistantChat({
                   </ul>
                 </div>
               ) : (
-                <p className="text-xs text-gray-500">중요한 위반 사항이 발견되지 않았습니다.</p>
+                <div
+                  className="rounded-lg border border-gray-200 p-4 text-xs text-gray-500 shadow-sm"
+                  style={{ backgroundColor: "#ffffff" }}
+                >
+                  중요한 위반 사항이 발견되지 않았습니다.
+                </div>
               )}
             </div>
           ) : (
             <p className="text-xs text-gray-500">검수 결과가 없습니다.</p>
           )}
-          <DialogFooter className="gap-2">
+
+          <DialogFooter className="!flex !flex-row !justify-center gap-3 pt-2">
             <Button
               type="button"
               size="sm"
               variant="outline"
+              className="min-w-[120px]"
               onClick={() => setInspectDialogOpen(false)}
             >
               닫기
@@ -702,7 +710,7 @@ export function DesignAssistantChat({
             <Button
               type="button"
               size="sm"
-              className="bg-[#F43182] hover:bg-[#F43182]/90"
+              className="min-w-[200px] bg-[#F43182] hover:bg-[#F43182]/90"
               disabled={loading || !inspection}
               onClick={() => void runInspectCorrection()}
             >

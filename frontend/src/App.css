@@ -1,38 +1,42 @@
+/* ImportViewer 전용 스타일.
+ * 전역 import 되더라도 다른 화면(예: 디자인 에디터, 검수 다이얼로그)에 영향이 없도록
+ * 모든 규칙을 `.page` 스코프 아래로 한정한다. */
+
 .page {
   max-width: 1200px;
   margin: 0 auto;
   padding: 24px 16px 48px;
 }
 
-.header {
+.page .header {
   margin-bottom: 16px;
 }
 
-.sub {
+.page .sub {
   opacity: 0.8;
   margin-top: 6px;
 }
 
-.grid {
+.page .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
 
 @media (max-width: 1000px) {
-  .grid {
+  .page .grid {
     grid-template-columns: 1fr;
   }
 }
 
-.panel {
+.page .panel {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   padding: 14px;
   background: rgba(255, 255, 255, 0.04);
 }
 
-.panel h2 {
+.page .panel h2 {
   margin: 0 0 10px;
   font-size: 16px;
 }
@@ -52,13 +56,13 @@
   line-height: 1.4;
 }
 
-.error {
+.page .error {
   margin-top: 8px;
   color: #ffb4b4;
   font-size: 12px;
 }
 
-.kv {
+.page .kv {
   display: grid;
   grid-template-columns: 140px 1fr;
   gap: 6px 10px;
@@ -66,16 +70,16 @@
   font-size: 13px;
 }
 
-.k {
+.page .k {
   opacity: 0.7;
 }
 
-.v {
+.page .v {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 12px;
 }
 
-.frames {
+.page .frames {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -84,21 +88,21 @@
   padding-right: 6px;
 }
 
-.frameRow {
+.page .frameRow {
   border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 10px;
   padding: 10px;
   background: rgba(0, 0, 0, 0.18);
 }
 
-.frameName {
+.page .frameName {
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.badge {
+.page .badge {
   font-size: 11px;
   opacity: 0.7;
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -106,24 +110,24 @@
   padding: 2px 8px;
 }
 
-.frameMeta {
+.page .frameMeta {
   margin-top: 6px;
   font-size: 12px;
   display: grid;
   gap: 4px;
 }
 
-.muted {
+.page .muted {
   opacity: 0.65;
 }
 
-.tabs {
+.page .tabs {
   display: flex;
   gap: 8px;
   margin-bottom: 16px;
 }
 
-.tab {
+.page .tab {
   appearance: none;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(0, 0, 0, 0.2);
@@ -134,20 +138,20 @@
   cursor: pointer;
 }
 
-.tab:hover {
+.page .tab:hover {
   border-color: rgba(255, 255, 255, 0.35);
 }
 
-.tab.active {
+.page .tab.active {
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.35);
 }
 
-.tabPanel {
+.page .tabPanel {
   min-height: 60vh;
 }
 
-.tsxPreviewWrap {
+.page .tsxPreviewWrap {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   padding: 16px;
@@ -155,19 +159,19 @@
   overflow: auto;
 }
 
-.previewError {
+.page .previewError {
   padding: 16px;
   border-radius: 12px;
   border: 1px solid rgba(255, 100, 100, 0.35);
   background: rgba(80, 0, 0, 0.2);
 }
 
-.previewErrorTitle {
+.page .previewErrorTitle {
   font-weight: 600;
   margin-bottom: 8px;
 }
 
-.previewErrorPre {
+.page .previewErrorPre {
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 12px;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { templates } from "@/design/templates";
 import type { DesignContent } from "@/design/types";
@@ -7,7 +7,6 @@ import type { CanvasTextEditTarget } from '@/design/canvasTextTypography';
 import { CanvasTextFormatPanel } from './CanvasTextFormatPanel';
 import { ContentPanel }           from './ContentPanel';
 import { LayersPanel }            from './LayersPanel';
-import { ExportDialog }           from './ExportDialog';
 import { QuickStartDialog }       from './QuickStartDialog';
 import { DesignAssistantChat }    from './DesignAssistantChat';
 import { RCSCanvas } from "./RCSCanvas";
@@ -29,9 +28,8 @@ import {
   Magnet,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import html2canvas from "html2canvas";
 import { toast } from "sonner";
-import { buildDesignCanvasCaptureOptions } from "@/lib/html2canvasDesignCapture";
+import { captureDesignCanvas } from "@/lib/designCanvasCapture";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import {
   createDesign,
@@ -41,6 +39,9 @@ import {
   updateDesign,
   type DesignListItem,
 } from "@/lib/designsApi";
+
+const ExportDialog = lazy(() => import("./ExportDialog").then((m) => ({ default: m.ExportDialog })));
+
 interface DesignEditorProps {
   templateId?: string;
 }
@@ -369,16 +370,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     try {
       const el = document.getElementById("design-canvas");
       if (!el) return null;
-      const canvas = await html2canvas(
-        el,
-        buildDesignCanvasCaptureOptions({
-          scale: 1,
-          logging: false,
-          useCORS: true,
-          backgroundColor: "#ffffff",
-        }) as Parameters<typeof html2canvas>[1]
-      );
-      // 너무 큰 dataUrl이 되는 것을 방지(간단 썸네일 용도)
+      const canvas = await captureDesignCanvas(el, { scale: 1, backgroundColor: "#ffffff" });
       return canvas.toDataURL("image/jpeg", 0.72);
     } catch (e) {
       console.warn("thumbnail_capture_failed", e);
@@ -1015,11 +1007,15 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
           </DialogContent>
         </Dialog>
 
-        <ExportDialog
-          open={showExportDialog}
-          onOpenChange={setShowExportDialog}
-          templateName={template.name}
-        />
+        {showExportDialog ? (
+          <Suspense fallback={null}>
+            <ExportDialog
+              open={showExportDialog}
+              onOpenChange={setShowExportDialog}
+              templateName={template.name}
+            />
+          </Suspense>
+        ) : null}
         <QuickStartDialog
           open={showQuickStartDialog}
           onOpenChange={setShowQuickStartDialog}
