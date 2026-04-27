@@ -29,7 +29,7 @@ const mainOptions = [
     badgeColor: "bg-[#F43182]/10 text-[#F43182]",
     title: "브랜드 그래픽 제작",
     description:
-      "브랜드 가이드에 맞는 비주얼을 손쉽게 디자인하세요.\n포스터, 플래카드, SNS 등 다양한 사이즈의 템플릿을 제공합니다.",
+      "포스터·플래카드·SNS 등 다양한 사이즈의 템플릿으로 브랜드 가이드에 맞는 비주얼을 손쉽게 디자인합니다.",
     cta: "스튜디오 열기",
     route: "/brand-graphics",
     accent: "from-gray-100 via-gray-50 to-white",
@@ -44,7 +44,7 @@ const mainOptions = [
     badgeColor: "bg-violet-100 text-violet-600",
     title: "브랜드 디자인 검수",
     description:
-      "그래픽, 영상, 사진, 템플릿을 업로드하면 Gemini AI가 브랜드 가이드라인에 맞는지 자동으로 검토합니다.",
+      "그래픽·영상·사진·템플릿을 업로드하면 Gemini AI가 브랜드 가이드라인 부합 여부를 자동으로 검토합니다.",
     cta: "검수 시작하기",
     route: "/inspection",
     accent: "from-gray-100 via-gray-50 to-white",
@@ -59,7 +59,7 @@ const mainOptions = [
     badgeColor: "bg-sky-100 text-sky-600",
     title: "브랜드 네이밍 검토",
     description:
-      "로고, 브랜드명, 슬로건을 검토받으세요.\nAI가 브랜드 원칙에 부합하는지 피드백을 제공합니다.",
+      "로고·브랜드명·슬로건이 브랜드 원칙에 부합하는지 AI가 즉시 피드백을 제공합니다.",
     cta: "네이밍 검토하기",
     route: "/naming",
     accent: "from-gray-100 via-gray-50 to-white",
@@ -74,7 +74,7 @@ const mainOptions = [
     badgeColor: "bg-emerald-100 text-emerald-600",
     title: "브랜드 라이브러리",
     description:
-      "BI/CI 로고, 마스터 .ai 파일, 공식 슬로건, 픽토그램, 아이콘 등 승인된 에셋을 한 곳에서 관리합니다.",
+      "BI/CI 로고, .ai 마스터, 공식 슬로건, 픽토그램·아이콘 등 승인 에셋을 한 곳에서 관리합니다.",
     cta: "라이브러리 보기",
     route: "/library",
     accent: "from-gray-100 via-gray-50 to-white",
@@ -278,25 +278,35 @@ export function OptionSelection() {
                   key={option.id}
                   type="button"
                   onClick={() => handleOptionClick(option.route)}
-                  className={`group relative text-left bg-gradient-to-br ${option.accent} border ${option.border} rounded-xl p-6 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#F43182]/30 flex flex-col items-start justify-center h-[180px]`}
+                  className={`group relative text-left bg-gradient-to-br ${option.accent} border ${option.border} rounded-xl px-5 py-5 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#F43182]/30 flex flex-col items-stretch min-h-[200px]`}
                 >
                   {option.featured && (
                     <div className="absolute inset-0 rounded-xl bg-[#F43182]/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                   )}
-                  <div className="flex items-start justify-between mb-3 w-full">
+                  <div className="flex items-start justify-between mb-3 w-full gap-2">
                     <div className={`w-9 h-9 rounded-lg ${option.iconBg} flex items-center justify-center shrink-0`}>
                       <Icon style={{ width: "18px", height: "18px" }} />
                     </div>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${option.badgeColor}`}>{option.badge}</span>
+                    <span
+                      className={`text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${option.badgeColor}`}
+                    >
+                      {option.badge}
+                    </span>
                   </div>
-                  <h2 className="text-gray-900 mb-2" style={{ fontSize: "21.6px", fontWeight: 600 }}>
+                  <h2
+                    className="text-gray-900 mb-1.5 leading-snug break-keep"
+                    style={{ fontSize: "18px", fontWeight: 600, letterSpacing: "-0.01em" }}
+                  >
                     {option.title}
                   </h2>
-                  <p className="text-gray-500 leading-relaxed mb-3 whitespace-pre-line" style={{ fontSize: "12px" }}>
+                  <p
+                    className="text-gray-500 break-keep"
+                    style={{ fontSize: "12.5px", lineHeight: 1.55 }}
+                  >
                     {option.description}
                   </p>
                   <div
-                    className="flex items-center gap-1.5 font-medium text-gray-700 group-hover:text-gray-900 transition-colors"
+                    className="mt-auto pt-3 flex items-center gap-1.5 font-medium text-gray-700 group-hover:text-gray-900 transition-colors"
                     style={{ fontSize: "12px" }}
                   >
                     {option.cta}
