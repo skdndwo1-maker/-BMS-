@@ -235,16 +235,17 @@ function passFailFromScore(score: number): "PASS" | "FAIL" {
   return v >= 70 ? "PASS" : "FAIL";
 }
 
+const NAMING_OVERALL_WEIGHTED_DESC =
+  "창의×30% + 대중×30% + 직관×20% + 확장×20% (브랜드계층·적법은 종합 미포함)";
+
 function weightedOverallFromProposal(p: BrandNamingProposal): number {
   const c = (n: unknown) => Math.min(100, Math.max(0, Math.round(Number(n) || 0)));
-  const sum =
-    c(p.hierarchyScore) +
-    c(p.legalityScore) +
-    c(p.originalityDimensionScore) +
-    c(p.pronunciationScore) +
-    c(p.publicAppealScore) +
-    c(p.scalabilityScore);
-  return Math.min(100, Math.max(0, Math.round(sum / 6)));
+  const o = c(p.originalityDimensionScore);
+  const pa = c(p.publicAppealScore);
+  const pr = c(p.pronunciationScore);
+  const sc = c(p.scalabilityScore);
+  const raw = o * 0.3 + pa * 0.3 + pr * 0.2 + sc * 0.2;
+  return Math.min(100, Math.max(0, Math.round(raw)));
 }
 
 function appendBrandNamingAnalysisTail(lines: string[], r: BrandNamingRunResult): void {
@@ -268,11 +269,11 @@ function appendBrandNamingAnalysisTail(lines: string[], r: BrandNamingRunResult)
       "[창의성]",
       dl.originality || "(없음)",
       "",
-      "[직관성]",
-      dl.pronunciationLanguage || "(없음)",
-      "",
       "[대중성]",
       dl.publicAppeal || "(없음)",
+      "",
+      "[직관성]",
+      dl.pronunciationLanguage || "(없음)",
       "",
       "[확장성]",
       dl.scalability || "(없음)"
@@ -340,13 +341,13 @@ function buildBrandNamingPlainText(opts: {
         });
         lines.push(
           "【패키지 통합 평가】",
-          `종합 점수: ${pkgOverall} / 100 (브랜드계층·적법·창의·직관·대중·확장 6항목 각 1/6 평균)`,
-          `① 브랜드 계층 정렬 — Pass/Fail: ${passFailFromScore(tp.hierarchyScore)} (점수 ${tp.hierarchyScore}/100 · 종합 1/6 · 70↓ NO-GO)`,
-          `② 적법성 — Pass/Fail: ${passFailFromScore(tp.legalityScore)} (점수 ${tp.legalityScore}/100 · 종합 1/6 · 70↓ NO-GO)`,
-          `③ 창의성 — ${tp.originalityDimensionScore} / 100 (종합 1/6 · 스토리라인·단계명 연계는 아래 창의성 근거)`,
-          `④ 직관성 — ${tp.pronunciationScore} / 100 (종합 1/6)`,
-          `⑤ 대중성 — ${tp.publicAppealScore ?? "—"} / 100 (종합 1/6)`,
-          `⑥ 확장성 — ${tp.scalabilityScore ?? "—"} / 100 (종합 1/6)`,
+          `종합 점수: ${pkgOverall} / 100 (${NAMING_OVERALL_WEIGHTED_DESC})`,
+          `① 브랜드 계층 정렬 — Pass/Fail: ${passFailFromScore(tp.hierarchyScore)} (점수 ${tp.hierarchyScore}/100 · 종합 미포함 · 70↓ NO-GO)`,
+          `② 적법성 — Pass/Fail: ${passFailFromScore(tp.legalityScore)} (점수 ${tp.legalityScore}/100 · 종합 미포함 · 70↓ NO-GO)`,
+          `③ 창의성 — ${tp.originalityDimensionScore} / 100 (종합 30% · 스토리라인·단계명 연계는 아래 창의성 근거)`,
+          `④ 대중성 — ${tp.publicAppealScore ?? "—"} / 100 (종합 30%)`,
+          `⑤ 직관성 — ${tp.pronunciationScore} / 100 (종합 20%)`,
+          `⑥ 확장성 — ${tp.scalabilityScore ?? "—"} / 100 (종합 20%)`,
           "",
           "[브랜드 계층 정렬 근거 — 패키지]",
           tpd.hierarchy || "(없음)",
@@ -357,11 +358,11 @@ function buildBrandNamingPlainText(opts: {
           "[창의성 근거 — 패키지 · 스토리라인·단계 네이밍 연계]",
           tpd.originality || "(없음)",
           "",
-          "[직관성 근거 — 패키지]",
-          tpd.pronunciationLanguage || "(없음)",
-          "",
           "[대중성 근거 — 패키지]",
           tpd.publicAppeal || "(없음)",
+          "",
+          "[직관성 근거 — 패키지]",
+          tpd.pronunciationLanguage || "(없음)",
           "",
           "[확장성 근거 — 패키지]",
           tpd.scalability || "(없음)",
@@ -393,13 +394,13 @@ function buildBrandNamingPlainText(opts: {
         const pkgOverall = weightedOverallFromProposal(pkg);
         lines.push(
           "【패키지 통합 평가 — 전 단계 네이밍을 한 세트로 평가】",
-          `종합 점수: ${pkgOverall} / 100 (6항목 각 1/6 평균)`,
-          `① 브랜드 계층 정렬 — Pass/Fail: ${passFailFromScore(tp.hierarchyScore)} (점수 ${tp.hierarchyScore}/100 · 종합 1/6 · 70↓ NO-GO)`,
-          `② 적법성 — Pass/Fail: ${passFailFromScore(tp.legalityScore)} (점수 ${tp.legalityScore}/100 · 종합 1/6 · 70↓ NO-GO)`,
-          `③ 창의성 — ${tp.originalityDimensionScore} / 100 (종합 1/6)`,
-          `④ 직관성 — ${tp.pronunciationScore} / 100 (종합 1/6)`,
-          `⑤ 대중성 — ${tp.publicAppealScore ?? "—"} / 100 (종합 1/6)`,
-          `⑥ 확장성 — ${tp.scalabilityScore ?? "—"} / 100 (종합 1/6)`,
+          `종합 점수: ${pkgOverall} / 100 (${NAMING_OVERALL_WEIGHTED_DESC})`,
+          `① 브랜드 계층 정렬 — Pass/Fail: ${passFailFromScore(tp.hierarchyScore)} (점수 ${tp.hierarchyScore}/100 · 종합 미포함 · 70↓ NO-GO)`,
+          `② 적법성 — Pass/Fail: ${passFailFromScore(tp.legalityScore)} (점수 ${tp.legalityScore}/100 · 종합 미포함 · 70↓ NO-GO)`,
+          `③ 창의성 — ${tp.originalityDimensionScore} / 100 (종합 30%)`,
+          `④ 대중성 — ${tp.publicAppealScore ?? "—"} / 100 (종합 30%)`,
+          `⑤ 직관성 — ${tp.pronunciationScore} / 100 (종합 20%)`,
+          `⑥ 확장성 — ${tp.scalabilityScore ?? "—"} / 100 (종합 20%)`,
           ""
         );
         const tpd = tp.proposalDetailLogic;
@@ -413,11 +414,11 @@ function buildBrandNamingPlainText(opts: {
           "[창의성 근거 — 패키지]",
           tpd.originality || "(없음)",
           "",
-          "[직관성 근거 — 패키지]",
-          tpd.pronunciationLanguage || "(없음)",
-          "",
           "[대중성 근거 — 패키지]",
           tpd.publicAppeal || "(없음)",
+          "",
+          "[직관성 근거 — 패키지]",
+          tpd.pronunciationLanguage || "(없음)",
           "",
           "[확장성 근거 — 패키지]",
           tpd.scalability || "(없음)",
@@ -445,13 +446,13 @@ function buildBrandNamingPlainText(opts: {
           lines.push(`--- ${tierLb}대안 ${i + 1}: ${p.name} ---`);
           lines.push(p.rationale.trim() || "(근거 없음)");
           lines.push(
-            `종합 점수: ${overall} / 100 (6항목 각 1/6 평균)`,
-            `① 브랜드 계층 정렬 — Pass/Fail: ${hPf} (점수 ${p.hierarchyScore}/100 · 종합 1/6 · 70↓ NO-GO)`,
-            `② 적법성 — Pass/Fail: ${lPf} (점수 ${p.legalityScore}/100 · 종합 1/6 · 70↓ NO-GO)`,
-            `③ 창의성 — ${p.originalityDimensionScore} / 100 (종합 1/6)`,
-            `④ 직관성 — ${p.pronunciationScore} / 100 (종합 1/6)`,
-            `⑤ 대중성 — ${p.publicAppealScore} / 100 (종합 1/6)`,
-            `⑥ 확장성 — ${p.scalabilityScore} / 100 (종합 1/6)`,
+            `종합 점수: ${overall} / 100 (${NAMING_OVERALL_WEIGHTED_DESC})`,
+            `① 브랜드 계층 정렬 — Pass/Fail: ${hPf} (점수 ${p.hierarchyScore}/100 · 종합 미포함 · 70↓ NO-GO)`,
+            `② 적법성 — Pass/Fail: ${lPf} (점수 ${p.legalityScore}/100 · 종합 미포함 · 70↓ NO-GO)`,
+            `③ 창의성 — ${p.originalityDimensionScore} / 100 (종합 30%)`,
+            `④ 대중성 — ${p.publicAppealScore} / 100 (종합 30%)`,
+            `⑤ 직관성 — ${p.pronunciationScore} / 100 (종합 20%)`,
+            `⑥ 확장성 — ${p.scalabilityScore} / 100 (종합 20%)`,
             ""
           );
           const pd = p.proposalDetailLogic;
@@ -466,11 +467,11 @@ function buildBrandNamingPlainText(opts: {
               "[창의성 근거]",
               pd.originality || "(없음)",
               "",
-              "[직관성 근거]",
-              pd.pronunciationLanguage || "(없음)",
-              "",
               "[대중성 근거]",
               pd.publicAppeal || "(없음)",
+              "",
+              "[직관성 근거]",
+              pd.pronunciationLanguage || "(없음)",
               "",
               "[확장성 근거]",
               pd.scalability || "(없음)",
@@ -499,14 +500,14 @@ function buildBrandNamingPlainText(opts: {
     const hPf = passFailFromScore(r.hierarchyScore);
     const lPf = passFailFromScore(l);
     lines.push("■ 종합 적합성 점수");
-    lines.push(`종합: ${r.overallScore} / 100 (브랜드계층·적법·창의·직관·대중·확장 6항목 각 1/6 평균)`);
+    lines.push(`종합: ${r.overallScore} / 100 (${NAMING_OVERALL_WEIGHTED_DESC})`);
     lines.push(
-      `① 브랜드 계층 정렬 — Pass/Fail: ${hPf} (점수 ${r.hierarchyScore}/100 · 종합 1/6 · 70↓ NO-GO)`,
-      `② 적법성 — Pass/Fail: ${lPf} (점수 ${l}/100 · 종합 1/6 · 70↓ NO-GO)`,
-      `③ 창의성 — ${o} / 100 (종합 1/6)`,
-      `④ 직관성 — ${pr} / 100 (종합 1/6)`,
-      `⑤ 대중성 — ${pa} / 100 (종합 1/6)`,
-      `⑥ 확장성 — ${sc} / 100 (종합 1/6)`,
+      `① 브랜드 계층 정렬 — Pass/Fail: ${hPf} (점수 ${r.hierarchyScore}/100 · 종합 미포함 · 70↓ NO-GO)`,
+      `② 적법성 — Pass/Fail: ${lPf} (점수 ${l}/100 · 종합 미포함 · 70↓ NO-GO)`,
+      `③ 창의성 — ${o} / 100 (종합 30%)`,
+      `④ 대중성 — ${pa} / 100 (종합 30%)`,
+      `⑤ 직관성 — ${pr} / 100 (종합 20%)`,
+      `⑥ 확장성 — ${sc} / 100 (종합 20%)`,
       ""
     );
     appendBrandNamingAnalysisTail(lines, r);

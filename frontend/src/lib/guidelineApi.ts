@@ -426,17 +426,17 @@ export type BrandNamingRunResult = {
   namingGeminiConfigured?: boolean;
   overallScore: number;
   hierarchyScore: number;
-  /** 검수: 독창성(30%) */
+  /** 검수: 창의성(종합 30%) */
   originalityDimensionScore?: number;
-  /** 검수: 발음·언어 단일 점수(0~100), pronunciationLanguageScore와 동일 */
+  /** 검수: 직관성 단일 점수(0~100), pronunciationLanguageScore와 동일 */
   pronunciationScore?: number;
-  /** 검수: 발음·언어(20%) */
+  /** 검수: 직관성(종합 20%) */
   pronunciationLanguageScore?: number;
-  /** 검수: 적법성(10%) */
+  /** 검수: 적법성(Pass/Fail·종합 미포함) */
   legalityScore?: number;
-  /** 검수·생성: 대중성(종합 1/6) */
+  /** 검수·생성: 대중성(종합 30%) */
   publicAppealScore?: number;
-  /** 검수·생성: 확장성(종합 1/6) */
+  /** 검수·생성: 확장성(종합 20%) */
   scalabilityScore?: number;
   trademarkScore: number;
   copyrightScore: number;

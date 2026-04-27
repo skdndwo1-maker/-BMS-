@@ -254,31 +254,30 @@ function ScoreGauge({ score, r = 85, scoreSize = 48 }: { score: number; r?: numb
   );
 }
 
-/** 종합: 브랜드계층·적법·창의·직관·대중·확장 — 6항목 균등(각 1/6) */
+/** 종합: 창의 30% · 대중 30% · 직관 20% · 확장 20% (계층·적법 미포함) */
 function weightedProposalOverall(p: BrandNamingProposal): number {
   const c = (n: unknown) => Math.min(100, Math.max(0, Math.round(Number(n) || 0)));
-  const sum =
-    c(p.hierarchyScore) +
-    c(p.legalityScore) +
-    c(p.originalityDimensionScore) +
-    c(p.pronunciationScore) +
-    c(p.publicAppealScore) +
-    c(p.scalabilityScore);
-  return Math.min(100, Math.max(0, Math.round(sum / 6)));
+  const o = c(p.originalityDimensionScore);
+  const pa = c(p.publicAppealScore);
+  const pr = c(p.pronunciationScore);
+  const sc = c(p.scalabilityScore);
+  const raw = o * 0.3 + pa * 0.3 + pr * 0.2 + sc * 0.2;
+  return Math.min(100, Math.max(0, Math.round(raw)));
 }
 
-/** 1~2: Pass/Fail · 3~6: 종합 반영(각 1/6) */
+/** 1~2: Pass/Fail · 3~6: 표시 순서 계층→적법→창의→대중→직관→확장, 종합은 창의·대중·직관·확장만 가중 */
 const GENERATE_EVAL_BOXES: {
   dim: keyof BrandNamingProposal["proposalDetailLogic"];
   label: string;
   score: (p: BrandNamingProposal) => number;
+  overallWeightPct?: number;
 }[] = [
   { dim: "hierarchy", label: "브랜드 계층 정렬", score: (p) => p.hierarchyScore },
   { dim: "legality", label: "적법성", score: (p) => p.legalityScore },
-  { dim: "originality", label: "창의성", score: (p) => p.originalityDimensionScore },
-  { dim: "pronunciationLanguage", label: "직관성", score: (p) => p.pronunciationScore },
-  { dim: "publicAppeal", label: "대중성", score: (p) => p.publicAppealScore },
-  { dim: "scalability", label: "확장성", score: (p) => p.scalabilityScore },
+  { dim: "originality", label: "창의성", score: (p) => p.originalityDimensionScore, overallWeightPct: 30 },
+  { dim: "publicAppeal", label: "대중성", score: (p) => p.publicAppealScore, overallWeightPct: 30 },
+  { dim: "pronunciationLanguage", label: "직관성", score: (p) => p.pronunciationScore, overallWeightPct: 20 },
+  { dim: "scalability", label: "확장성", score: (p) => p.scalabilityScore, overallWeightPct: 20 },
 ];
 
 function passFail(score: number): "PASS" | "FAIL" {
@@ -341,10 +340,10 @@ function ProposalDimensionBars({ proposal }: { proposal: BrandNamingProposal }) 
           <span className="text-[11px] font-medium text-gray-500">종합</span>
           <span className="mt-1 text-[30px] font-bold tabular-nums leading-none text-[#E91E8C] sm:text-[34px]">{overall}</span>
           <span className="mt-0.5 text-[10px] text-gray-400">/ 100</span>
-          <span className="mt-2 max-w-[7.5rem] text-center text-[9px] leading-snug text-gray-500">
-            6항목 균등
+          <span className="mt-2 max-w-[8.5rem] text-center text-[9px] leading-snug text-gray-500">
+            창의30%·대중30%
             <br />
-            (각 1/6 평균)
+            직관20%·확장20%
           </span>
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-3">
@@ -390,10 +389,10 @@ function ProposalDimensionBars({ proposal }: { proposal: BrandNamingProposal }) 
           </div>
           <div>
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-              종합 반영 (6항목 각 1/6 · 계층·적법은 위 Pass/Fail과 동일 점수)
+              종합 가중 (창의 30% · 대중 30% · 직관 20% · 확장 20%) — 계층·적법은 미반영
             </p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 [grid-template-columns:minmax(0,1fr)_minmax(0,1fr)] sm:[grid-template-columns:minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-              {GENERATE_EVAL_BOXES.slice(2, 6).map(({ dim, label, score }) => {
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 [grid-template-columns:minmax(0,1fr)_minmax(0,1fr)] sm:[grid-template-columns:minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+              {GENERATE_EVAL_BOXES.slice(2, 6).map(({ dim, label, score, overallWeightPct }) => {
                 const raw = score(proposal);
                 const n = Number(raw);
                 const v = Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : 0;
@@ -403,7 +402,12 @@ function ProposalDimensionBars({ proposal }: { proposal: BrandNamingProposal }) 
                     className="relative flex min-h-[88px] min-w-0 flex-col justify-center rounded-lg border border-gray-100 bg-gray-50/80 px-3 pb-2 pt-2"
                   >
                     <div className="mb-1 flex items-center justify-between gap-1">
-                      <span className="text-[11px] font-medium text-gray-600">{label}</span>
+                      <span className="text-[11px] font-medium text-gray-600">
+                        {label}
+                        {overallWeightPct != null ? (
+                          <span className="ml-1 text-[9px] font-normal text-gray-400">({overallWeightPct}%)</span>
+                        ) : null}
+                      </span>
                       <span className="text-[12px] font-bold tabular-nums text-[#E91E8C]">{v}</span>
                     </div>
                     <NamingEvalProgressBar percent={v} />
@@ -1149,8 +1153,8 @@ export function BrandNaming() {
                         </h2>
                         <p className="mt-[6px] text-[13px] leading-snug text-gray-600">
                           {namingResult.generateMeta?.style === "tiered"
-                            ? "한 번의 생성마다 서로 다른 세계관·스토리라인을 가진 패키지 대안이 4개 제시됩니다. 각 패키지는 요청한 모든 단계 네이밍을 포함하며, 단계 간 이름은 같은 스토리라인에서 파생되도록 설계된 것이 기본입니다. 브랜드 계층·적법·창의·직관·대중·확장 여섯 항목이 패키지(대안)마다 통합 평가되며, 창의성 근거에는 스토리라인과 단계 네이밍의 연결이 반영됩니다. 종합 점수는 여섯 항목 균등(각 1/6) 평균입니다."
-                            : "각 안의 종합 점수는 브랜드 계층·적법·창의·직관·대중·확장 여섯 점수의 균등(각 1/6) 평균입니다. 계층·적법은 70점 미만 시 Pass/Fail상 Fail입니다."}
+                            ? "한 번의 생성마다 서로 다른 세계관·스토리라인을 가진 패키지 대안이 4개 제시됩니다. 각 패키지는 요청한 모든 단계 네이밍을 포함하며, 단계 간 이름은 같은 스토리라인에서 파생되도록 설계된 것이 기본입니다. 평가 표시 순서는 계층·적법·창의·대중·직관·확장이며, 종합 점수는 창의 30%·대중 30%·직관 20%·확장 20% 가중합입니다(계층·적법은 Pass/Fail만)."
+                            : "표시 순서: 계층·적법·창의·대중·직관·확장. 종합 점수는 창의×0.3 + 대중×0.3 + 직관×0.2 + 확장×0.2 입니다. 브랜드 계층·적법은 종합에 넣지 않으며 70점 미만 시 Fail·NO-GO입니다."}
                         </p>
                       </div>
                     </div>
@@ -1323,7 +1327,7 @@ export function BrandNaming() {
                 </>
               )}
 
-              {/* 종합 적합성 점수 — 검수 모드 (6항목 각 1/6, 계층·적법 70↓ NO-GO) */}
+              {/* 종합 적합성 점수 — 검수 (가중: 창의30·대중30·직관20·확장20, 계층·적법 70↓ NO-GO) */}
               {namingMode === "audit" && overallScore !== null && namingResult && (() => {
                 const dim = {
                   hierarchy: namingResult.hierarchyScore,
@@ -1347,7 +1351,7 @@ export function BrandNaming() {
                   <div>
                     <h2 className="text-[20px] font-bold text-gray-900 mb-[4px]">종합 적합성 점수</h2>
                     <p className="text-[13px] text-gray-500">
-                      종합 점수는 브랜드 계층·적법성·창의성·직관성·대중성·확장성 여섯 항목을 균등(각 1/6) 반영합니다. 브랜드 계층 정렬·적법성은 70점 미만이면 Fail·NO-GO입니다.
+                      항목 순서: 계층 → 적법 → 창의 → 대중 → 직관 → 확장. 종합 점수는 창의성 30%·대중성 30%·직관성 20%·확장성 20% 가중합이며, 브랜드 계층 정렬·적법성은 Pass/Fail만(종합 미포함, 70점 미만 NO-GO)입니다.
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -1429,8 +1433,8 @@ export function BrandNaming() {
                           { label: "계층", val: dim.hierarchy, pf: true },
                           { label: "적법", val: dim.legality, pf: true },
                           { label: "창의", val: dim.originality, pf: false },
-                          { label: "직관", val: dim.pronunciation, pf: false },
                           { label: "대중", val: dim.publicAppeal, pf: false },
+                          { label: "직관", val: dim.pronunciation, pf: false },
                           { label: "확장", val: dim.scalability, pf: false },
                         ] as const
                       ).map((row) => {
@@ -1548,7 +1552,7 @@ export function BrandNaming() {
                         </div>
                         <div className="shrink-0 text-right">
                           <span className="block pt-1 text-[10px] font-medium leading-snug text-gray-400">
-                            NO-GO 70↓ · 종합 1/6
+                            NO-GO 70↓ · 종합 미반영
                           </span>
                         </div>
                       </div>
@@ -1581,12 +1585,15 @@ export function BrandNaming() {
                     </div>
                   </div>
                   <div>
-                    <p className="mb-3 text-[12px] font-semibold text-gray-500">종합 반영 항목 (6항목 각 1/6)</p>
+                    <p className="mb-3 text-[12px] font-semibold text-gray-500">
+                      종합 가중 항목 (창의 30% · 대중 30% · 직관 20% · 확장 20%)
+                    </p>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {[
                     {
                       id: "originality" as const,
                       title: "창의성",
+                      weightLabel: "30%",
                       score: dim.originality,
                       icon: Sparkles,
                       iconCls: "text-[#F43182]",
@@ -1607,22 +1614,9 @@ export function BrandNaming() {
                       ),
                     },
                     {
-                      id: "pronunciation" as const,
-                      title: "직관성",
-                      score: dim.pronunciation,
-                      icon: Mic,
-                      iconCls: "text-violet-600",
-                      body: (
-                        <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-gray-700">
-                          {dl.pronunciationLanguage?.trim()
-                            ? dl.pronunciationLanguage
-                            : "직관성 항목이 아직 없습니다. 다시 검수하거나 잠시 후 재시도해 주세요."}
-                        </p>
-                      ),
-                    },
-                    {
                       id: "publicAppeal" as const,
                       title: "대중성",
+                      weightLabel: "30%",
                       score: dim.publicAppeal,
                       icon: Users,
                       iconCls: "text-sky-600",
@@ -1635,8 +1629,24 @@ export function BrandNaming() {
                       ),
                     },
                     {
+                      id: "pronunciation" as const,
+                      title: "직관성",
+                      weightLabel: "20%",
+                      score: dim.pronunciation,
+                      icon: Mic,
+                      iconCls: "text-violet-600",
+                      body: (
+                        <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-gray-700">
+                          {dl.pronunciationLanguage?.trim()
+                            ? dl.pronunciationLanguage
+                            : "직관성 항목이 아직 없습니다. 다시 검수하거나 잠시 후 재시도해 주세요."}
+                        </p>
+                      ),
+                    },
+                    {
                       id: "scalability" as const,
                       title: "확장성",
+                      weightLabel: "20%",
                       score: dim.scalability,
                       icon: Layers,
                       iconCls: "text-amber-600",
@@ -1661,7 +1671,7 @@ export function BrandNaming() {
                           <h4 className="line-clamp-3 text-[18px] font-semibold leading-tight text-gray-900">{box.title}</h4>
                         </div>
                         <div className="shrink-0 text-right">
-                          <span className="block text-[11px] text-gray-400">종합 (1/6)</span>
+                          <span className="block text-[11px] text-gray-400">종합 {box.weightLabel}</span>
                           <span className="text-[19px] font-bold tabular-nums leading-none text-[#F43182]">{box.score}</span>
                         </div>
                       </div>
@@ -1841,12 +1851,12 @@ export function BrandNaming() {
                   scalability: "",
                 };
                 const blocks = [
-                  { t: "1. 브랜드 계층 정렬 (종합 1/6 · 70점 미만 NO-GO)", c: dl.hierarchy },
-                  { t: "2. 적법성 (종합 1/6 · 70점 미만 NO-GO) — 국가법령정보 연동 시 출처 명시", c: dl.legality },
-                  { t: "3. 창의성 (종합 1/6) — Gemini 추론만 사용", c: dl.originality },
-                  { t: "4. 직관성 (종합 1/6)", c: dl.pronunciationLanguage },
-                  { t: "5. 대중성 (종합 1/6) — 사회·문화적 수용", c: dl.publicAppeal },
-                  { t: "6. 확장성 (종합 1/6) — 브랜드 생태계·파생", c: dl.scalability },
+                  { t: "1. 브랜드 계층 정렬 (Pass/Fail · 종합 미포함 · 70점 미만 NO-GO)", c: dl.hierarchy },
+                  { t: "2. 적법성 (Pass/Fail · 종합 미포함 · 70점 미만 NO-GO) — 국가법령정보 연동 시 출처 명시", c: dl.legality },
+                  { t: "3. 창의성 (종합 30%) — Gemini 추론만 사용", c: dl.originality },
+                  { t: "4. 대중성 (종합 30%) — 사회·문화적 수용", c: dl.publicAppeal },
+                  { t: "5. 직관성 (종합 20%)", c: dl.pronunciationLanguage },
+                  { t: "6. 확장성 (종합 20%) — 브랜드 생태계·파생", c: dl.scalability },
                 ];
                 return (
                   <div className="flex flex-col gap-6">

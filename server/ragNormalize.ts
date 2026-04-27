@@ -156,19 +156,19 @@ function formatNamingAudit(p: { out: AnyRec; inp: AnyRec; guidelineId: string | 
   lines.push(`- 유형: 네이밍 검수 (naming_audit)`);
   lines.push(`- 가이드라인: ${guidelineLabel(p.guidelineId ?? text(i.guidelineId))}`);
   lines.push(`- 최종 판정: 승인`);
-  lines.push(`- 종합 점수: ${numStr(o.overallScore)}`);
+  lines.push(`- 종합 점수: ${numStr(o.overallScore)} (창의30%·대중30%·직관20%·확장20% 가중, 계층·적법 미포함)`);
   lines.push("");
 
-  lines.push("### 점수 상세");
+  lines.push("### 점수 상세 (순서: 계층→적법→창의→대중→직관→확장)");
   lines.push(`- 브랜드 위계: ${numStr(o.hierarchyScore)}`);
-  lines.push(`- 발음: ${numStr(o.pronunciationScore)}`);
-  lines.push(`- 발음/언어: ${numStr(o.pronunciationLanguageScore)}`);
-  lines.push(`- 저작권: ${numStr(o.copyrightScore)}`);
   lines.push(`- 법적 검토: ${numStr(o.legalityScore)}`);
-  lines.push(`- 상표: ${numStr(o.trademarkScore)}`);
   lines.push(`- 독창성: ${numStr(o.originalityDimensionScore)}`);
   lines.push(`- 대중성: ${numStr(o.publicAppealScore)}`);
+  lines.push(`- 직관(발음): ${numStr(o.pronunciationScore)}`);
   lines.push(`- 확장성: ${numStr(o.scalabilityScore)}`);
+  lines.push(`- (참고) 발음/언어: ${numStr(o.pronunciationLanguageScore)}`);
+  lines.push(`- (참고) 상표: ${numStr(o.trademarkScore)}`);
+  lines.push(`- (참고) 저작권: ${numStr(o.copyrightScore)}`);
   lines.push("");
 
   lines.push("### 브랜드 위계 평가");
@@ -233,6 +233,7 @@ function formatNamingAudit(p: { out: AnyRec; inp: AnyRec; guidelineId: string | 
   lines.push(`- 요금제 명칭 원칙: B2C 모바일 종속 요금제 작명 룰을 따라 일관된 시리즈를 구성한다.`);
   lines.push(`- 발음 원칙: 한국어와 영어 발음이 모두 자연스럽고 단순해야 한다.`);
   lines.push(`- 상표 원칙: 동일·유사 상표 충돌을 회피하고 등록 가능성을 우선한다.`);
+  lines.push(`- 종합 산정: 창의·대중·직관·확장 가중합(30/30/20/20). 브랜드 위계·법적 검토는 Pass/Fail·NO-GO만.`);
 
   return trimTrailingBlankLines(lines).join("\n");
 }
@@ -329,16 +330,16 @@ function formatNamingGenerate(p: { out: AnyRec; inp: AnyRec; guidelineId: string
       lines.push(`#### ${e.name}`);
       lines.push(`- 핵심 의미: ${e.rationale}`);
       lines.push(`- 브랜드 위계: ${text(e.detail.hierarchy)}`);
-      lines.push(`- 독창성: ${text(e.detail.originality)}`);
-      lines.push(`- 발음: ${text(e.detail.pronunciationLanguage)}`);
       lines.push(`- 법적 검토: ${text(e.detail.legality)}`);
+      lines.push(`- 독창성: ${text(e.detail.originality)}`);
       lines.push(`- 대중성: ${text(e.detail.publicAppeal)}`);
+      lines.push(`- 직관(발음): ${text(e.detail.pronunciationLanguage)}`);
       lines.push(`- 확장성: ${text(e.detail.scalability)}`);
       lines.push(`- 위계 점수: ${e.hierarchyScore}`);
-      lines.push(`- 독창성 점수: ${e.originalityScore}`);
-      lines.push(`- 발음 점수: ${e.pronunciationScore}`);
       lines.push(`- 법적 점수: ${e.legalityScore}`);
+      lines.push(`- 독창성 점수: ${e.originalityScore}`);
       lines.push(`- 대중성 점수: ${e.publicAppealScore}`);
+      lines.push(`- 직관 점수: ${e.pronunciationScore}`);
       lines.push(`- 확장성 점수: ${e.scalabilityScore}`);
       lines.push("");
     }
@@ -350,6 +351,7 @@ function formatNamingGenerate(p: { out: AnyRec; inp: AnyRec; guidelineId: string
   lines.push(`- 프리미엄/혜택 중심 직관적 명칭`);
   lines.push(`- 한국어/영어 발음 자연스러움 필수`);
   lines.push(`- 법적 리스크 낮은 명칭 선별`);
+  lines.push(`- 종합 산정: 창의30%·대중30%·직관20%·확장20% (계층·적법은 종합 미포함)`);
 
   return trimTrailingBlankLines(lines).join("\n");
 }

@@ -1679,15 +1679,15 @@ const brandNamingResponseSchema = {
     overallScore: {
       type: SchemaType.NUMBER,
       description:
-        "0~100 종합. 검수 시 서버에서 브랜드계층·적법성·창의성·직관성·대중성·확장성 **6항목 균등(각 1/6)** 으로 재계산되므로, 여섯 점수와 논리적으로 맞게 채점",
+        "0~100 종합. 검수 시 서버에서 **창의성×0.3 + 대중성×0.3 + 직관성×0.2 + 확장성×0.2** 로 재계산. 브랜드계층·적법은 미포함",
     },
     hierarchyScore: {
       type: SchemaType.NUMBER,
-      description: "브랜드 계층 정렬 0~100 (검수: 종합 1/6 반영, 70 미만이면 Pass/Fail상 Fail·NO-GO 요건)",
+      description: "브랜드 계층 정렬 0~100 (검수: 종합 가중합 미포함, 70 미만이면 Pass/Fail상 Fail·NO-GO)",
     },
     originalityDimensionScore: {
       type: SchemaType.NUMBER,
-      description: "창의성 0~100 (검수: 종합 1/6). 가이드·요청·참고 정보만으로 Gemini 추론",
+      description: "창의성 0~100 (검수: 종합 **30%**). 가이드·요청·참고 정보만으로 Gemini 추론",
     },
     pronunciationScore: {
       type: SchemaType.INTEGER,
@@ -1697,21 +1697,21 @@ const brandNamingResponseSchema = {
     pronunciationLanguageScore: {
       type: SchemaType.NUMBER,
       description:
-        "직관성(발음·언어) 0~100 (검수: 종합 1/6). **pronunciationScore와 동일한 정수 값**으로 맞출 것",
+        "직관성(발음·언어) 0~100 (검수: 종합 **20%**). **pronunciationScore와 동일한 정수 값**으로 맞출 것",
     },
     legalityScore: {
       type: SchemaType.NUMBER,
-      description: "적법성 0~100 (검수: 종합 1/6 반영, 70 미만이면 Pass/Fail상 Fail·NO-GO 요건). 국가법령정보 요약이 있으면 반영",
+      description: "적법성 0~100 (검수: 종합 가중합 미포함, 70 미만이면 Pass/Fail상 Fail·NO-GO). 국가법령정보 요약이 있으면 반영",
     },
     publicAppealScore: {
       type: SchemaType.INTEGER,
       description:
-        "대중성(사회·문화적 수용 가능성) 0~100. 부정 연상·세대·문화권 범용성·특정 집단 편향 여부 등을 Gemini 추론으로 채점 (검수: 종합 1/6)",
+        "대중성(사회·문화적 수용 가능성) 0~100. 부정 연상·세대·문화권 범용성·특정 집단 편향 여부 등을 Gemini 추론으로 채점 (검수: 종합 **30%**)",
     },
     scalabilityScore: {
       type: SchemaType.INTEGER,
       description:
-        "확장성(브랜드 생태계 확장 잠재력) 0~100. 패밀리 네이밍·글로벌 발음·파생·시간 내구성 등을 Gemini 추론으로 채점 (검수: 종합 1/6)",
+        "확장성(브랜드 생태계 확장 잠재력) 0~100. 패밀리 네이밍·글로벌 발음·파생·시간 내구성 등을 Gemini 추론으로 채점 (검수: 종합 **20%**)",
     },
     trademarkScore: { type: SchemaType.NUMBER, description: "레거시: 상표 관점. 검수에서는 originalityDimensionScore와 유사 목적으로 채울 수 있음" },
     copyrightScore: { type: SchemaType.NUMBER, description: "레거시: 저작권. 검수에서는 legalityScore 보조로 채울 수 있음" },
@@ -2401,12 +2401,10 @@ function parseTierPackageEvaluation(p: Record<string, unknown>): TierPackageEval
 }
 
 function weightedTierPackageOverall(tp: TierPackageEvaluationGemini): number {
-  return averageNamingOverallSix(
-    tp.hierarchyScore,
+  return namingOverallWeightedFour(
     tp.originalityDimensionScore,
-    tp.pronunciationScore,
-    tp.legalityScore,
     tp.publicAppealScore,
+    tp.pronunciationScore,
     tp.scalabilityScore
   );
 }
@@ -2530,15 +2528,14 @@ function parseBrandNamingPayload(raw: string): BrandNamingGeminiResult | null {
   }
 }
 
-/** 종합: 브랜드계층·창의성·직관성·적법성·대중성·확장성 — 6항목 균등(각 1/6) */
-function averageNamingOverallSix(h: number, o: number, pr: number, l: number, pa: number, sc: number): number {
-  const hh = Math.min(100, Math.max(0, Math.round(Number(h) || 0)));
-  const oo = Math.min(100, Math.max(0, Math.round(Number(o) || 0)));
-  const ppr = Math.min(100, Math.max(0, Math.round(Number(pr) || 0)));
-  const ll = Math.min(100, Math.max(0, Math.round(Number(l) || 0)));
-  const ppa = Math.min(100, Math.max(0, Math.round(Number(pa) || 0)));
-  const ssc = Math.min(100, Math.max(0, Math.round(Number(sc) || 0)));
-  return Math.min(100, Math.max(0, Math.round((hh + oo + ppr + ll + ppa + ssc) / 6)));
+/** 종합: 창의 30% · 대중 30% · 직관 20% · 확장 20% (계층·적법은 미포함) */
+function namingOverallWeightedFour(originality: number, publicAppeal: number, pronunciation: number, scalability: number): number {
+  const o = Math.min(100, Math.max(0, Math.round(Number(originality) || 0)));
+  const pa = Math.min(100, Math.max(0, Math.round(Number(publicAppeal) || 0)));
+  const pr = Math.min(100, Math.max(0, Math.round(Number(pronunciation) || 0)));
+  const sc = Math.min(100, Math.max(0, Math.round(Number(scalability) || 0)));
+  const raw = o * 0.3 + pa * 0.3 + pr * 0.2 + sc * 0.2;
+  return Math.min(100, Math.max(0, Math.round(raw)));
 }
 
 /** 검수: 발음·언어 상세가 너무 짧거나 비어 있으면 기본 안내 문구 보강 */
@@ -2570,14 +2567,14 @@ function normalizeBrandNamingResult(p: Record<string, unknown>): BrandNamingGemi
   const tmLegacy = finite(p.trademarkScore) ?? origNum;
   const crLegacy = finite(p.copyrightScore) ?? legNum;
   const overallScore =
-    finite(p.overallScore) ?? averageNamingOverallSix(hsNum, origNum, pronNum, legNum, paNum, scNum);
+    finite(p.overallScore) ?? namingOverallWeightedFour(origNum, paNum, pronNum, scNum);
   const hs = ["aligned", "misaligned", "warning"].includes(String(p.hierarchyStatus))
     ? (String(p.hierarchyStatus) as "aligned" | "misaligned" | "warning")
     : "warning";
   const tr = ["low", "medium", "high"].includes(String(p.trademarkRisk))
     ? (String(p.trademarkRisk) as "low" | "medium" | "high")
     : "medium";
-  // Pass/Fail: 브랜드 계층 정렬·적법성 70 미만이면 NO-GO(점수는 종합 1/6에도 반영)
+  // Pass/Fail: 브랜드 계층·적법 70 미만 NO-GO(종합 가중합에는 미포함)
   const passHierarchy = hsNum >= 70;
   const passLegality = legNum >= 70;
   const gr =
@@ -2949,12 +2946,10 @@ function finalizeNamingResult(
 ): BrandNamingGeminiResult {
   const reqCtx = (opts?.requestText ?? "").trim();
   if (mode === "audit") {
-    const overallScore = averageNamingOverallSix(
-      r.hierarchyScore,
+    const overallScore = namingOverallWeightedFour(
       r.originalityDimensionScore,
-      r.pronunciationLanguageScore,
-      r.legalityScore,
       r.publicAppealScore,
+      r.pronunciationLanguageScore,
       r.scalabilityScore
     );
     const additionalNamingSuggestions = Array.isArray(r.additionalNamingSuggestions)
@@ -3210,7 +3205,7 @@ ${tierStorylineToneBlock ? `\n${tierStorylineToneBlock}\n` : ""}
 - **namingProposals**의 각 원소에도 위와 동일한 값을 넣되, 스키마상 **description** 필드는 **반드시** 채우고, **rationale**이 있으면 **description과 동일 문자열**로 맞추어도 됩니다.
 - **tierNamingAlternatives**는 일반 생성에서 **빈 배열 []**.
 - **적법성(legalScore·legalDetail)**: [참고 정보]에 **국가법령정보센터 법령 검색** 결과가 있으면 **반드시 인용·요약**하고, 상표법·표시광고법 위반 가능성·일반명칭·저작권 이슈를 기준으로 **반드시** 평가합니다. **0점은 정보가 없어 평가 자체가 불가능할 때만** 사용합니다. **평가가 가능하면 반드시 10점 이상** 부여하고, 그 근거를 **legalDetail**에 3줄 이상 서술합니다.
-- **후보별 종합 해석**: 브랜드계층·창의성·직관성·적법성·대중성·확장성 **6항목 균등(각 1/6)** 과 검수 모드와 동일한 관점입니다. 루트 **pronunciationLanguageScore**는 **pronunciationScore와 동일 정수**로 맞출 것.
+- **후보별·루트 종합 해석**: **창의성×30% + 대중성×30% + 직관성×20% + 확장성×20%** (합 100%). 브랜드계층·적법 점수는 **종합 가중합에 넣지 않음**(Pass/Fail·NO-GO만). 루트 **pronunciationLanguageScore**는 **pronunciationScore와 동일 정수**로 맞출 것.
 - **직관성·대중성·확장성**: 각 후보마다 호명 용이성·사회문화 수용·브랜드 생태계 확장을 반영해 점수·Detail을 채웁니다.
 - **suggestedNames**는 **names** 또는 **namingProposals**의 **name**과 같은 순서·같은 ${genCount}개 문자열 배열.
 - **additionalNamingSuggestions**는 생성 모드에서 **반드시 빈 배열 []**.
@@ -3219,13 +3214,13 @@ ${tierStorylineToneBlock ? `\n${tierStorylineToneBlock}\n` : ""}
               ? `\n- **브랜드 계층 컨텍스트**: 아래 **[브랜드 계층 컨텍스트]** 블록이 있으면 ${genCount}개 네이밍 제안을 만들 때 **반드시** 그 계층·접두·독립 작명 룰을 따를 것. 룰과 충돌하는 상위 브랜드 접두를 임의로 붙이지 말 것.`
               : ""
           }`
-      : `작업 유형: **검수**. [요청 내용]의 네이밍·슬로건을 아래 **6개 항목**으로 채점합니다. 각 항목은 0~100점입니다. **종합 overallScore는 서버에서 브랜드계층·적법성·창의성·직관성·대중성·확장성 여섯 점수를 균등(각 1/6) 산술 평균으로 재계산**합니다. **브랜드 계층 정렬·적법성은 70점 미만이면 Fail·NO-GO 조건**에 반드시 포함합니다(점수는 종합에도 1/6 반영).
-- **(1) hierarchyScore 브랜드 계층 정렬** — 오직 [U+ 브랜드 가이드라인 및 참고 문맥] 안의 **가이드라인 PDF 요약** + [참고 정보]의 **업로드 파일 요약** + **참고 정보 직접 입력**만 근거로 분석·채점. 법령 검색 블록은 이 항목에 **넣지 마세요**. (**종합 1/6**, 70 미만 NO-GO)
-- **(2) originalityDimensionScore 창의성** — **오직 Gemini 추론**으로 가이드·요청·참고 정보를 바탕으로 유사·식별력 관점에서 채점. **외부 데이터베이스 연동·조회 여부는 결과에 절대 언급하지 말 것.** trademarkConflicts는 분석 보조용 추론 결과로만 채움. (**종합 1/6**)
-- **(3) pronunciationScore / pronunciationLanguageScore 직관성(발음·언어)** — 검수 대상 네이밍·슬로건에 대해 (가) 한국어·영어로 읽을 때 **발음의 자연스러움·호명 용이성** (나) 주요 외국어에서 **부정·비하·불쾌·금기 의미** 연상 여부를 평가하세요. **pronunciationLanguageScore**는 **pronunciationScore와 동일한 정수**로 맞추세요. **detailLogicPronunciation**에는 위 근거·보완·유의사항을 최소 수백 자 한국어로 서술. 녹음·발음기호 출력 불요. (**종합 1/6**)
-- **(4) legalityScore 적법성** — 참고 정보에 **국가법령정보·법령 검색** 요약이 있으면 인용·출처를 밝히고 상표법·저작권법 관점 적법성·이슈 자유도를 채점. 없으면 일반론으로 보완. (**종합 1/6**, 70 미만 NO-GO)
-- **(5) publicAppealScore 대중성(사회·문화적 수용 가능성)** — **Gemini 추론**으로 (가) 특정 문화권·언어에서 **오해·불쾌·부정적 연상** (나) **세대 범용성** (다) **글로벌 발음·의미** 문제 (라) **특정 집단·계층 편향** 여부를 평가. **detailLogicPublicAppeal**에 근거를 최소 수백 자 한국어로. (**종합 1/6**)
-- **(6) scalabilityScore 확장성(브랜드 생태계)** — **Gemini 추론**으로 (가) **하위/상위·패밀리 네이밍**(Pro, Lite, + 등) 연동 가능성 (나) 글로벌 확장 시 **발음·의미 왜곡** (다) **파생 네이밍·슬로건·캠페인**으로의 확장 (라) **시간이 지나도 촌스럽지 않은 내구성**을 평가. **detailLogicScalability**에 근거를 최소 수백 자 한국어로. (**종합 1/6**)
+      : `작업 유형: **검수**. [요청 내용]의 네이밍·슬로건을 아래 **6개 항목**(표시·서술 순서)으로 채점합니다. 각 항목은 0~100점입니다. **종합 overallScore는 서버에서 창의성×0.3 + 대중성×0.3 + 직관성×0.2 + 확장성×0.2 로 재계산**합니다. **브랜드 계층 정렬·적법성은 종합 가중합에 포함하지 않으며**, 70점 미만이면 Fail·NO-GO 조건에 반드시 포함합니다.
+- **(1) hierarchyScore 브랜드 계층 정렬** — 오직 [U+ 브랜드 가이드라인 및 참고 문맥] 안의 **가이드라인 PDF 요약** + [참고 정보]의 **업로드 파일 요약** + **참고 정보 직접 입력**만 근거로 분석·채점. 법령 검색 블록은 이 항목에 **넣지 마세요**. (**Pass/Fail 전용 · 종합 미포함**, 70 미만 NO-GO)
+- **(2) legalityScore 적법성** — 참고 정보에 **국가법령정보·법령 검색** 요약이 있으면 인용·출처를 밝히고 상표법·저작권법 관점 적법성·이슈 자유도를 채점. 없으면 일반론으로 보완. (**Pass/Fail 전용 · 종합 미포함**, 70 미만 NO-GO)
+- **(3) originalityDimensionScore 창의성** — **오직 Gemini 추론**으로 가이드·요청·참고 정보를 바탕으로 유사·식별력 관점에서 채점. **외부 데이터베이스 연동·조회 여부는 결과에 절대 언급하지 말 것.** trademarkConflicts는 분석 보조용 추론 결과로만 채움. (**종합 30%**)
+- **(4) publicAppealScore 대중성(사회·문화적 수용 가능성)** — **Gemini 추론**으로 (가) 특정 문화권·언어에서 **오해·불쾌·부정적 연상** (나) **세대 범용성** (다) **글로벌 발음·의미** 문제 (라) **특정 집단·계층 편향** 여부를 평가. **detailLogicPublicAppeal**에 근거를 최소 수백 자 한국어로. (**종합 30%**)
+- **(5) pronunciationScore / pronunciationLanguageScore 직관성(발음·언어)** — 검수 대상 네이밍·슬로건에 대해 (가) 한국어·영어로 읽을 때 **발음의 자연스러움·호명 용이성** (나) 주요 외국어에서 **부정·비하·불쾌·금기 의미** 연상 여부를 평가하세요. **pronunciationLanguageScore**는 **pronunciationScore와 동일한 정수**로 맞추세요. **detailLogicPronunciation**에는 위 근거·보완·유의사항을 최소 수백 자 한국어로 서술. 녹음·발음기호 출력 불요. (**종합 20%**)
+- **(6) scalabilityScore 확장성(브랜드 생태계)** — **Gemini 추론**으로 (가) **하위/상위·패밀리 네이밍**(Pro, Lite, + 등) 연동 가능성 (나) 글로벌 확장 시 **발음·의미 왜곡** (다) **파생 네이밍·슬로건·캠페인**으로의 확장 (라) **시간이 지나도 촌스럽지 않은 내구성**을 평가. **detailLogicScalability**에 근거를 최소 수백 자 한국어로. (**종합 20%**)
 - **names**·**namingProposals**·**suggestedNames**는 모두 빈 배열 [].
 - **additionalNamingSuggestions** (검수 필수): 위 평가 맥락(가이드·작명 의도·검토 결과)을 반영한 **대안 네이밍을 정확히 3개**, 배열로만 제시하세요. 검수명·슬로건과 **다른** 실제 후보명(한글·영문 등). 안내 문구·주석·※ 같은 비이름 문자열 금지. 빈 배열 금지.
 - **detailLogicHierarchy** ~ **detailLogicScalability**: 각 항목에 대해 **상세 논리**를 한국어로 길게 서술. **detailLogicHierarchy**에는 외부 상표 DB·연동 출처를 **넣지 말 것**(가이드·업로드·직접입력만). **detailLogicOriginality**에는 외부 API 연동·조회 성공/실패를 **절대 넣지 말 것.** 적법성에서 국가법령정보 요약을 썼다면 **출처를 문장 안에 명시**할 수 있음. trademark·copyright 하위 필드는 요약·충돌 목록용으로 유지.${
@@ -3265,7 +3260,7 @@ ${notes}
 ${req}
 
 규칙:
-1) 점수는 0~100 정수. 검수 시 **hierarchyScore, originalityDimensionScore, pronunciationScore, pronunciationLanguageScore(=pronunciationScore와 동일), legalityScore, publicAppealScore, scalabilityScore**를 채우고, trademarkScore·copyrightScore는 레거시 호환용으로 맞게 채웁니다.
+1) 점수는 0~100 정수. 검수 시 **hierarchyScore, legalityScore, originalityDimensionScore, publicAppealScore, pronunciationScore, pronunciationLanguageScore(=pronunciationScore와 동일), scalabilityScore**를 채우고, trademarkScore·copyrightScore는 레거시 호환용으로 맞게 채웁니다. **종합 overallScore**는 창의·대중·직관·확장 가중합으로 서버가 재계산합니다.
 2) 상표법·저작권은 **참고 수준**이며 법률 자문이 아님.
 3) 국가법령정보 블록이 있으면 **적법성** 항목 서술에 반영할 수 있습니다. **창의성**은 국가법령정보와 무관하게 가이드·요청·Gemini 추론만으로 서술합니다. 창의성 보완은 trademarkConflicts 등 **추론 결과**로만 합니다.
 4) 출력은 JSON 한 개만. 스키마 키 이름을 정확히 맞추세요.${generateExtraRule}${jsonOnlyFooter}`;
