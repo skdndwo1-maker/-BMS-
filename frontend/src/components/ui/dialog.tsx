@@ -12,7 +12,7 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<typeof Dial
   return (
     <DialogPrimitive.Overlay
       className={cn(
-        "fixed inset-0 z-50 bg-black/55 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out",
+        "fixed inset-0 z-[1000] bg-black/55 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out",
         className
       )}
       {...props}
@@ -30,7 +30,7 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         className={cn(
-          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-gray-200 bg-white p-6 shadow-lg duration-200 sm:max-w-lg",
+          "fixed top-[50%] left-[50%] z-[1001] grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-gray-200 bg-white p-6 shadow-lg duration-200 sm:max-w-lg",
           className
         )}
         {...props}

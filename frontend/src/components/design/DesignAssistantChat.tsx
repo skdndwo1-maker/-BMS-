@@ -624,7 +624,7 @@ export function DesignAssistantChat({
       <Dialog open={inspectDialogOpen} onOpenChange={setInspectDialogOpen}>
         <DialogContent
           className="w-[min(96vw,920px)] max-h-[88vh] overflow-y-auto sm:!max-w-[920px] p-5 !grid-cols-1"
-          style={{ backgroundColor: "#f3f4f6", isolation: "isolate" }}
+          style={{ backgroundColor: "#f3f4f6", isolation: "isolate", zIndex: 1001 }}
         >
           <DialogHeader className="!text-left">
             <div className="flex flex-wrap items-center justify-between gap-3 pr-8">
