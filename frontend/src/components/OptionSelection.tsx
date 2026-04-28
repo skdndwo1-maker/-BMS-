@@ -434,10 +434,13 @@ export function OptionSelection() {
             style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
+              justifyContent: "flex-start",
               gap: "12px",
               marginBottom: "12px",
-              padding: "0 2px",
+              paddingLeft: "16px",
+              paddingRight: "2px",
+              width: "100%",
+              boxSizing: "border-box",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -449,7 +452,7 @@ export function OptionSelection() {
                   letterSpacing: "-0.01em",
                 }}
               >
-                브랜드 작업
+                Branding
               </span>
               <SectionDot size={8} />
             </div>
