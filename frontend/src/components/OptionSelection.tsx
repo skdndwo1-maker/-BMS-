@@ -456,27 +456,58 @@ export function OptionSelection() {
                   onMouseEnter={() => setHoveredOptionId(option.id)}
                   onMouseLeave={() => setHoveredOptionId(null)}
                   style={{
+                    position: "relative",
                     textAlign: "left",
-                    background: PALETTE.card,
-                    border: isHovered ? `1px solid ${PALETTE.coral}` : `1px solid ${PALETTE.borderSubtle}`,
+                    background: isHovered ? "rgba(255, 127, 102, 0.22)" : PALETTE.card,
+                    border: isHovered ? "1px solid rgba(255, 127, 102, 0.5)" : `1px solid ${PALETTE.borderSubtle}`,
                     borderRadius: "24px",
                     padding: "22px 20px 20px",
                     cursor: "pointer",
                     transition:
-                      "background 0.25s ease, border-color 0.2s, box-shadow 0.2s, transform 0.2s",
+                      "background 0.28s ease, border-color 0.25s, box-shadow 0.22s, transform 0.22s",
                     display: "flex",
                     flexDirection: "column",
                     minHeight: "200px",
                     outline: "none",
                     boxShadow: isHovered ? PALETTE.shadowHover : PALETTE.shadow,
                     transform: isHovered ? "translateY(-2px)" : "translateY(0)",
+                    overflow: "hidden",
                   }}
                 >
+                  {isHovered ? (
+                    <svg
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 h-full w-full"
+                      viewBox="0 0 100 100"
+                      preserveAspectRatio="none"
+                      style={{ zIndex: 2 }}
+                    >
+                      <rect
+                        x="1.5"
+                        y="1.5"
+                        width="97"
+                        height="97"
+                        rx="11"
+                        ry="11"
+                        fill="none"
+                        stroke="rgba(255, 255, 255, 0.95)"
+                        strokeWidth="2.25"
+                        strokeLinecap="round"
+                        pathLength={100}
+                        strokeDasharray="7 93"
+                        strokeDashoffset={0}
+                        className="option-card-border-trail-dash"
+                        style={{
+                          filter: "drop-shadow(0 0 4px rgba(255, 127, 102, 0.75))",
+                        }}
+                      />
+                    </svg>
+                  ) : null}
                   <span
                     style={{
                       textAlign: "left",
                       position: "relative",
-                      zIndex: 1,
+                      zIndex: 3,
                       display: "flex",
                       flexDirection: "column",
                       width: "100%",
@@ -546,7 +577,7 @@ export function OptionSelection() {
                   >
                     <h2
                       style={{
-                        color: isHovered ? PALETTE.coral : PALETTE.ink,
+                        color: isHovered ? PALETTE.black : PALETTE.ink,
                         fontSize: "16px",
                         fontWeight: 700,
                         margin: 0,
@@ -579,11 +610,12 @@ export function OptionSelection() {
                   </div>
                   <p
                     style={{
-                      color: PALETTE.muted,
+                      color: isHovered ? PALETTE.inkSoft : PALETTE.muted,
                       fontSize: "12.5px",
                       lineHeight: 1.6,
                       wordBreak: "keep-all",
                       flexGrow: 1,
+                      transition: "color 0.2s",
                     }}
                   >
                     {option.description}

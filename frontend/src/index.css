@@ -26,3 +26,18 @@ body {
 body {
   background: #f5f5f5;
 }
+
+/* Option 페이지 — 메인 4타일 호버 시 테두리 불릿 주행 */
+@keyframes optionCardBorderTravel {
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+.option-card-border-trail-dash {
+  animation: optionCardBorderTravel 2.25s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .option-card-border-trail-dash {
+    animation: none;
+  }
+}
