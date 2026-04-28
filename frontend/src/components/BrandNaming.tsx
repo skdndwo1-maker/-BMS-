@@ -1,5 +1,6 @@
 import { Fragment, useState, useRef, useEffect, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { APP_DISPLAY_NAME } from "@/constants/appBranding";
 import {
   Upload,
   FileText,
@@ -742,10 +743,10 @@ export function BrandNaming() {
               <div className="h-6 w-px bg-gray-200" />
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 shrink-0">
-                  <img src="/uplus-main-logo.png" alt="U+ AI 브랜드 Agent" className="h-full w-full object-contain" />
+                  <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="h-full w-full object-contain" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-semibold text-gray-900">U+ AI 브랜드 Agent</h1>
+                  <h1 className="text-xl font-semibold text-gray-900">{APP_DISPLAY_NAME}</h1>
                   <p className="text-xs text-gray-500">브랜드 네이밍 검토 Brand Naming Audit</p>
                 </div>
               </div>

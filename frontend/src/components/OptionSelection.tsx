@@ -21,6 +21,7 @@ import {
 import { postOptionsChat, type OptionsChatMessage } from "@/lib/optionsChatApi";
 import { apiUrl } from "@/lib/apiUrl";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { APP_DISPLAY_NAME } from "@/constants/appBranding";
 
 const mainOptions = [
   {
@@ -227,11 +228,11 @@ export function OptionSelection() {
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 shrink-0">
-              <img src="/uplus-main-logo.png" alt="U+ AI 브랜드 Agent" className="h-full w-full object-contain" />
+              <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="h-full w-full object-contain" />
             </div>
             <div>
-              <span className="font-semibold text-gray-900 text-xl block leading-tight">U+ AI 브랜드 Agent</span>
-              <span className="text-xs text-gray-400 leading-tight block">Brand Contents Total Managing Platform</span>
+              <span className="font-semibold text-gray-900 text-xl block leading-tight">{APP_DISPLAY_NAME}</span>
+              <span className="text-xs text-gray-400 leading-tight block">Brand design &amp; content platform</span>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -526,7 +527,7 @@ export function OptionSelection() {
                 <div className="flex items-center justify-between rounded-b-2xl border-t border-gray-100 bg-white px-4 py-2">
                   <span className="flex items-center gap-1 text-xs text-gray-500">
                     <Sparkles className="h-3 w-3 text-gray-400" />
-                    Powered by Gemini AI · Based on U+ brand guidelines
+                    Powered by Gemini AI · Based on brand guidelines
                   </span>
                   <span className="text-xs text-gray-400">Shift+Enter로 줄바꿈</span>
                 </div>
@@ -537,7 +538,7 @@ export function OptionSelection() {
       </main>
 
       <footer className="py-4 text-center text-xs text-gray-400 border-t border-gray-100">
-        © 2026 LG U+. All rights reserved.
+        © 2026 {APP_DISPLAY_NAME}. All rights reserved.
       </footer>
     </div>
   );

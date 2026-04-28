@@ -332,29 +332,6 @@ app.get("/api/admin/me", async (req, res) => {
   res.json({ ok: true, isAdmin: true, userId: auth.userId ?? null });
 });
 
-/** 초대코드 게이트: `INVITE_CODE`가 비어 있으면 프론트에서 게이트 비활성화. Railway 등에 설정 시에만 검증 */
-app.get("/api/invite/status", (_req, res) => {
-  res.json({ required: Boolean(process.env.INVITE_CODE?.trim()) });
-});
-
-app.post("/api/invite/verify", (req, res) => {
-  const expected = process.env.INVITE_CODE?.trim();
-  if (!expected) {
-    res.json({ ok: true, inviteGateDisabled: true });
-    return;
-  }
-  const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
-  if (!code) {
-    res.status(400).json({ ok: false, error: "code_required" });
-    return;
-  }
-  if (code === expected) {
-    res.json({ ok: true });
-    return;
-  }
-  res.status(403).json({ ok: false, error: "forbidden" });
-});
-
 /** 국가법령정보센터 Open API 연동 상태. `?probe=1`이면 상표법 검색 1회로 실제 호출 성공 여부 확인(OC·IP 등록 필요) */
 app.get("/api/law/status", async (req, res) => {
   const configured = Boolean(resolveLawApiOc());
@@ -458,7 +435,7 @@ app.get("/api/guidelines/:id/file", (req, res) => {
 
 app.post("/api/guidelines/:id/upload", uploadGuideline.single("file"), async (req, res) => {
   const id = String(req.params.id);
-  const displayName = (req.body?.displayName as string) || "LGU+ VI Brandguidelines";
+  const displayName = (req.body?.displayName as string) || "Axis VI Brand guidelines";
   const file = req.file;
   if (!file) {
     res.status(400).json({ error: "file_required" });

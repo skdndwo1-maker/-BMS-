@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { templates as designTemplates, templateCategories } from "@/design/templates";
+import { APP_DISPLAY_NAME } from "@/constants/appBranding";
 
 type MediaType = "online" | "offline";
 
@@ -110,10 +111,10 @@ export function TemplateGallery() {
               <div className="h-6 w-px bg-gray-200" />
               <div className="flex items-center gap-3">
                 <div className="h-11 w-11 shrink-0">
-                  <img src="/uplus-main-logo.png" alt="U+ AI 브랜드 Agent" className="h-full w-full object-contain" />
+                  <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="h-full w-full object-contain" />
                 </div>
                 <div className="flex h-10 flex-col justify-between py-px">
-                  <h1 className="text-xl font-semibold leading-none text-gray-900">U+ AI 브랜드 Agent</h1>
+                  <h1 className="text-xl font-semibold leading-none text-gray-900">{APP_DISPLAY_NAME}</h1>
                   <p className="text-xs leading-none text-gray-500">브랜드 그래픽 제작 · Brand Design Create</p>
                 </div>
               </div>

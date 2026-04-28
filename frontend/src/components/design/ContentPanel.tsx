@@ -524,7 +524,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                 : "LG U+ 브랜드 가이드 기반 서식"}
             </p>
             <span className="inline-flex items-center gap-1 bg-[#F43182]/10 border border-[#F43182]/25 rounded-full px-2 py-0.5 w-fit">
-              <Sparkles className="w-3 h-3 text-[#F43182]"/><span className="text-[10px] font-medium text-[#F43182]">LG U+ Brand Guideline</span>
+              <Sparkles className="w-3 h-3 text-[#F43182]"/><span className="text-[10px] font-medium text-[#F43182]">Brand Guideline</span>
             </span>
           </div>
           {/* 설명 문구는 각 기능 타이틀 툴팁으로 이동 */}

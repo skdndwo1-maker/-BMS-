@@ -25,7 +25,7 @@ export const PROJECT_ROOT = resolveProjectRoot();
  */
 function resolveDataDir(): string {
   if (process.env.VERCEL === "1") {
-    return join(tmpdir(), "u-layer1-data");
+    return join(tmpdir(), "axis-app-data");
   }
   return join(PROJECT_ROOT, "data");
 }

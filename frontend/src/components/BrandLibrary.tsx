@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { APP_DISPLAY_NAME } from "@/constants/appBranding";
 import {
   deleteLibraryAsset,
   extractExtensionLabel,
@@ -256,11 +257,11 @@ export function BrandLibrary() {
           </button>
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 shrink-0">
-              <img src="/uplus-main-logo.png" alt="U+ Logo" className="w-full h-full object-contain" />
+              <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="w-full h-full object-contain" />
             </div>
             <div>
-              <h1 className="font-semibold text-gray-900 text-xl">U+ Layer</h1>
-              <p className="text-xs text-gray-500">브랜드 라이브러리 Brand Library</p>
+              <h1 className="font-semibold text-gray-900 text-xl">{APP_DISPLAY_NAME}</h1>
+              <p className="text-xs text-gray-500">브랜드 라이브러리 · Brand Library</p>
             </div>
           </div>
         </div>

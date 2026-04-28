@@ -5,8 +5,6 @@
 # PORT: Railway가 자동으로 지정(로그에 8080 등으로 보일 수 있음). Variables에 PORT=3001을
 # 넣어도 플랫폼이 다른 값을 주면 그 값에 맞춰 바인딩해야 하며, 서버는 `process.env.PORT`를 사용합니다.
 # 공개 URL은 호스트만 쓰면 되고(HTTPS), 컨테이너 내부 포트는 Railway 설정을 따릅니다.
-#
-# INVITE_CODE: 초대코드 게이트. Variables에 설정(예: Brand2026). 미설정 시 게이트 비활성화.
 
 [deploy]
 startCommand = "npm start"

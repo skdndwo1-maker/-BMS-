@@ -41,11 +41,15 @@ import {
   updateDesign,
   type DesignListItem,
 } from "@/lib/designsApi";
+import { APP_DISPLAY_NAME } from "@/constants/appBranding";
 
 const ExportDialog = lazy(() => import("./ExportDialog").then((m) => ({ default: m.ExportDialog })));
 
 /** RCS 카드·우측 목업(높이 동기화) 기준 표시 — 10% 축소 시 0.9 */
 const RCS_WORKSPACE_DISPLAY_SCALE = 0.9;
+/** RCS 메인 타이틀 크기 슬라이더 상한(%). 기존 대비 +20%, step 5 정렬 */
+const RCS_TITLE_SIZE_MAX = 170;
+const RCS_TITLE_SIZE_MAX_BENEFIT = 220;
 /** 워크스페이스 한 변당 여백 ≈ 화면(컨테이너)의 1/15 — 좌·우·상·하 대칭 */
 const RCS_WORKSPACE_EDGE_FRACTION = 1 / 15;
 
@@ -679,7 +683,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
           {sw} × {sh} {unit} · {template.name}
         </span>
         <Separator orientation="vertical" className="h-3" />
-        <span className="text-[#F43182]">LG U+ Brand Guideline</span>
+        <span className="text-[#F43182]">Brand Guideline</span>
       </>
     );
   };
@@ -698,7 +702,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
               </Button>
               <Separator orientation="vertical" className="h-6" />
               <div>
-                <h1 className="font-semibold text-gray-900 text-sm">U+ AI 브랜드 Agent - {template.name}</h1>
+                <h1 className="font-semibold text-gray-900 text-sm">{APP_DISPLAY_NAME} — {template.name}</h1>
                 <p className="text-xs text-gray-500">
                   {effectiveCanvasSize.width} × {effectiveCanvasSize.height} {effectiveCanvasSize.unit}
                 </p>
@@ -801,7 +805,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                           <input
                             type="range"
                             min={70}
-                            max={rcsMessageType === "혜택안내" ? 180 : 140}
+                            max={rcsMessageType === "혜택안내" ? RCS_TITLE_SIZE_MAX_BENEFIT : RCS_TITLE_SIZE_MAX}
                             step={5}
                             value={content.titleSize ?? 100}
                             onChange={(e) => setContentWithHistory((prev) => ({ ...prev, titleSize: Number(e.target.value) }))}

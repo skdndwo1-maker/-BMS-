@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import { normalizeNamingProposal, type BrandNamingRunResult, type BrandNamingProposal } from "./guidelineApi";
+import { APP_DISPLAY_NAME } from "@/constants/appBranding";
 
 export type ExportFormat = "pdf" | "png" | "jpeg";
 
@@ -122,7 +123,7 @@ function buildReportPlainText(opts: {
   violations: Array<{ category: string; issue: string; severity: string }>;
 }): string {
   const lines: string[] = [
-    "U+ AI 브랜드 Agent — 브랜드 디자인 검수 리포트",
+    `${APP_DISPLAY_NAME} — 브랜드 디자인 검수 리포트`,
     `생성 시각: ${new Date().toLocaleString("ko-KR")}`,
     "",
     `브랜드 적합성 점수: ${opts.brandScore} / 100`,
@@ -291,8 +292,8 @@ function buildBrandNamingPlainText(opts: {
   const lines: string[] = [];
   const title =
     opts.mode === "generate"
-      ? "U+ AI 브랜드 Agent — 브랜드 네이밍 생성 리포트"
-      : "U+ AI 브랜드 Agent — 브랜드 네이밍 검수 리포트";
+      ? `${APP_DISPLAY_NAME} — 브랜드 네이밍 생성 리포트`
+      : `${APP_DISPLAY_NAME} — 브랜드 네이밍 검수 리포트`;
   lines.push(title, `생성 시각: ${new Date().toLocaleString("ko-KR")}`, "", "■ 요청 내용", opts.requestText.trim() || "(없음)", "");
   const ref = opts.referenceText.trim();
   if (ref) {

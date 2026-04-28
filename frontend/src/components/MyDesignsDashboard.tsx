@@ -9,6 +9,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { deleteDesign, getDesignById, listDesignsForUser, requireAuthedUserId, type DesignListItem } from "@/lib/designsApi";
 import { DesignCanvas } from "@/components/design/DesignCanvas";
 import type { DesignContent } from "@/design/types";
+import { APP_DISPLAY_NAME } from "@/constants/appBranding";
 
 function templateLabel(templateId: string): string {
   return templates.find((t) => t.id === templateId)?.name ?? templateId;
@@ -112,7 +113,7 @@ export function MyDesignsDashboard() {
               <div className="h-6 w-px bg-gray-200" />
               <div className="flex items-center gap-3">
                 <div className="h-11 w-11 shrink-0">
-                  <img src="/uplus-main-logo.png" alt="U+ AI 브랜드 Agent" className="h-full w-full object-contain" />
+                  <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="h-full w-full object-contain" />
                 </div>
                 <div className="flex h-10 flex-col justify-between py-px">
                   <h1 className="text-xl font-semibold leading-none text-gray-900">내 디자인</h1>

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { APP_DISPLAY_NAME } from "@/constants/appBranding";
 
 export function LoginScreen() {
   const navigate = useNavigate();
@@ -62,11 +63,11 @@ export function LoginScreen() {
         <div className="text-center mb-8 flex flex-col items-center">
           <img
             src="/uplus-main-logo.png"
-            alt="U+ AI 브랜드 Agent"
+            alt={APP_DISPLAY_NAME}
             className="h-16 rounded-xl w-auto object-contain mb-4 drop-shadow-sm"
           />
-          <h1 className="text-3xl font-semibold text-gray-900 mb-2">U+ AI 브랜드 Agent</h1>
-          <p className="text-gray-500 font-regular tracking-wide">U+ Brand Contents Total Managing Platform</p>
+          <h1 className="text-3xl font-semibold text-gray-900 mb-2">{APP_DISPLAY_NAME}</h1>
+          <p className="text-gray-500 font-regular tracking-wide">Brand design &amp; content platform</p>
         </div>
 
         <Card className="border-gray-200 shadow-lg">
@@ -156,7 +157,7 @@ export function LoginScreen() {
         </Card>
 
         <div className="mt-8 text-center text-sm text-gray-500">
-          <p>© 2026 LG U+. All rights reserved.</p>
+          <p>© 2026 {APP_DISPLAY_NAME}. All rights reserved.</p>
           <div className="mt-1.5 space-x-3" style={{ fontSize: "6px" }}>
             <button type="button" className="text-gray-300 hover:text-gray-400 transition-colors">
               Privacy Policy
