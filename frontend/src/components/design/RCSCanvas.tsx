@@ -29,6 +29,14 @@ interface RCSCanvasProps {
   content: DesignContent;
   canvasSize: CanvasSize;
   zoom: number;
+  /** 워크스페이스 표시 배율(1=꽉 참). 예: 0.77 ≈ 30% 축소 후 10% 확대 편집 화면. */
+  workspaceDisplayScale?: number;
+  /** 캔버스 블록 정렬 — center면 워크스페이스 가운데 */
+  workspaceAlign?: "center" | "start";
+  /** 내보내기/AI용 메인 캔버스 id. 미리보기 등은 다른 id로 두어 중복을 피함 */
+  canvasElementId?: string;
+  /** true면 패딩·배경을 줄여 MMS 카드 슬롯 등에 끼워 넣기 좋게 함 */
+  embed?: boolean;
 }
 
 function getFontWeight(weight?: string): number {
@@ -46,7 +54,15 @@ function getFontWeight(weight?: string): number {
   }
 }
 
-export function RCSCanvas({ content, canvasSize, zoom }: RCSCanvasProps) {
+export function RCSCanvas({
+  content,
+  canvasSize,
+  zoom,
+  workspaceDisplayScale = 1,
+  workspaceAlign = "center",
+  canvasElementId = "design-canvas",
+  embed = false,
+}: RCSCanvasProps) {
   const outerRef = useRef<HTMLDivElement>(null);
   const [containerW, setContainerW] = useState(800);
   const [containerH, setContainerH] = useState(600);
@@ -74,16 +90,17 @@ export function RCSCanvas({ content, canvasSize, zoom }: RCSCanvasProps) {
 
   const realAspect = canvasSize.width / canvasSize.height;
 
-  const padding = 80;
-  const availW = containerW - padding;
-  const availH = containerH - padding;
+  const padding = embed ? Math.max(6, Math.min(20, Math.round(containerW * 0.06))) : 80;
+  const availW = Math.max(1, containerW - padding);
+  const availH = Math.max(1, containerH - padding);
   let baseW = availW;
   let baseH = baseW / realAspect;
   if (baseH > availH) {
     baseH = availH;
     baseW = baseH * realAspect;
   }
-  const displayW = baseW * zoom;
+  const scale = Math.max(0.25, Math.min(1.5, workspaceDisplayScale));
+  const displayW = baseW * zoom * scale;
   const displayH = displayW / realAspect;
 
   const W = displayW;
@@ -192,15 +209,21 @@ export function RCSCanvas({ content, canvasSize, zoom }: RCSCanvasProps) {
     </div>
   );
 
+  const justify = workspaceAlign === "start" ? "justify-start" : "justify-center";
+  const outerClass = embed
+    ? `w-full h-full min-h-0 flex items-center overflow-hidden bg-transparent ${justify}`
+    : `w-full h-full flex items-center overflow-auto bg-[#F5F5F5] ${justify}`;
+
   return (
-    <div ref={outerRef} className="w-full h-full flex items-center justify-center overflow-auto bg-[#F5F5F5]">
+    <div ref={outerRef} className={outerClass}>
       <div
+        id={canvasElementId}
         style={{
           width: `${displayW}px`,
           height: `${displayH}px`,
           position: "relative",
           backgroundColor: canvasBg,
-          boxShadow: "0 4px 24px rgba(0,0,0,0.08)",
+          boxShadow: embed ? "0 1px 4px rgba(0,0,0,0.06)" : "0 4px 24px rgba(0,0,0,0.08)",
           overflow: "hidden",
         }}
       >

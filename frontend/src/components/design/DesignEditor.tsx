@@ -10,6 +10,7 @@ import { LayersPanel }            from './LayersPanel';
 import { QuickStartDialog }       from './QuickStartDialog';
 import { DesignAssistantChat }    from './DesignAssistantChat';
 import { RCSCanvas } from "./RCSCanvas";
+import { RCSPhoneMmsPreview } from "./RCSPhoneMmsPreview";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -26,6 +27,7 @@ import {
   Eye,
   Grid3x3,
   Magnet,
+  X,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
@@ -41,6 +43,17 @@ import {
 } from "@/lib/designsApi";
 
 const ExportDialog = lazy(() => import("./ExportDialog").then((m) => ({ default: m.ExportDialog })));
+
+/** RCS 워크스페이스: 기존 0.7 축소 기준 +10% 표시 */
+const RCS_WORKSPACE_DISPLAY_SCALE = 0.77;
+
+/** `public/rcs-galaxy-mockup.png` (189×390) 흰 화면 영역 — 실제 픽셀에 맞춘 비율 */
+const RCS_GALAXY_SCREEN_INSET = {
+  top: "10.8%",
+  left: "6.3%",
+  right: "6.3%",
+  bottom: "11.2%",
+} as const;
 
 interface DesignEditorProps {
   templateId?: string;
@@ -112,6 +125,13 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     logoPosition: defaultLogoPosition,
   }));
   const [focusTarget, setFocusTarget] = useState<DesignFocusTarget>(null);
+
+  /** AI 디자인 교정: 캔버스에 덮지 않고 옆 패널에 표시할 참조 이미지(data URL) */
+  const [correctionReferenceUrl, setCorrectionReferenceUrl] = useState<string | null>(null);
+  /** #design-canvas 의 화면상 크기 — 참조 패널을 동일 픽셀 크기로 맞춤 */
+  const [correctionRefBox, setCorrectionRefBox] = useState<{ w: number; h: number } | null>(null);
+  /** RCS: 메인 카드 높이와 갤럭시 목업 표시 높이 동기화(원본 종횡비 유지) */
+  const [rcsFrameHeightPx, setRcsFrameHeightPx] = useState<number | null>(null);
 
   const isPlacardTemplate =
     actualTemplateId === "placard-wide-landscape" ||
@@ -494,26 +514,150 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   }, [isRcsTemplate]);
 
   // ── Canvas ─────────────────────────────────────────────────────
-  const renderCanvas = () =>
-    isRcsTemplate ? (
-      <RCSCanvas content={content} canvasSize={effectiveCanvasSize} zoom={zoom} />
-    ) : (
-      <DesignCanvas
-        ref={designCanvasRef}
+  /** RCS: 워크스페이스 가운데 정렬 + 우측 갤럭시 목업(높이=RCS 카드). compact는 교정 패널 시 목업 생략 */
+  const renderCanvas = (opts?: { rcsWorkspace?: "full" | "compact" }) => {
+    if (!isRcsTemplate) {
+      return (
+        <DesignCanvas
+          ref={designCanvasRef}
+          content={content}
+          templateId={actualTemplateId}
+          canvasSize={template.size}
+          zoom={zoom}
+          onContentChange={setContentWithHistory}
+          onContentDraftChange={setContent}
+          onBeginCanvasTextEdit={pushUndoSnapshot}
+          onFocusChange={setFocusTarget}
+          showViGrid={showViGrid}
+          layoutSnapEnabled={layoutSnapEnabled}
+          onTextFormatTargetChange={setTextFormatTarget}
+          onCanvasTextSelectionChanged={() => setTextFormatSelectionTick((n) => n + 1)}
+        />
+      );
+    }
+
+    const rcsWorkspace = opts?.rcsWorkspace ?? "full";
+    const rcsCanvas = (
+      <RCSCanvas
         content={content}
-        templateId={actualTemplateId}
-        canvasSize={template.size}
+        canvasSize={effectiveCanvasSize}
         zoom={zoom}
-        onContentChange={setContentWithHistory}
-        onContentDraftChange={setContent}
-        onBeginCanvasTextEdit={pushUndoSnapshot}
-        onFocusChange={setFocusTarget}
-        showViGrid={showViGrid}
-        layoutSnapEnabled={layoutSnapEnabled}
-        onTextFormatTargetChange={setTextFormatTarget}
-        onCanvasTextSelectionChanged={() => setTextFormatSelectionTick((n) => n + 1)}
+        workspaceDisplayScale={RCS_WORKSPACE_DISPLAY_SCALE}
+        workspaceAlign="center"
       />
     );
+
+    if (rcsWorkspace === "compact") {
+      return (
+        <div className="flex h-full min-h-0 w-full items-center justify-center overflow-auto bg-[#EEEFF1] px-3">
+          {rcsCanvas}
+        </div>
+      );
+    }
+
+    const mockH = rcsFrameHeightPx && rcsFrameHeightPx > 0 ? rcsFrameHeightPx : undefined;
+
+    return (
+      <div className="flex h-full min-h-0 w-full items-stretch overflow-hidden bg-[#EEEFF1]">
+        <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-auto py-3 px-4">
+          {rcsCanvas}
+        </div>
+        <div className="flex h-full min-h-0 w-[min(300px,32vw)] min-w-[220px] shrink-0 flex-col border-l border-gray-200 bg-gradient-to-b from-[#E6E7EB] to-[#DDDEE3]">
+          <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-2 py-3">
+            <div className="relative inline-block leading-none">
+              <img
+                src="/rcs-galaxy-mockup.png"
+                alt="RCS 모바일 미리보기 Galaxy 프레임"
+                width={189}
+                height={390}
+                className="pointer-events-none block max-w-[240px] select-none object-contain drop-shadow-xl"
+                style={
+                  mockH
+                    ? { height: mockH, width: "auto" }
+                    : { height: "auto", width: "auto", maxHeight: "min(88vh,640px)", maxWidth: "240px" }
+                }
+              />
+              <div
+                className="absolute overflow-hidden rounded-[9px]"
+                style={{
+                  top: RCS_GALAXY_SCREEN_INSET.top,
+                  left: RCS_GALAXY_SCREEN_INSET.left,
+                  right: RCS_GALAXY_SCREEN_INSET.right,
+                  bottom: RCS_GALAXY_SCREEN_INSET.bottom,
+                }}
+              >
+                <RCSPhoneMmsPreview
+                  content={content}
+                  canvasSize={effectiveCanvasSize}
+                  inDeviceFrame
+                  className="h-full min-h-0 w-full"
+                />
+              </div>
+            </div>
+          </div>
+          <p className="shrink-0 px-2 pb-2 text-center text-[10px] leading-snug text-gray-500">
+            MMS 수신 미리보기 · 편집 내용이 카드에 실시간으로 반영됩니다
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  useEffect(() => {
+    if (!isRcsTemplate) {
+      setRcsFrameHeightPx(null);
+      return;
+    }
+    let cancelled = false;
+    const sync = () => {
+      if (cancelled) return;
+      const el = document.getElementById("design-canvas");
+      if (!el) return;
+      const h = Math.round(el.getBoundingClientRect().height);
+      if (h > 0) setRcsFrameHeightPx(h);
+    };
+    sync();
+    const raf = requestAnimationFrame(sync);
+    const el = document.getElementById("design-canvas");
+    if (!el) {
+      cancelAnimationFrame(raf);
+      return () => {
+        cancelled = true;
+      };
+    }
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    window.addEventListener("resize", sync);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      window.removeEventListener("resize", sync);
+    };
+  }, [isRcsTemplate, showPreview, zoom, content, effectiveCanvasSize.height, effectiveCanvasSize.width, rcsMessageType]);
+
+  useEffect(() => {
+    if (!correctionReferenceUrl || showPreview) {
+      setCorrectionRefBox(null);
+      return;
+    }
+    const sync = () => {
+      const el = document.getElementById("design-canvas");
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) setCorrectionRefBox({ w: Math.round(r.width), h: Math.round(r.height) });
+    };
+    sync();
+    const el = document.getElementById("design-canvas");
+    if (!el) return;
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    window.addEventListener("resize", sync);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", sync);
+    };
+  }, [correctionReferenceUrl, showPreview, zoom, content, effectiveCanvasSize.width, effectiveCanvasSize.height, isRcsTemplate]);
 
   const renderStatusBar = () => {
     const { width: sw, height: sh, unit } = effectiveCanvasSize;
@@ -787,7 +931,49 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                 </Tooltip>
               </div>
             </div>
-            <div className="flex-1 overflow-hidden min-h-0">{renderCanvas()}</div>
+            {correctionReferenceUrl && !showPreview ? (
+              <div className="flex min-h-0 flex-1 overflow-hidden">
+                <div className="flex min-h-0 min-w-0 flex-1 items-stretch justify-stretch overflow-auto">
+                  {renderCanvas(isRcsTemplate ? { rcsWorkspace: "compact" } : undefined)}
+                </div>
+                <aside className="flex max-h-full shrink-0 flex-col gap-2 border-l border-gray-200 bg-white/95 py-2 pl-3 pr-2 shadow-sm">
+                  <div className="flex max-w-[min(92vw,420px)] items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-gray-800">VI 교정 참조</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 shrink-0 p-0 text-gray-500 hover:text-gray-800"
+                      title="참조 닫기"
+                      onClick={() => setCorrectionReferenceUrl(null)}
+                    >
+                      <X className="h-4 w-4" aria-hidden />
+                    </Button>
+                  </div>
+                  <p className="max-w-[min(92vw,420px)] text-[10px] leading-snug text-gray-500">
+                    왼쪽 작업 캔버스와 같은 표시 크기·비율입니다. 참고하며 따라 그리듯 편집할 수 있습니다.
+                  </p>
+                  {correctionRefBox && correctionRefBox.w > 0 && correctionRefBox.h > 0 ? (
+                    <div
+                      className="shrink-0 rounded-lg border border-gray-200 bg-gray-50"
+                      style={{ width: correctionRefBox.w, height: correctionRefBox.h }}
+                    >
+                      <img
+                        src={correctionReferenceUrl}
+                        alt="VI 교정 참조"
+                        className="h-full w-full bg-white object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-[10px] text-gray-400">
+                      크기 맞추는 중…
+                    </div>
+                  )}
+                </aside>
+              </div>
+            ) : (
+              <div className="min-h-0 flex-1 overflow-hidden">{renderCanvas()}</div>
+            )}
           </div>
 
           {/* Right Panel — 전체 높이 고정, 패널만 독립 스크롤 */}
@@ -815,6 +1001,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                     <DesignAssistantChat
                       content={content}
                       onApplyContent={setContentWithHistory}
+                      onCorrectionReference={setCorrectionReferenceUrl}
                       templateId={actualTemplateId ?? ""}
                       /* RCS(568×338)만 제외 — 그 외 온라인/오프라인은 우측 패널 부제·본문 슬롯과 동일 규칙 */
                       panelSyncedTextSuggest={!isRcsTemplate}
@@ -1013,6 +1200,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
               open={showExportDialog}
               onOpenChange={setShowExportDialog}
               templateName={template.name}
+              canvasSize={effectiveCanvasSize}
             />
           </Suspense>
         ) : null}

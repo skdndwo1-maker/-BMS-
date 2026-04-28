@@ -160,6 +160,7 @@ type AssistantTab = "text" | "inspect" | "correct";
 export function DesignAssistantChat({
   content,
   onApplyContent,
+  onCorrectionReference,
   templateId,
   guidelineId = "uplus-brand-guideline",
   /** false: RCS 고정(메인·본문 1) · true: 우측 패널 부제·본문 슬롯 수와 동기(최대 각 3) */
@@ -167,6 +168,8 @@ export function DesignAssistantChat({
 }: {
   content: DesignContent;
   onApplyContent: (next: DesignContent) => void;
+  /** 디자인 교정 결과를 캔버스에 덮지 않고 에디터 옆 참조 패널에 표시 */
+  onCorrectionReference?: (dataUrl: string | null) => void;
   templateId: string;
   guidelineId?: string;
   panelSyncedTextSuggest?: boolean;
@@ -317,7 +320,7 @@ export function DesignAssistantChat({
     }
   };
 
-  /** 검수 후 후속 교정: 결과 이미지를 즉시 캔버스에 적용 (사용자는 그대로 추가 편집 가능) */
+  /** 검수 후 후속 교정: 결과 이미지를 에디터 옆 참조 패널에 표시 */
   const runInspectCorrection = async () => {
     if (!inspection) {
       toast.error("먼저 캔버스 검수를 실행해 주세요.");
@@ -343,16 +346,24 @@ export function DesignAssistantChat({
             : undefined,
       });
       const url = `data:${out.mimeType};base64,${out.data}`;
-      onApplyContent({
-        ...content,
-        image: url,
-        posterBackgroundImageRect: { x: 0, y: 0, width: 1, height: 1 },
-        posterImageOpacity: 100,
-        posterImagePosX: 50,
-        posterImagePosY: 50,
-      });
+      if (onCorrectionReference) {
+        onCorrectionReference(url);
+      } else {
+        onApplyContent({
+          ...content,
+          image: url,
+          posterBackgroundImageRect: { x: 0, y: 0, width: 1, height: 1 },
+          posterImageOpacity: 100,
+          posterImagePosX: 50,
+          posterImagePosY: 50,
+        });
+      }
       setInspectDialogOpen(false);
-      toast.success("교정안을 캔버스에 적용했습니다. 필요 시 추가 편집이 가능합니다.");
+      toast.success(
+        onCorrectionReference
+          ? "교정 참조를 캔버스 옆에 표시했습니다. 왼쪽에서 따라 편집할 수 있습니다."
+          : "교정안을 캔버스에 적용했습니다. 필요 시 추가 편집이 가능합니다."
+      );
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "교정 생성에 실패했습니다.");
@@ -361,7 +372,7 @@ export function DesignAssistantChat({
     }
   };
 
-  /** 전체 VI 교정: 결과 이미지를 즉시 캔버스에 적용 */
+  /** 전체 VI 교정: 결과 이미지를 에디터 옆 참조 패널에 표시 */
   const runHolisticCorrection = async () => {
     setLoading(true);
     try {
@@ -374,15 +385,23 @@ export function DesignAssistantChat({
         creativeTopic: creativeTopic.trim() || undefined,
       });
       const url = `data:${out.mimeType};base64,${out.data}`;
-      onApplyContent({
-        ...content,
-        image: url,
-        posterBackgroundImageRect: { x: 0, y: 0, width: 1, height: 1 },
-        posterImageOpacity: 100,
-        posterImagePosX: 50,
-        posterImagePosY: 50,
-      });
-      toast.success("전체 VI 교정안을 캔버스에 적용했습니다. 필요 시 추가 편집이 가능합니다.");
+      if (onCorrectionReference) {
+        onCorrectionReference(url);
+      } else {
+        onApplyContent({
+          ...content,
+          image: url,
+          posterBackgroundImageRect: { x: 0, y: 0, width: 1, height: 1 },
+          posterImageOpacity: 100,
+          posterImagePosX: 50,
+          posterImagePosY: 50,
+        });
+      }
+      toast.success(
+        onCorrectionReference
+          ? "전체 VI 교정 참조를 캔버스 옆에 표시했습니다. 왼쪽에서 따라 편집할 수 있습니다."
+          : "전체 VI 교정안을 캔버스에 적용했습니다. 필요 시 추가 편집이 가능합니다."
+      );
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "교정에 실패했습니다.");
@@ -471,8 +490,9 @@ export function DesignAssistantChat({
   return (
     <div className="space-y-3">
       <p className="text-[10px] leading-snug text-gray-500">
-        모든 AI 기능은 서버의 <span className="font-medium text-gray-700">브랜드 VI 가이드라인</span>(등록된 참조
-        가이드)과 Gemini API를 사용합니다.
+        검수·교정은 서버에 등록된{" "}
+        <span className="font-medium text-gray-700">VI 가이드라인 PDF</span> 원문을 필수로 반영합니다. 텍스트 제안 등
+        기타 기능은 등록된 참조 가이드와 Gemini API를 사용합니다.
       </p>
 
       <div className="space-y-1.5">
@@ -570,7 +590,9 @@ export function DesignAssistantChat({
       {tab === "inspect" && (
         <div className="space-y-2">
           <p className="text-[11px] text-gray-600">
-            캔버스 캡처를 VI 가이드와 비교해 위반·교정 포인트를 검수합니다. 결과는 팝업으로 표시됩니다.
+            캔버스 캡처를 서버에 등록된{" "}
+            <span className="font-medium text-gray-800">VI 가이드라인 PDF</span>와 비교해 검수합니다. 결과는 팝업으로
+            표시됩니다. (PDF 미등록·텍스트 추출 불가 시 검수를 실행할 수 없습니다.)
           </p>
           <Button
             type="button"
@@ -599,7 +621,9 @@ export function DesignAssistantChat({
       {tab === "correct" && (
         <div className="space-y-2">
           <p className="text-[11px] text-gray-600">
-            뱃지·타이틀·본문·유의·이미지·픽토그램·일러스트 등을 VI에 맞게 한 번에 시각 교정해 캔버스에 즉시 반영합니다. 적용 후 추가 편집이 가능합니다.
+            뱃지·타이틀·본문·유의·이미지 등을 VI PDF 기준으로 시각 교정한 이미지를{" "}
+            <span className="font-medium text-gray-800">캔버스 오른쪽</span>에 같은 크기·비율로 띄웁니다. 참고하며 왼쪽
+            캔버스에서 따라 그리듯 수정할 수 있습니다.
           </p>
           <Button
             type="button"
@@ -715,7 +739,7 @@ export function DesignAssistantChat({
               onClick={() => void runInspectCorrection()}
             >
               {loading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Wand2 className="mr-2 h-3.5 w-3.5" />}
-              검수 반영해 캔버스 교정
+              검수 반영 · 교정 참조 표시
             </Button>
           </DialogFooter>
         </DialogContent>

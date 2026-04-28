@@ -642,10 +642,24 @@ export async function runDesignEditorCanvasVisualCorrection(opts: {
   const topicBlock = opts.creativeTopic?.trim()
     ? `[제작 주제]\n${opts.creativeTopic.trim()}\n\n`
     : "";
-  const notes =
+
+  const viPdfFirst = `[VI 가이드라인 PDF — 절대 우선]
+프롬프트의 [참조 가이드라인 및 검수 맥락] 블록은 PDF에서 추출한 필수 근거입니다. 색상·로고·타이포·여백·톤·금지 사항 등은 PDF와 아래 규칙이 충돌할 경우 **항상 PDF를 따르세요**.`;
+
+  const typographyRules = `[디자인 에디터 텍스트 교정 규칙 — PDF 다음 우선순위]
+첨부 캔버스 이미지의 한국어 카피를 손볼 때(문구·줄 수·상대 크기), VI PDF 요구를 만족하는 범위에서 반드시:
+1) **메인 타이틀**: 상대 글자 크기를 **150% 스케일(기준 대비 1.5배 느낌)**로 잡고, **줄 수는 2줄을 절대 넘기지 않음**. 장황한 표현은 줄이고 간결한 문구로 교정.
+2) **부제1(첫 번째 부제)**: **현재와 비슷한 글자 크기 관계**를 유지하되, **1줄을 넘기지 않음**(자동 줄바꿈 없이 한 줄). 길면 의미를 유지하며 축약.
+3) **본문(주 본문 블록)**: **기본형(100%) 대비 약 60% 크기**로 작고 단정하게 보이게 하고, **줄 수는 2줄을 넘기지 않음**. 핵심만 남기도록 다듬음.
+
+레이아웃·비율·이미지 구도는 원본 의도를 해치지 않되, 위 텍스트 규칙과 VI PDF를 동시에 만족하는 **단일 교정 이미지**를 출력하세요.`;
+
+  const modeNotes =
     opts.mode === "holistic"
-      ? `${topicBlock}[디자인 교정 모드 — 전체]\n캔버스 전체를 브랜드 VI에 맞게 시각적으로 다듬은 단일 이미지를 생성하세요. 텍스트는 가독성 있게 유지·보완합니다.`
-      : `${topicBlock}[디자인 교정 모드 — 검수 반영]\n아래 검수 지적을 우선 반영하여 수정 이미지를 생성하세요.`;
+      ? `[디자인 교정 모드 — 전체]\n캔버스 전체를 브랜드 VI에 맞게 시각적으로 다듬은 단일 이미지를 생성하세요.`
+      : `[디자인 교정 모드 — 검수 반영]\n아래 검수 지적을 우선 반영하여 수정 이미지를 생성하세요.`;
+
+  const notes = `${viPdfFirst}\n\n${typographyRules}\n\n${topicBlock}${modeNotes}`;
 
   return generateRevisedBrandingImage({
     designBase64: opts.designBase64,
@@ -653,7 +667,8 @@ export async function runDesignEditorCanvasVisualCorrection(opts: {
     guidelineContext: opts.guidelineContext,
     overallSummary: opts.overallSummary ?? "디자인 에디터 교정 요청",
     violations: viols,
-    userNotes: notes
+    userNotes: notes,
+    viGuidelineTakesPrecedence: true
   });
 }
 
@@ -966,6 +981,8 @@ export async function generateRevisedBrandingImage(opts: {
   overallSummary: string;
   violations: Array<{ category: string; issue: string; severity: string }>;
   userNotes?: string;
+  /** true면 VI PDF(참조 가이드라인)가 [사용자 직접 입력]보다 우선 — 디자인 에디터 교정용 */
+  viGuidelineTakesPrecedence?: boolean;
 }): Promise<{ mimeType: string; base64: string; caption: string } | null> {
   const key = getKey();
   if (!key) return null;
@@ -979,14 +996,17 @@ export async function generateRevisedBrandingImage(opts: {
     ? opts.userNotes.trim()
     : "(사용자 직접 입력 없음)";
 
+  const precedenceRules = opts.viGuidelineTakesPrecedence
+    ? `- **[참조 가이드라인 및 검수 맥락](VI 가이드라인 PDF)** 의 규정이 색·로고·타이포·여백·톤 판단에서 **최우선**입니다.\n- [사용자 직접 입력 검수 사항]의 타이포·줄 수 등 추가 규칙은 **PDF와 충돌하지 않을 때만** 적용합니다.`
+    : `- [사용자 직접 입력 검수 사항]에 적힌 요구는 **최우선**으로 반영합니다.\n- 로고·컬러·타이포·여백 등 가이드가 요구하는 바를 최대한 따릅니다.`;
+
   const prompt = `당신은 브랜드 디자인 수정 전문가입니다.
 
 첨부 이미지는 검수 대상 디자인입니다. 아래 [참조 가이드라인·검수 요약·위반 목록·사용자 요청]을 모두 반영하여 **브랜드에 맞게 보완한 새 이미지**를 생성하세요.
 
 규칙:
 - 원본의 메시지·구성 의도는 유지하되, 가이드 위반·개선점을 시각적으로 반영합니다.
-- [사용자 직접 입력 검수 사항]에 적힌 요구는 **최우선**으로 반영합니다.
-- 로고·컬러·타이포·여백 등 가이드가 요구하는 바를 최대한 따릅니다.
+${precedenceRules}
 - 한국어 텍스트가 있으면 가독성 있게 유지합니다.
 - 먼저 1~3문장으로 어떤 점을 어떻게 수정했는지 설명한 뒤, 수정된 이미지를 출력하세요.
 

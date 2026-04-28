@@ -148,6 +148,84 @@ async function buildPrimaryGuidelineBlock(guidelineId: string, queryText?: strin
   return out;
 }
 
+/**
+ * 디자인 에디터「디자인 검수」「디자인 교정」전용: 슬롯에 등록된 파일이 PDF인지 확인하고,
+ * PDF에서 추출한 원문(필수) + 선택적 RAG·AI 요약을 붙입니다. PDF가 없거나 텍스트 추출에 실패하면 API가 거절됩니다.
+ */
+async function buildMandatoryViPdfContextForDesignEditor(
+  guidelineId: string,
+  queryText?: string
+): Promise<{ ok: true; block: string } | { ok: false; error: string; status: number }> {
+  const g = getGuideline(guidelineId);
+  if (!g) {
+    return {
+      ok: false,
+      status: 400,
+      error:
+        "VI 가이드라인 PDF가 등록되어 있지 않습니다. 브랜드 검수 화면에서 PDF 가이드를 동기화·업로드한 뒤 다시 시도해 주세요."
+    };
+  }
+  if (g.mimeType !== "application/pdf") {
+    return {
+      ok: false,
+      status: 400,
+      error: `디자인 검수·교정은 VI 가이드라인 PDF가 필요합니다. 현재 슬롯 "${g.displayName}"은(는) PDF가 아닙니다.`
+    };
+  }
+  const abs = resolveStoredPath(g.storedRelativePath);
+  if (!existsSync(abs)) {
+    return {
+      ok: false,
+      status: 400,
+      error: "VI 가이드라인 PDF 파일을 서버에서 찾을 수 없습니다. 가이드를 다시 등록해 주세요."
+    };
+  }
+  const excerpt = (await excerptGuidelineForInspection(g)).trim();
+  if (
+    !excerpt ||
+    excerpt.includes("가이드 파일을 찾을 수 없습니다") ||
+    excerpt.includes("PDF에서 텍스트를 추출하지 못했습니다") ||
+    excerpt.includes("가이드가 이미지로만 등록되어 있습니다") ||
+    excerpt.includes("지원하지 않는 가이드 형식입니다")
+  ) {
+    return {
+      ok: false,
+      status: 400,
+      error:
+        "VI 가이드라인 PDF에서 추론용 텍스트를 추출하지 못했습니다. 텍스트가 포함된 PDF인지 확인하거나 가이드를 다시 등록해 주세요."
+    };
+  }
+
+  let block = `[VI 가이드라인 PDF — 필수 추론 근거]\n문서: ${g.displayName ?? guidelineId}\n\n${excerpt}`;
+
+  if (queryText?.trim() && process.env.GEMINI_API_KEY?.trim() && process.env.SUPABASE_URL?.trim()) {
+    try {
+      const q = queryText.trim().slice(0, 6000);
+      const qEmb = await embedTextWithGemini(q, { model: "gemini-embedding-001" });
+      const matches = await matchRagChunks({ queryEmbedding: qEmb, guidelineId, sourceType: "guideline", topK: 8 });
+      const picked = matches.filter((m) => typeof m.similarity === "number" && m.similarity >= 0.2).slice(0, 6);
+      if (picked.length > 0) {
+        const lines = picked.map(
+          (m, i) =>
+            `(${i + 1}) [${m.source_title}] (sim=${m.similarity!.toFixed(3)})\n${String(m.content).trim()}`
+        );
+        block += `\n\n[관련 VI 가이드라인 구절 — RAG]\n${lines.join("\n\n---\n")}`;
+      }
+    } catch (e) {
+      console.error(
+        "[rag] buildMandatoryViPdfContextForDesignEditor retrieval failed:",
+        e instanceof Error ? e.message : String(e)
+      );
+    }
+  }
+
+  if (g.aiSummary?.trim()) {
+    block = `[VI 가이드라인 AI 요약 — 참고]\n${g.aiSummary.trim()}\n\n---\n\n${block}`;
+  }
+
+  return { ok: true, block };
+}
+
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     mkdirSync(GUIDELINES_DIR, { recursive: true });
@@ -1153,11 +1231,18 @@ app.post("/api/design-editor/correct-canvas", async (req, res) => {
 
     const creativeTopic =
       typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
-    const guidelineContext = await buildPrimaryGuidelineBlock(guidelineId, [overallSummary, creativeTopic].filter(Boolean).join("\n\n"));
+    const viPdf = await buildMandatoryViPdfContextForDesignEditor(
+      guidelineId,
+      [overallSummary, creativeTopic].filter(Boolean).join("\n\n")
+    );
+    if (!viPdf.ok) {
+      res.status(viPdf.status).json({ error: viPdf.error });
+      return;
+    }
     const out = await runDesignEditorCanvasVisualCorrection({
       designBase64,
       designMime,
-      guidelineContext,
+      guidelineContext: viPdf.block,
       overallSummary: overallSummary || undefined,
       violations: violations.length > 0 ? violations : undefined,
       mode,
@@ -1183,7 +1268,7 @@ app.post("/api/design-editor/correct-canvas", async (req, res) => {
         overallSummary: overallSummary || null,
       },
       outputJson: { ok: true, mimeType: out.mimeType, caption: out.caption },
-      inputText: guidelineContext,
+      inputText: viPdf.block,
       outputText: out.caption ?? null,
       model: process.env.GEMINI_IMAGE_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || null,
     });
@@ -1209,11 +1294,18 @@ app.post("/api/design-editor/inspect", async (req, res) => {
 
     const creativeTopic =
       typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
-    const guidelineSummary = await buildPrimaryGuidelineBlock(guidelineId, [templateId, creativeTopic].filter(Boolean).join("\n\n"));
+    const viPdf = await buildMandatoryViPdfContextForDesignEditor(
+      guidelineId,
+      [templateId, creativeTopic].filter(Boolean).join("\n\n")
+    );
+    if (!viPdf.ok) {
+      res.status(viPdf.status).json({ error: viPdf.error });
+      return;
+    }
     const result = await runDesignEditorCanvasInspection({
       designBase64: imageBase64,
       designMime: imageMime,
-      guidelineSummary,
+      guidelineSummary: viPdf.block,
       designContentJson: JSON.stringify(designContent ?? {}),
       templateLabel: templateId || "template",
       creativeTopic: creativeTopic || undefined
@@ -1227,7 +1319,7 @@ app.post("/api/design-editor/inspect", async (req, res) => {
       templateId: templateId || null,
       inputJson: { guidelineId, templateId: templateId || null, imageMime, creativeTopic: creativeTopic || null },
       outputJson: { score: result.score, overallSummary: result.overallSummary, violations: result.violations },
-      inputText: guidelineSummary,
+      inputText: viPdf.block,
       outputText: result.overallSummary,
       score: result.score,
       model: process.env.GEMINI_MODEL?.trim() || null,

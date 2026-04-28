@@ -37,6 +37,7 @@ export function ViAlignmentGrid({
 
   return (
     <svg
+      data-vi-grid="true"
       width={W}
       height={H}
       viewBox={`0 0 ${W} ${H}`}

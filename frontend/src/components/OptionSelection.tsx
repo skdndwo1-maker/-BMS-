@@ -9,6 +9,7 @@ import {
   ArrowRight,
   Sparkles,
   Crown,
+  LogOut,
   ImagePlus,
   Camera,
   Globe,
@@ -210,6 +211,16 @@ export function OptionSelection() {
     if (cameraInputRef.current) cameraInputRef.current.value = "";
   };
 
+  const handleLogout = async () => {
+    try {
+      const sb = getSupabaseClient();
+      await sb.auth.signOut();
+    } catch {
+      /* Supabase 미설정 등 — 로그인 화면으로만 이동 */
+    }
+    navigate("/", { replace: true });
+  };
+
   return (
     <div className="min-h-screen bg-[#F8F8F9] flex flex-col">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
@@ -250,6 +261,17 @@ export function OptionSelection() {
                 <Crown className={`w-3.5 h-3.5 ${canOpenAdmin ? "text-gray-500" : "text-gray-300"}`} />
               </div>
               <span className="text-xs font-medium">Admin</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleLogout()}
+              title="로그아웃 후 로그인 화면으로 이동"
+              className="flex items-center gap-2 text-sm text-gray-600 transition-colors hover:text-gray-900 cursor-pointer"
+            >
+              <div className="w-8 h-7 rounded-full border border-gray-300 bg-gray-100 flex items-center justify-center">
+                <LogOut className="w-3.5 h-3.5 text-gray-500" aria-hidden />
+              </div>
+              <span className="text-xs font-medium">로그아웃</span>
             </button>
           </div>
         </div>
