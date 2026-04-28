@@ -27,6 +27,7 @@ import { AssetPresetPickerDialog } from "@/components/design/AssetPresetPickerDi
 import { resolveRcsMessageBackground } from "@/components/design/RCSCanvas";
 import { templates as allDesignTemplates } from "@/design/templates";
 import { resolvePosterBodyBlocksForRender, applyBodyBlockTextEdit } from "@/design/posterBodyDisplay";
+import { VI_COLORS } from "@/design/viCanvasConstants";
 
 interface ContentPanelProps {
   content: DesignContent;
@@ -743,7 +744,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                   { label: "Grey", hex: "#F5F5F5", border: "#D1D1D1" },
                   { label: "Ivory", hex: "#FDFAF0", border: "#D9D5C0" },
                   { label: "Pink", hex: "#FFF0F5", border: "#F4B8D0" },
-                  { label: "Magenta", hex: "#FF7F66", border: "#FF7F66" },
+                  { label: "Magenta", hex: VI_COLORS.brandMagenta, border: VI_COLORS.brandMagenta },
                   { label: "Black", hex: "#000000", border: "#000000" },
                 ] as const
               ).map((color) => {
@@ -794,7 +795,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                       const v = e.target.value.replace(/[^0-9a-fA-F]/g, "").slice(0, 6);
                       if (v.length === 6) onContentChange({ ...content, backgroundColor: `#${v}` });
                     }}
-                    placeholder="FF7F66"
+                    placeholder="F43182"
                     className="flex-1 text-sm font-mono outline-none bg-transparent"
                     maxLength={6}
                   />
@@ -813,7 +814,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           <div ref={refBadge} className="space-y-2 border-t border-gray-100 pt-4">
             <div className="flex items-center justify-between gap-2">
               <Label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
-                <span className="inline-block bg-[#FF7F66] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">뱃지</span>
+                <span className="inline-block text-white text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: VI_COLORS.brandMagenta }}>뱃지</span>
                 뱃지 텍스트
               </Label>
               <Button
@@ -896,7 +897,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                       <div className="flex flex-wrap gap-2">
                         {(
                           [
-                            { key: "magenta" as const, label: "마젠타", bg: "#FF7F66" },
+                            { key: "magenta" as const, label: "마젠타", bg: VI_COLORS.brandMagenta },
                             { key: "black" as const, label: "블랙", bg: "#000000" },
                           ] as const
                         ).map((opt) => {
@@ -1381,7 +1382,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
       <div className="space-y-3">
         <Label className="text-sm font-medium">배경색</Label>
         <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5">
-          {[{label:"White",hex:"#FFFFFF",border:"#E5E5E5"},{label:"Grey",hex:"#F5F5F5",border:"#D1D1D1"},{label:"Ivory",hex:"#FDFAF0",border:"#D9D5C0"},{label:"Pink",hex:"#FFF0F5",border:"#F4B8D0"},{label:"Magenta",hex:"#FF7F66",border:"#FF7F66"},{label:"Black",hex:"#000000",border:"#000000"}].map((color)=>{
+          {[{label:"White",hex:"#FFFFFF",border:"#E5E5E5"},{label:"Grey",hex:"#F5F5F5",border:"#D1D1D1"},{label:"Ivory",hex:"#FDFAF0",border:"#D9D5C0"},{label:"Pink",hex:"#FFF0F5",border:"#F4B8D0"},{label:"Magenta",hex:VI_COLORS.brandMagenta,border:VI_COLORS.brandMagenta},{label:"Black",hex:"#000000",border:"#000000"}].map((color)=>{
             const active=(content.backgroundColor||"#FFFFFF")===color.hex;
             return (
               <button key={color.hex} type="button" title={color.label} onClick={()=>onContentChange({...content,backgroundColor:color.hex})}
@@ -1405,7 +1406,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
             <Label className="text-xs font-medium text-gray-700 mb-2 block">텍스트 색상</Label>
             <div className="grid grid-cols-6 gap-1.5">
-              {["#000000","#FFFFFF","#FF7F66","#6B7280","#3B82F6","#EF4444"].map((color)=>(
+              {["#000000", "#FFFFFF", VI_COLORS.brandMagenta, "#6B7280", "#3B82F6", "#EF4444"].map((color)=>(
                 <button key={color} onClick={()=>onContentChange({...content,titleColor:color})}
                   className={`w-full h-8 rounded border-2 ${(content.titleColor||"#000000")===color?"border-[#FF7F66] scale-110":"border-gray-300"} transition-all`}
                   style={{backgroundColor:color}}/>

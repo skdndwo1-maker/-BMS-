@@ -41,7 +41,7 @@ export function CanvasTextFormatPanel({
       <div className="flex items-center justify-between gap-2 px-2 py-1.5 border-b border-gray-100 bg-gray-50 shrink-0">
         <span className="text-[11px] font-semibold text-gray-800">문자 옵션</span>
         {target ? (
-          <span className="text-[10px] text-[#FF7F66] font-medium truncate">{targetLabel(target)}</span>
+          <span className="text-[10px] text-[#F43182] font-medium truncate">{targetLabel(target)}</span>
         ) : null}
         <Button
           type="button"

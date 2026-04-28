@@ -4,7 +4,8 @@
  */
 
 export const VI_COLORS = {
-  brandMagenta: "#FF7F66",
+  /** 브랜드 지정 마젠타 — 우측 배경/텍스트옵션 글자색 등 (#F43182) */
+  brandMagenta: "#F43182",
   textPrimary: "#1A1A1A",
   textSecondary: "#5A5A5A",
   border: "#C8C8C8",

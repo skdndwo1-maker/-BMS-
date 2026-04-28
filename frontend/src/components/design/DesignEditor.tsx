@@ -810,7 +810,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                             step={5}
                             value={content.titleSize ?? 100}
                             onChange={(e) => setContentWithHistory((prev) => ({ ...prev, titleSize: Number(e.target.value) }))}
-                            className="h-2 w-full cursor-pointer accent-[#FF7F66]"
+                            className="h-2 w-full cursor-pointer accent-[#F43182]"
                           />
                           <div className="text-[10px] text-gray-500 font-mono tabular-nums">{content.titleSize ?? 100}%</div>
                         </div>
@@ -824,7 +824,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                             step={5}
                             value={content.bodySize ?? 100}
                             onChange={(e) => setContentWithHistory((prev) => ({ ...prev, bodySize: Number(e.target.value) }))}
-                            className="h-2 w-full cursor-pointer accent-[#FF7F66]"
+                            className="h-2 w-full cursor-pointer accent-[#F43182]"
                           />
                           <div className="text-[10px] text-gray-500 font-mono tabular-nums">{content.bodySize ?? 100}%</div>
                         </div>
@@ -842,7 +842,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                                     onClick={() => setContentWithHistory((prev) => ({ ...(prev as any), titleWeight: w }))}
                                     className={`rounded-md border px-1.5 py-1 text-[10px] font-semibold ${
                                       active
-                                        ? "border-[#FF7F66] bg-[#FF7F66]/10 text-[#FF7F66]"
+                                        ? "border-[#F43182] bg-[#F43182]/10 text-[#F43182]"
                                         : "border-gray-200 bg-white text-gray-700"
                                     }`}
                                   >
@@ -865,7 +865,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                                     onClick={() => setContentWithHistory((prev) => ({ ...(prev as any), bodyWeight: w }))}
                                     className={`rounded-md border px-1.5 py-1 text-[10px] font-semibold ${
                                       active
-                                        ? "border-[#FF7F66] bg-[#FF7F66]/10 text-[#FF7F66]"
+                                        ? "border-[#F43182] bg-[#F43182]/10 text-[#F43182]"
                                         : "border-gray-200 bg-white text-gray-700"
                                     }`}
                                   >
@@ -995,10 +995,17 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                   templateId={actualTemplateId}
                   focusTarget={focusTarget}
                 />
-                <div className="border-t border-gray-200 bg-gradient-to-br from-purple-50 to-blue-50">
-                  <div className="space-y-3 p-4">
+                <div
+                  className={[
+                    "relative border-t border-violet-200/45",
+                    "bg-gradient-to-br from-[#FFF5F0] via-[#EDE9FE] to-[#DBEAFE]",
+                    "shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_-12px_40px_-14px_rgba(109,40,217,0.16)]",
+                    "before:pointer-events-none before:absolute before:inset-0 before:content-[''] before:bg-gradient-to-t before:from-transparent before:via-transparent before:to-white/25",
+                  ].join(" ")}
+                >
+                  <div className="relative space-y-3 p-4">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#FF7F66] to-purple-600">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#FF7F66] via-[#A855F7] to-[#6366F1] shadow-sm ring-2 ring-white/80">
                         <Sparkles className="h-4 w-4 text-white" />
                       </div>
                       <div className="min-w-0 flex-1">

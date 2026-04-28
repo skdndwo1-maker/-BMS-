@@ -2414,7 +2414,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                 .map((b, idx) => {
                   const rect = rects[b.id] ?? (idx === 0 ? badgeRect : { ...badgeRect, y: Math.min(0.92, badgeRect.y + idx * 0.07) });
                   const m = computeBadgeAutoText(rect);
-                  const fill = (b.color ?? "magenta") === "black" ? "#000000" : "#FF7F66";
+                  const fill = (b.color ?? "magenta") === "black" ? "#000000" : VI_COLORS.brandMagenta;
                   return (
                     <DraggableCanvasOverlay
                       key={b.id}

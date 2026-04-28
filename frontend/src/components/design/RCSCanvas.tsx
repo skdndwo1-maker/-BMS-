@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DESIGN_CANVAS_BASE_VIEW_SCALE } from "@/design/canvasViewConstants";
 import type { AssetLayer, CanvasSize, DesignContent } from "@/design/types";
+import { VI_COLORS } from "@/design/viCanvasConstants";
 
 const DARK = "#1A1A1A";
-const MAGENTA = "#FF7F66";
+const MAGENTA = VI_COLORS.brandMagenta;
 
 /** RCS: 메시지 유형별 고정 배경 (우측 패널/저장용 backgroundColor과 동기화) */
 const RCS_BG_BY_MESSAGE: Record<string, string> = {
