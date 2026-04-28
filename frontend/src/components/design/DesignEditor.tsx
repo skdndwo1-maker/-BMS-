@@ -44,8 +44,10 @@ import {
 
 const ExportDialog = lazy(() => import("./ExportDialog").then((m) => ({ default: m.ExportDialog })));
 
-/** RCS 워크스페이스: 기존 0.7 축소 기준 +10% 표시 */
-const RCS_WORKSPACE_DISPLAY_SCALE = 0.77;
+/** RCS 카드·우측 목업(높이 동기화) 기준 표시 — 10% 축소 시 0.9 */
+const RCS_WORKSPACE_DISPLAY_SCALE = 0.9;
+/** 워크스페이스 한 변당 여백 ≈ 화면(컨테이너)의 1/15 — 좌·우·상·하 대칭 */
+const RCS_WORKSPACE_EDGE_FRACTION = 1 / 15;
 
 /** `public/rcs-galaxy-mockup.png` (189×390) 흰 화면 영역 — 실제 픽셀에 맞춘 비율 */
 const RCS_GALAXY_SCREEN_INSET = {
@@ -544,6 +546,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
         zoom={zoom}
         workspaceDisplayScale={RCS_WORKSPACE_DISPLAY_SCALE}
         workspaceAlign="center"
+        workspaceEdgeFraction={RCS_WORKSPACE_EDGE_FRACTION}
       />
     );
 
@@ -559,22 +562,22 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
 
     return (
       <div className="flex h-full min-h-0 w-full items-stretch overflow-hidden bg-[#EEEFF1]">
-        <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-auto py-3 px-4">
+        <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-auto py-2 px-2 sm:px-3">
           {rcsCanvas}
         </div>
-        <div className="flex h-full min-h-0 w-[min(300px,32vw)] min-w-[220px] shrink-0 flex-col border-l border-gray-200 bg-gradient-to-b from-[#E6E7EB] to-[#DDDEE3]">
-          <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-2 py-3">
-            <div className="relative inline-block leading-none">
+        <div className="flex h-full min-h-0 w-[min(420px,40vw)] min-w-[280px] shrink-0 flex-col border-l border-gray-200 bg-gradient-to-b from-[#E6E7EB] to-[#DDDEE3]">
+          <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-2 py-2 sm:px-3">
+            <div className="relative inline-block max-w-full leading-none">
               <img
                 src="/rcs-galaxy-mockup.png"
                 alt="RCS 모바일 미리보기 Galaxy 프레임"
                 width={189}
                 height={390}
-                className="pointer-events-none block max-w-[240px] select-none object-contain drop-shadow-xl"
+                className="pointer-events-none mx-auto block h-auto w-auto max-h-[min(92vh,760px)] max-w-[min(360px,calc(40vw-1.5rem))] select-none object-contain drop-shadow-xl"
                 style={
                   mockH
-                    ? { height: mockH, width: "auto" }
-                    : { height: "auto", width: "auto", maxHeight: "min(88vh,640px)", maxWidth: "240px" }
+                    ? { height: mockH, width: "auto", maxHeight: mockH }
+                    : undefined
                 }
               />
               <div

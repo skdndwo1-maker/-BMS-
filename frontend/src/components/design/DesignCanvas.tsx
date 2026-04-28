@@ -25,6 +25,7 @@ import {
   DEFAULT_POSTER_SUBTITLE_RECT,
   DEFAULT_POSTER_SUBTITLE_OFFSET_Y,
 } from "@/design/posterDefaults";
+import { DESIGN_CANVAS_BASE_VIEW_SCALE } from "@/design/canvasViewConstants";
 import { VI_COLORS, VI_FONT_STACK, getViGridStepPx } from "@/design/viCanvasConstants";
 import {
   renderPlainWithBoldRanges,
@@ -393,8 +394,10 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     baseH = availH;
     baseW = baseH * realAspect;
   }
-  const displayW = baseW * zoom;
+  const displayW = baseW * zoom * DESIGN_CANVAS_BASE_VIEW_SCALE;
   const displayH = displayW / realAspect;
+  /** 기본 뷰 배율로 인해 ‘맞춤’보다 커질 수 있음 — 줌 100%에서도 스크롤 허용 */
+  const overflowZoom = zoom * DESIGN_CANVAS_BASE_VIEW_SCALE;
 
   const W = displayW;
   /** VI 12분할 대비 약 1.8배 더 촘촘한 간격 — 정렬 그리드 표시/스냅 공용
@@ -1770,9 +1773,9 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         height: "100%",
         background: "#F0F0F0",
         display: "flex",
-        alignItems: zoom > 1 ? "flex-start" : "center",
+        alignItems: overflowZoom > 1 ? "flex-start" : "center",
         justifyContent: "center",
-        overflow: zoom > 1 ? "auto" : "hidden",
+        overflow: overflowZoom > 1 ? "auto" : "hidden",
         padding: "40px",
         boxSizing: "border-box",
       }}

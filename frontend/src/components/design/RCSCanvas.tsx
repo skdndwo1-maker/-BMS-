@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { DESIGN_CANVAS_BASE_VIEW_SCALE } from "@/design/canvasViewConstants";
 import type { AssetLayer, CanvasSize, DesignContent } from "@/design/types";
 
 const DARK = "#1A1A1A";
@@ -29,7 +30,7 @@ interface RCSCanvasProps {
   content: DesignContent;
   canvasSize: CanvasSize;
   zoom: number;
-  /** 워크스페이스 표시 배율(1=꽉 참). 예: 0.77 ≈ 30% 축소 후 10% 확대 편집 화면. */
+  /** 워크스페이스 표시 배율(1=가용 영역에 맞춤). 1 미만이면 전체 축소. */
   workspaceDisplayScale?: number;
   /** 캔버스 블록 정렬 — center면 워크스페이스 가운데 */
   workspaceAlign?: "center" | "start";
@@ -37,6 +38,12 @@ interface RCSCanvasProps {
   canvasElementId?: string;
   /** true면 패딩·배경을 줄여 MMS 카드 슬롯 등에 끼워 넣기 좋게 함 */
   embed?: boolean;
+  /** 워크스페이스(embed 아님)에서 측정 영역 바깥 여백(px). workspaceEdgeFraction이 있으면 무시 */
+  workspaceGutterPx?: number;
+  /**
+   * 워크스페이스 한 변(좌·우 또는 상·하)당 여백 비율. 예: 1/15 → 좌우 각 containerW/15, 상하 각 containerH/15
+   */
+  workspaceEdgeFraction?: number;
 }
 
 function getFontWeight(weight?: string): number {
@@ -62,6 +69,8 @@ export function RCSCanvas({
   workspaceAlign = "center",
   canvasElementId = "design-canvas",
   embed = false,
+  workspaceGutterPx,
+  workspaceEdgeFraction,
 }: RCSCanvasProps) {
   const outerRef = useRef<HTMLDivElement>(null);
   const [containerW, setContainerW] = useState(800);
@@ -90,9 +99,23 @@ export function RCSCanvas({
 
   const realAspect = canvasSize.width / canvasSize.height;
 
-  const padding = embed ? Math.max(6, Math.min(20, Math.round(containerW * 0.06))) : 80;
-  const availW = Math.max(1, containerW - padding);
-  const availH = Math.max(1, containerH - padding);
+  let availW: number;
+  let availH: number;
+  if (embed) {
+    const p = Math.max(6, Math.min(20, Math.round(containerW * 0.06)));
+    availW = Math.max(1, containerW - p);
+    availH = Math.max(1, containerH - p);
+  } else if (workspaceEdgeFraction != null && workspaceEdgeFraction > 0) {
+    const f = Math.min(0.45, workspaceEdgeFraction);
+    const padX = Math.round(containerW * f);
+    const padY = Math.round(containerH * f);
+    availW = Math.max(1, containerW - 2 * padX);
+    availH = Math.max(1, containerH - 2 * padY);
+  } else {
+    const padding = Math.max(24, workspaceGutterPx ?? 80);
+    availW = Math.max(1, containerW - padding);
+    availH = Math.max(1, containerH - padding);
+  }
   let baseW = availW;
   let baseH = baseW / realAspect;
   if (baseH > availH) {
@@ -100,7 +123,9 @@ export function RCSCanvas({
     baseW = baseH * realAspect;
   }
   const scale = Math.max(0.25, Math.min(1.5, workspaceDisplayScale));
-  const displayW = baseW * zoom * scale;
+  /** 메인 워크스페이스만 기본 뷰 배율 적용 — MMS 슬롯(embed)은 물리 크기 유지 */
+  const baseView = embed ? 1 : DESIGN_CANVAS_BASE_VIEW_SCALE;
+  const displayW = baseW * zoom * scale * baseView;
   const displayH = displayW / realAspect;
 
   const W = displayW;
