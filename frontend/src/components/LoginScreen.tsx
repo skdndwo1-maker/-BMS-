@@ -4,7 +4,6 @@ import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { APP_DISPLAY_NAME } from "@/constants/appBranding";
@@ -58,75 +57,151 @@ export function LoginScreen() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8 flex flex-col items-center">
-          <img
-            src="/uplus-main-logo.png"
-            alt={APP_DISPLAY_NAME}
-            className="h-16 rounded-xl w-auto object-contain mb-4 drop-shadow-sm"
-          />
-          <h1 className="text-3xl font-semibold text-gray-900 mb-2">{APP_DISPLAY_NAME}</h1>
-          <p className="text-gray-500 font-regular tracking-wide">Brand design &amp; content platform</p>
+    <div className="min-h-screen flex" style={{ background: "#F0E9DF" }}>
+      {/* Left panel — dark navy brand */}
+      <div
+        className="hidden lg:flex lg:w-[420px] xl:w-[480px] shrink-0 flex-col justify-between px-12 py-12"
+        style={{ background: "#1A2535" }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 shrink-0">
+            <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="h-full w-full object-contain" />
+          </div>
+          <span className="text-white font-semibold text-lg tracking-tight">{APP_DISPLAY_NAME}</span>
         </div>
 
-        <Card className="border-gray-200 shadow-lg">
-          <div className="px-6 pt-6 pb-2 flex flex-col items-center text-center gap-2">
-            <CardTitle className="text-2xl font-semibold tracking-tight">로그인</CardTitle>
-            <CardDescription className="text-sm text-gray-500">
-              계정 정보를 입력하여 로그인하세요.
-            </CardDescription>
+        <div>
+          <div
+            className="inline-flex items-center gap-2 rounded-full px-3 py-1 mb-5 text-xs font-medium"
+            style={{ background: "rgba(244,49,130,0.18)", color: "#F87AB8" }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-[#F43182] inline-block" />
+            AI-Powered Brand Management
           </div>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm text-gray-700">
+          <h2
+            className="font-bold leading-tight mb-4"
+            style={{ fontSize: "32px", color: "#F0E9DF", letterSpacing: "-0.02em" }}
+          >
+            브랜드 디자인을<br />더 스마트하게
+          </h2>
+          <p style={{ color: "#8A9BB8", fontSize: "14px", lineHeight: 1.7 }}>
+            브랜드 가이드라인 기반의 그래픽 제작,<br />
+            AI 검수, 네이밍 검토, 에셋 라이브러리를<br />
+            한 플랫폼에서 관리하세요.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {[
+            { num: "4", label: "핵심 기능" },
+            { num: "AI", label: "Gemini 연동" },
+            { num: "∞", label: "에셋 관리" },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="flex-1 rounded-xl px-3 py-3 text-center"
+              style={{ background: "rgba(240,233,223,0.06)" }}
+            >
+              <div className="font-bold text-white text-lg leading-none mb-0.5">{item.num}</div>
+              <div style={{ color: "#8A9BB8", fontSize: "11px" }}>{item.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Right panel — login form */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
+        {/* Mobile logo */}
+        <div className="lg:hidden flex items-center gap-3 mb-10">
+          <div className="w-9 h-9 shrink-0">
+            <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="h-full w-full object-contain" />
+          </div>
+          <span className="font-semibold text-lg" style={{ color: "#1A2535" }}>{APP_DISPLAY_NAME}</span>
+        </div>
+
+        <div className="w-full max-w-[400px]">
+          <div className="mb-8">
+            <h1
+              className="font-bold mb-1.5"
+              style={{ fontSize: "26px", color: "#1A2535", letterSpacing: "-0.02em" }}
+            >
+              로그인
+            </h1>
+            <p style={{ color: "#8A8FA8", fontSize: "14px" }}>계정 정보를 입력하여 로그인하세요.</p>
+          </div>
+
+          <div
+            className="rounded-2xl p-7 shadow-lg"
+            style={{ background: "#FFFFFF", border: "1px solid rgba(26,37,53,0.08)" }}
+          >
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-1.5">
+                <Label htmlFor="email" style={{ color: "#1A2535", fontSize: "13px", fontWeight: 500 }}>
                   이메일
                 </Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <Mail
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4"
+                    style={{ color: "#8A8FA8" }}
+                  />
                   <Input
                     id="email"
                     type="email"
                     placeholder="name@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 h-12 border-gray-300 focus:border-[#FF2E99] focus:ring-[#FF2E99]"
+                    className="pl-10 h-11 text-sm"
+                    style={{
+                      background: "#F5F0E8",
+                      border: "1px solid rgba(26,37,53,0.10)",
+                      borderRadius: "10px",
+                      color: "#1A2535",
+                    }}
                     required
                   />
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm text-gray-700">
+              <div className="space-y-1.5">
+                <Label htmlFor="password" style={{ color: "#1A2535", fontSize: "13px", fontWeight: 500 }}>
                   비밀번호
                 </Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <Lock
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4"
+                    style={{ color: "#8A8FA8" }}
+                  />
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 pr-10 h-12 border-gray-300 focus:border-[#FF2E99] focus:ring-[#FF2E99]"
+                    className="pl-10 pr-10 h-11 text-sm"
+                    style={{
+                      background: "#F5F0E8",
+                      border: "1px solid rgba(26,37,53,0.10)",
+                      borderRadius: "10px",
+                      color: "#1A2535",
+                    }}
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors"
+                    style={{ color: "#8A8FA8" }}
                   >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
 
-              <div className="text-right">
+              <div className="text-right -mt-1">
                 <button
                   type="button"
-                  className="text-xs text-[#D3D3D3] hover:text-[#B0B0B0] hover:underline transition-colors"
-                  style={{ fontWeight: 350 }}
+                  className="text-xs transition-colors hover:underline"
+                  style={{ color: "#C8C2B8", fontWeight: 350 }}
                 >
                   비밀번호 찾기
                 </button>
@@ -135,37 +210,37 @@ export function LoginScreen() {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="w-full h-12 bg-[#FF2E99] hover:bg-[#D12170] text-white transition-all shadow-md"
+                className="w-full h-11 text-sm font-semibold transition-all shadow-sm"
+                style={{
+                  background: "#F43182",
+                  color: "#FFFFFF",
+                  borderRadius: "10px",
+                  border: "none",
+                }}
               >
                 {isLoading ? "Signing In..." : "Sign In"}
               </Button>
-
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300" />
-                </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="px-2 bg-white text-gray-500">계정이 없으신가요?</span>
-                </div>
-              </div>
-
-              <div className="text-center">
-                <p className="text-xs text-gray-600">계정 발급은 IT 관리자에게 문의해주세요.</p>
-              </div>
             </form>
-          </CardContent>
-        </Card>
 
-        <div className="mt-8 text-center text-sm text-gray-500">
-          <p>© 2026 {APP_DISPLAY_NAME}. All rights reserved.</p>
-          <div className="mt-1.5 space-x-3" style={{ fontSize: "6px" }}>
-            <button type="button" className="text-gray-300 hover:text-gray-400 transition-colors">
-              Privacy Policy
-            </button>
-            <span className="text-gray-300">•</span>
-            <button type="button" className="text-gray-300 hover:text-gray-400 transition-colors">
-              Terms of Service
-            </button>
+            <div
+              className="mt-5 pt-5 text-center text-xs"
+              style={{ borderTop: "1px solid rgba(26,37,53,0.08)", color: "#8A8FA8" }}
+            >
+              계정 발급은 IT 관리자에게 문의해주세요.
+            </div>
+          </div>
+
+          <div className="mt-8 text-center" style={{ fontSize: "12px", color: "#A8A49C" }}>
+            <p>© 2026 {APP_DISPLAY_NAME}. All rights reserved.</p>
+            <div className="mt-1.5 space-x-3" style={{ fontSize: "10px" }}>
+              <button type="button" className="transition-colors hover:underline" style={{ color: "#C8C2B8" }}>
+                Privacy Policy
+              </button>
+              <span style={{ color: "#C8C2B8" }}>•</span>
+              <button type="button" className="transition-colors hover:underline" style={{ color: "#C8C2B8" }}>
+                Terms of Service
+              </button>
+            </div>
           </div>
         </div>
       </div>

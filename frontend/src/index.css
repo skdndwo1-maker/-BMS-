@@ -23,5 +23,5 @@ body {
 }
 /* 하단 상태줄 아래에 흰색이 비치는 잔여 케이스 방지(뷰포트 픽셀 반올림 등) */
 body {
-  background: #f5f5f5;
+  background: #F0E9DF;
 }

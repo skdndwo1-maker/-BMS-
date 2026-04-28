@@ -101,28 +101,47 @@ export function MyDesignsDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
-      <header className="border-b border-gray-200 bg-white">
+    <div className="min-h-screen" style={{ background: "#F0E9DF" }}>
+      <header style={{ background: "#1A2535", borderBottom: "1px solid rgba(240,233,223,0.06)" }}>
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" type="button" onClick={() => navigate("/brand-graphics")}>
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                onClick={() => navigate("/brand-graphics")}
+                className="text-sm font-medium"
+                style={{ color: "rgba(240,233,223,0.70)" }}
+              >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 템플릿으로
               </Button>
-              <div className="h-6 w-px bg-gray-200" />
+              <div className="h-5 w-px" style={{ background: "rgba(240,233,223,0.15)" }} />
               <div className="flex items-center gap-3">
-                <div className="h-11 w-11 shrink-0">
+                <div className="h-9 w-9 shrink-0">
                   <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="h-full w-full object-contain" />
                 </div>
                 <div className="flex h-10 flex-col justify-between py-px">
-                  <h1 className="text-xl font-semibold leading-none text-gray-900">내 디자인</h1>
-                  <p className="text-xs leading-none text-gray-500">저장된 디자인 목록</p>
+                  <h1 className="text-lg font-semibold leading-none" style={{ color: "#F0E9DF" }}>내 디자인</h1>
+                  <p className="text-xs leading-none" style={{ color: "#8A9BB8" }}>저장된 디자인 목록</p>
                 </div>
               </div>
             </div>
 
-            <Button variant="outline" size="sm" type="button" onClick={load} disabled={busy}>
+            <Button
+              size="sm"
+              type="button"
+              onClick={load}
+              disabled={busy}
+              className="text-sm font-medium"
+              style={{
+                background: "rgba(240,233,223,0.10)",
+                color: "#F0E9DF",
+                border: "1px solid rgba(240,233,223,0.15)",
+                borderRadius: "10px",
+              }}
+            >
               {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               새로고침
             </Button>
@@ -132,19 +151,34 @@ export function MyDesignsDashboard() {
 
       <div className="mx-auto max-w-7xl px-6 py-8">
         {busy ? (
-          <div className="flex items-center justify-center py-16 text-sm text-gray-500">
+          <div className="flex items-center justify-center py-16 text-sm" style={{ color: "#8A8FA8" }}>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             불러오는 중…
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-[12px] border border-gray-200 bg-white p-10 text-center text-sm text-gray-500">
+          <div
+            className="rounded-2xl p-10 text-center text-sm"
+            style={{
+              background: "#FFFFFF",
+              border: "1px solid rgba(26,37,53,0.08)",
+              color: "#8A8FA8",
+            }}
+          >
             저장된 디자인이 없습니다.
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((it) => (
-              <div key={it.id} className="rounded-[12px] border border-gray-200 bg-white shadow-sm overflow-hidden">
-                <div className="aspect-[4/3] w-full bg-gray-50">
+              <div
+                key={it.id}
+                className="rounded-2xl overflow-hidden"
+                style={{
+                  background: "#FFFFFF",
+                  border: "1px solid rgba(26,37,53,0.08)",
+                  boxShadow: "0 1px 4px rgba(26,37,53,0.05)",
+                }}
+              >
+                <div className="aspect-[4/3] w-full" style={{ background: "#F5F0E8" }}>
                   {it.thumbnail_url ? (
                     <img src={it.thumbnail_url} alt={it.name} className="h-full w-full object-cover" />
                   ) : it.canvas_data ? (
@@ -170,13 +204,18 @@ export function MyDesignsDashboard() {
                       />
                     </div>
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">NO THUMB</div>
+                    <div
+                      className="flex h-full w-full items-center justify-center text-xs"
+                      style={{ color: "#C8C2B8" }}
+                    >
+                      NO THUMB
+                    </div>
                   )}
                 </div>
                 <div className="p-4">
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-gray-900">{it.name}</div>
-                    <div className="mt-1 text-xs text-gray-500">
+                    <div className="truncate text-sm font-semibold" style={{ color: "#1A2535" }}>{it.name}</div>
+                    <div className="mt-1 text-xs" style={{ color: "#8A8FA8" }}>
                       {templateLabel(it.template_id)} · {new Date(it.updated_at || it.created_at).toLocaleString()}
                     </div>
                   </div>
@@ -187,7 +226,13 @@ export function MyDesignsDashboard() {
                       onClick={() =>
                         navigate(`/create/${it.template_id}?designId=${encodeURIComponent(it.id)}`)
                       }
-                      className="h-8 px-2 text-xs gap-1.5"
+                      className="h-8 px-2 text-xs gap-1.5 font-semibold"
+                      style={{
+                        background: "#1A2535",
+                        color: "#F0E9DF",
+                        borderRadius: "8px",
+                        border: "none",
+                      }}
                     >
                       <Pencil className="h-3.5 w-3.5" />
                       이어서 편집
@@ -198,6 +243,11 @@ export function MyDesignsDashboard() {
                       variant="outline"
                       onClick={() => askDelete(it)}
                       className="h-8 px-2 text-xs gap-1.5"
+                      style={{
+                        borderRadius: "8px",
+                        border: "1px solid rgba(26,37,53,0.12)",
+                        color: "#6B7280",
+                      }}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       삭제

@@ -30,9 +30,9 @@ const categoryIconMap: Record<string, React.ComponentType<{ className?: string }
 };
 
 const categoryTabBase =
-  "inline-flex items-center justify-center rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F43182]/40";
-const categoryTabIdle = "border-gray-200 bg-white text-gray-700 hover:border-gray-300";
-const categoryTabActive = "border-[#F43182] bg-[#F43182]/10 text-[#F43182]";
+  "inline-flex items-center justify-center rounded-xl border px-3 py-2 text-[13px] font-medium transition-all focus-visible:outline-none";
+const categoryTabIdle = "bg-white text-[#6B7280] hover:border-[rgba(26,37,53,0.20)]";
+const categoryTabActive = "bg-[#1A2535] text-white border-[#1A2535]";
 
 function parseCategoryFromSearch(searchParams: URLSearchParams): string | "all" {
   const c = searchParams.get("category");
@@ -93,8 +93,8 @@ export function TemplateGallery() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
-      <header className="border-b border-gray-200 bg-white">
+    <div className="min-h-screen" style={{ background: "#F0E9DF" }}>
+      <header style={{ background: "#1A2535", borderBottom: "1px solid rgba(240,233,223,0.06)" }}>
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -103,23 +103,35 @@ export function TemplateGallery() {
                 size="sm"
                 type="button"
                 onClick={() => navigate("/options")}
-                className="text-gray-600 hover:text-gray-900"
+                className="text-sm font-medium transition-colors"
+                style={{ color: "rgba(240,233,223,0.70)" }}
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 옵션으로
               </Button>
-              <div className="h-6 w-px bg-gray-200" />
+              <div className="h-5 w-px" style={{ background: "rgba(240,233,223,0.15)" }} />
               <div className="flex items-center gap-3">
-                <div className="h-11 w-11 shrink-0">
+                <div className="h-9 w-9 shrink-0">
                   <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="h-full w-full object-contain" />
                 </div>
                 <div className="flex h-10 flex-col justify-between py-px">
-                  <h1 className="text-xl font-semibold leading-none text-gray-900">{APP_DISPLAY_NAME}</h1>
-                  <p className="text-xs leading-none text-gray-500">브랜드 그래픽 제작 · Brand Design Create</p>
+                  <h1 className="text-lg font-semibold leading-none" style={{ color: "#F0E9DF" }}>{APP_DISPLAY_NAME}</h1>
+                  <p className="text-xs leading-none" style={{ color: "#8A9BB8" }}>브랜드 그래픽 제작 · Brand Design Create</p>
                 </div>
               </div>
             </div>
-            <Button variant="outline" size="sm" type="button" onClick={() => navigate("/dashboard")}>
+            <Button
+              size="sm"
+              type="button"
+              onClick={() => navigate("/dashboard")}
+              className="text-sm font-medium transition-all"
+              style={{
+                background: "rgba(240,233,223,0.10)",
+                color: "#F0E9DF",
+                border: "1px solid rgba(240,233,223,0.15)",
+                borderRadius: "10px",
+              }}
+            >
               내 디자인
             </Button>
           </div>
@@ -127,10 +139,17 @@ export function TemplateGallery() {
       </header>
 
       <div className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-8 rounded-[12px] border border-gray-200 bg-white px-[32px] pb-6 pt-[21px]">
-          <div className="mb-[16px] flex min-w-0 items-center gap-[8px]">
-            <Layers className="h-[26px] w-[26px] shrink-0 text-[#F43182]" />
-            <h2 className="text-[19.5px] font-semibold text-gray-900">카테고리 선택</h2>
+        <div
+          className="mb-8 rounded-2xl px-8 pb-6 pt-5"
+          style={{
+            background: "#FFFFFF",
+            border: "1px solid rgba(26,37,53,0.08)",
+            boxShadow: "0 1px 4px rgba(26,37,53,0.05)",
+          }}
+        >
+          <div className="mb-4 flex min-w-0 items-center gap-2">
+            <Layers className="h-6 w-6 shrink-0" style={{ color: "#F43182" }} />
+            <h2 className="font-semibold" style={{ fontSize: "18px", color: "#1A2535" }}>카테고리 선택</h2>
           </div>
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -181,13 +200,18 @@ export function TemplateGallery() {
 
         <div className="mb-8">
           <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "#8A8FA8" }} />
             <Input
               type="search"
               placeholder="템플릿 검색..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              className="pl-10 h-10 rounded-xl text-sm"
+              style={{
+                background: "#FFFFFF",
+                border: "1px solid rgba(26,37,53,0.10)",
+                color: "#1A2535",
+              }}
             />
           </div>
         </div>
@@ -209,39 +233,58 @@ export function TemplateGallery() {
                     handleSelectTemplate(template.id);
                   }
                 }}
-                className={`group min-w-0 cursor-pointer overflow-hidden rounded-lg border bg-white transition-all hover:shadow-lg ${
-                  isPlacard ? "border-gray-200 hover:border-[#F43182]/40" : "border-gray-200"
-                }`}
+                className="group min-w-0 cursor-pointer overflow-hidden rounded-2xl transition-all"
+                style={{
+                  background: "#FFFFFF",
+                  border: "1px solid rgba(26,37,53,0.08)",
+                  boxShadow: "0 1px 4px rgba(26,37,53,0.05)",
+                }}
                 onClick={() => handleSelectTemplate(template.id)}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.boxShadow = "0 6px 20px rgba(26,37,53,0.10)";
+                  (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 4px rgba(26,37,53,0.05)";
+                  (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
+                }}
               >
-                <div className="relative flex h-20 items-center justify-center overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 sm:h-24">
-                  <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-indigo-600/10 opacity-0 transition-opacity group-hover:opacity-100" />
+                <div
+                  className="relative flex h-20 items-center justify-center overflow-hidden sm:h-24"
+                  style={{ background: "#F5F0E8" }}
+                >
+                  <div
+                    className="absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100"
+                    style={{ background: "linear-gradient(135deg, rgba(244,49,130,0.06), rgba(26,37,53,0.06))" }}
+                  />
                   <div className="z-10 text-center">
-                    <div className="mx-auto mb-1 flex h-10 w-10 items-center justify-center rounded-md bg-white shadow-sm sm:h-12 sm:w-12">
+                    <div
+                      className="mx-auto mb-1 flex h-10 w-10 items-center justify-center rounded-xl shadow-sm sm:h-12 sm:w-12"
+                      style={{ background: "#FFFFFF" }}
+                    >
                       {isPlacard ? (
-                        <RectangleHorizontal className="h-6 w-6 text-gray-400 sm:h-7 sm:w-7" />
+                        <RectangleHorizontal className="h-6 w-6 sm:h-7 sm:w-7" style={{ color: "#C8C2B8" }} />
                       ) : (
-                        <LayoutTemplate className="h-6 w-6 text-gray-400 sm:h-7 sm:w-7" />
+                        <LayoutTemplate className="h-6 w-6 sm:h-7 sm:w-7" style={{ color: "#C8C2B8" }} />
                       )}
                     </div>
-                    <div className="text-[11px] font-medium text-gray-500">{template.size.name}</div>
+                    <div className="text-[11px] font-medium" style={{ color: "#A8A49C" }}>{template.size.name}</div>
                   </div>
                 </div>
 
                 <div className="min-w-0 p-2 sm:p-3">
-                  <h3 className="mb-0.5 truncate text-[13px] font-medium text-gray-900">{template.name}</h3>
-                  <p className="mb-2 hidden truncate text-[12px] text-gray-500 sm:block">{template.description}</p>
+                  <h3 className="mb-0.5 truncate text-[13px] font-semibold" style={{ color: "#1A2535" }}>{template.name}</h3>
+                  <p className="mb-2 hidden truncate text-[12px] sm:block" style={{ color: "#8A8FA8" }}>{template.description}</p>
                   <div className="flex min-w-0 items-center justify-between gap-2">
-                    <span className="min-w-0 truncate text-[11px] text-gray-400">
+                    <span className="min-w-0 truncate text-[11px]" style={{ color: "#A8A49C" }}>
                       {template.size.width} × {template.size.height} {template.size.unit}
                     </span>
                     <Button
                       size="sm"
                       variant="ghost"
                       type="button"
-                      className={`h-7 px-2 text-[12px] opacity-0 transition-opacity group-hover:opacity-100 ${
-                        isPlacard ? "text-[#F43182] hover:bg-[#F43182]/10 hover:text-[#F43182]" : ""
-                      }`}
+                      className="h-7 px-2 text-[12px] opacity-0 transition-opacity group-hover:opacity-100 font-semibold"
+                      style={{ color: "#F43182" }}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleSelectTemplate(template.id);
@@ -258,9 +301,9 @@ export function TemplateGallery() {
 
         {filteredTemplates.length === 0 && (
           <div className="py-16 text-center">
-            <FileImage className="mx-auto mb-4 h-16 w-16 text-gray-300" />
-            <h3 className="mb-2 text-lg font-medium text-gray-900">검색 결과가 없습니다.</h3>
-            <p className="text-gray-500">검색어나 카테고리 필터를 변경해보세요.</p>
+            <FileImage className="mx-auto mb-4 h-16 w-16" style={{ color: "#C8C2B8" }} />
+            <h3 className="mb-2 text-lg font-semibold" style={{ color: "#1A2535" }}>검색 결과가 없습니다.</h3>
+            <p style={{ color: "#8A8FA8" }}>검색어나 카테고리 필터를 변경해보세요.</p>
           </div>
         )}
       </div>

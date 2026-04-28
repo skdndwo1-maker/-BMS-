@@ -62,9 +62,9 @@ const ETC_TOOLTIP_TEXT = [
 
 // 네이밍 검수 카테고리 탭과 동일 스타일
 const categoryTabBase =
-  "inline-flex items-center justify-center rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F43182]/40";
-const categoryTabIdle = "border-gray-200 bg-white text-gray-700 hover:border-gray-300";
-const categoryTabActive = "border-[#F43182] bg-[#F43182]/10 text-[#F43182]";
+  "inline-flex items-center justify-center rounded-xl border px-3 py-2 text-[13px] font-medium transition-all focus-visible:outline-none";
+const categoryTabIdle = "bg-white text-[#6B7280] border-[rgba(26,37,53,0.10)] hover:border-[rgba(26,37,53,0.20)]";
+const categoryTabActive = "bg-[#1A2535] text-white border-[#1A2535]";
 
 interface Violation {
   category: string;
@@ -307,23 +307,30 @@ export function BrandInspection() {
   const currentStepIndex = getStepIndex(currentStep);
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
-      <header className="sticky top-0 z-10 border-b border-gray-200 bg-white">
+    <div className="min-h-screen" style={{ background: "#F0E9DF" }}>
+      <header className="sticky top-0 z-10" style={{ background: "#1A2535", borderBottom: "1px solid rgba(240,233,223,0.06)" }}>
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" type="button" onClick={() => navigate("/options")}>
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                onClick={() => navigate("/options")}
+                className="text-sm font-medium"
+                style={{ color: "rgba(240,233,223,0.70)" }}
+              >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 옵션으로
               </Button>
-              <div className="h-6 w-px bg-gray-200" />
+              <div className="h-5 w-px" style={{ background: "rgba(240,233,223,0.15)" }} />
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 shrink-0">
+                <div className="h-9 w-9 shrink-0">
                   <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="h-full w-full object-contain" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-semibold text-gray-900">{APP_DISPLAY_NAME}</h1>
-                  <p className="text-xs text-gray-500">브랜드 디자인 검수 Brand Design Inspection</p>
+                  <h1 className="text-lg font-semibold" style={{ color: "#F0E9DF" }}>{APP_DISPLAY_NAME}</h1>
+                  <p className="text-xs" style={{ color: "#8A9BB8" }}>브랜드 디자인 검수 Brand Design Inspection</p>
                 </div>
               </div>
             </div>
@@ -332,7 +339,7 @@ export function BrandInspection() {
       </header>
 
       {currentStep !== "idle" && (
-        <div className="border-b border-gray-200 bg-white">
+        <div style={{ background: "#FFFFFF", borderBottom: "1px solid rgba(26,37,53,0.08)" }}>
           <div className="mx-auto max-w-7xl px-6 py-4">
             {/* 스텝 고정 폭 + 구간 연결선만 flex-1로 등간격 분배 */}
             <div className="flex w-full items-center">
