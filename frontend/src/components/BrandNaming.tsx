@@ -334,11 +334,22 @@ function tierPackageToProposal(tp: TierPackageEvaluation): BrandNamingProposal {
 /** 생성 모드 평가 점수 바 — 대안 1~4 카드 공통: 고정 높이, 트랙·채움 색 통일 */
 const NAMING_EVAL_PROGRESS_HEIGHT_PX = 8;
 
-function NamingEvalProgressBar({ percent }: { percent: number }) {
+const NAMING_TIER_LEGAL_TRACK = "bg-[#92b8b1]/14";
+const NAMING_TIER_LEGAL_FILL = "bg-[#92b8b1]";
+
+function NamingEvalProgressBar({
+  percent,
+  variant = "coral",
+}: {
+  percent: number;
+  variant?: "coral" | "tierLegality";
+}) {
   const v = Number.isFinite(percent) ? Math.min(100, Math.max(0, Math.round(percent))) : 0;
+  const track = variant === "tierLegality" ? NAMING_TIER_LEGAL_TRACK : "bg-[#FF7F66]/12";
+  const fill = variant === "tierLegality" ? NAMING_TIER_LEGAL_FILL : "bg-[#FF7F66]";
   return (
     <div
-      className="naming-eval-progress w-full min-w-0 shrink-0 overflow-hidden rounded-full bg-[#FF7F66]/12"
+      className={`naming-eval-progress w-full min-w-0 shrink-0 overflow-hidden rounded-full ${track}`}
       style={{ height: NAMING_EVAL_PROGRESS_HEIGHT_PX }}
       role="progressbar"
       aria-valuenow={v}
@@ -346,7 +357,7 @@ function NamingEvalProgressBar({ percent }: { percent: number }) {
       aria-valuemax={100}
     >
       <div
-        className="h-full min-h-0 rounded-full bg-[#FF7F66] transition-[width] duration-150 ease-out"
+        className={`h-full min-h-0 rounded-full transition-[width] duration-150 ease-out ${fill}`}
         style={{ width: `${v}%` }}
       />
     </div>
@@ -401,7 +412,7 @@ function ProposalDimensionBars({ proposal }: { proposal: BrandNamingProposal }) 
                       <div className="mb-1 flex items-center justify-between gap-1">
                         <span className="text-[11px] font-medium text-gray-700">{label}</span>
                       </div>
-                      <NamingEvalProgressBar percent={passfail === "PASS" ? 100 : 0} />
+                      <NamingEvalProgressBar variant="tierLegality" percent={passfail === "PASS" ? 100 : 0} />
                       <div className="mt-1.5 flex w-full min-w-0 items-center justify-between gap-2">
                         <span
                           className={passfail === "PASS" ? NAMING_PASS_BADGE_MD : NAMING_FAIL_TEXT_MD}
@@ -1528,7 +1539,11 @@ export function BrandNaming() {
                           key={row.label}
                           className="flex min-w-0 flex-col items-center justify-center gap-0.5 leading-none sm:flex-row sm:gap-1.5"
                         >
-                          <span className="brand-pill--accent !px-2 !py-0.5 !text-[9px] sm:!text-[10px] max-w-full truncate">
+                          <span
+                            className={`${
+                              row.pf ? "brand-pill--hierarchy-legality" : "brand-pill--accent"
+                            } !px-2 !py-0.5 !text-[9px] sm:!text-[10px] max-w-full truncate`}
+                          >
                             {row.label}
                           </span>
                           {pf ? (
@@ -1575,7 +1590,7 @@ export function BrandNaming() {
                 <div className="mt-8 flex flex-col gap-8">
                   <div>
                     <p className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#FF7F66]" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#92b8b1]" />
                       Pass / Fail 항목
                     </p>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1586,7 +1601,7 @@ export function BrandNaming() {
                       weightInOverall: null,
                       score: dim.hierarchy,
                       icon: BadgeCheck,
-                      iconWrap: "bg-[#c8d9c4]/35 text-[#2f4a38]",
+                      iconWrap: "bg-[#92b8b1]/18 text-[#2f5550]",
                       body: (
                         <>
                           <p className="mb-2 text-[14px] leading-relaxed text-gray-600">{namingResult.hierarchy.message}</p>
@@ -1605,7 +1620,7 @@ export function BrandNaming() {
                       weightInOverall: null,
                       score: dim.legality,
                       icon: Scale,
-                      iconWrap: "bg-[#FF7F66]/12 text-[#FF7F66]",
+                      iconWrap: "bg-[#92b8b1]/18 text-[#2f5550]",
                       body: (
                         <>
                           <p className="mb-2 text-[14px] leading-relaxed text-gray-600">{namingResult.copyright.verdict}</p>
@@ -1957,9 +1972,15 @@ export function BrandNaming() {
                 ];
                 return (
                   <div className="flex flex-col gap-6">
-                    {blocks.map((b) => (
+                    {blocks.map((b, bi) => (
                       <section key={b.t}>
-                        <h4 className="mb-2 text-[14px] font-semibold text-[#FF7F66]">{b.t}</h4>
+                        <h4
+                          className={`mb-2 text-[14px] font-semibold ${
+                            bi < 2 ? "text-[#92b8b1]" : "text-[#FF7F66]"
+                          }`}
+                        >
+                          {b.t}
+                        </h4>
                         <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-gray-700">
                           {String(b.c ?? "").trim() || "(상세 문단 없음)"}
                         </p>

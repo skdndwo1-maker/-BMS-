@@ -30,6 +30,22 @@
   white-space: nowrap;
 }
 
+/* 네이밍 Pass/Fail 계층·적법 라벨 캡슐 (#92b8b1, 주황과 구분) */
+.brand-pill--hierarchy-legality {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  color: #2f5550;
+  background: rgba(146, 184, 177, 0.22);
+  border: 1px solid rgba(146, 184, 177, 0.42);
+  white-space: nowrap;
+}
+
 /* Active / 성공 */
 .brand-pill--success {
   display: inline-flex;
