@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 import {
@@ -178,26 +177,28 @@ export function BrandLibrary() {
     return a.name.localeCompare(b.name, "ko");
   });
 
-  const getThumbnailColor = (category: string) => {
-    switch (category) {
-      case "logo":
-        return "from-[#FF7F66] to-[#E55A3E]";
-      case "icon":
-        return "from-blue-500 to-indigo-600";
-      case "pictogram":
-        return "from-green-500 to-emerald-600";
-      case "image":
-        return "from-purple-500 to-pink-600";
-      case "template":
-        return "from-orange-500 to-red-600";
-      case "font":
-        return "from-green-500 to-emerald-600";
-      case "guide":
-        return "from-gray-500 to-gray-700";
-      default:
-        return "from-gray-400 to-gray-600";
-    }
-  };
+/** 카테고리별 썸네일 — 플랫 톤(그라데이션 제거), 대시보드 스타일 */
+function getThumbnailSurface(category: string): string {
+  switch (category) {
+    case "logo":
+      return "bg-[#FF7F66]/14 text-[#FF7F66]";
+    case "slogan":
+      return "bg-[#F0EFEC] text-gray-700";
+    case "icon":
+    case "pictogram":
+      return "bg-[#E8E4DF] text-gray-700";
+    case "image":
+      return "bg-[#FF7F66]/10 text-[#E85D4A]";
+    case "template":
+      return "bg-[#FAFAF8] text-gray-800 border border-[rgba(0,0,0,0.06)]";
+    case "font":
+      return "bg-[#EBE8E4] text-gray-800";
+    case "guide":
+      return "bg-[#c8d9c4]/40 text-[#2f4a38]";
+    default:
+      return "bg-[#EBE8E4] text-gray-600";
+  }
+}
 
   const handleDownload = async (asset: Asset) => {
     if (!sb) {
@@ -244,15 +245,15 @@ export function BrandLibrary() {
   };
 
   return (
-    <div className="min-h-screen brand-app-shell flex">
-      <aside className="w-72 border-r border-[rgba(0,0,0,0.06)] bg-[#F0EFEC] flex flex-col">
-        <div className="p-6 border-b border-[rgba(0,0,0,0.06)]">
+    <div className="brand-app-shell flex min-h-screen">
+      <aside className="flex w-64 shrink-0 flex-col border-r border-[rgba(0,0,0,0.06)] bg-[#ECE9E4] sm:w-72">
+        <div className="border-b border-[rgba(0,0,0,0.06)] p-5 sm:p-6">
           <button
             type="button"
             onClick={() => navigate("/options")}
-            className="flex items-center gap-2 text-[13px] font-medium text-[#6B6B6B] hover:text-[#1A1A1A] mb-4 transition-colors"
+            className="mb-4 flex items-center gap-2 text-[13px] font-medium text-[#6B6B6B] transition-colors hover:text-[#1A1A1A]"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="h-4 w-4" />
             <span className="text-sm">홈으로</span>
           </button>
           <div className="mb-1">
@@ -260,7 +261,7 @@ export function BrandLibrary() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4">
           <div className="space-y-1">
             {categories.map((category) => {
               const Icon = category.icon;
@@ -271,18 +272,20 @@ export function BrandLibrary() {
                   key={category.id}
                   type="button"
                   onClick={() => setSelectedCategory(category.id)}
-                  className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 transition-all ${
-                    isActive ? "bg-black text-white shadow-sm" : "text-gray-600 hover:bg-white/60 hover:text-gray-900"
+                  className={`flex w-full items-center justify-between rounded-full px-3 py-2.5 transition-all ${
+                    isActive
+                      ? "bg-black font-medium text-white shadow-[0_4px_14px_-4px_rgba(0,0,0,0.25)]"
+                      : "text-gray-600 hover:bg-white/70 hover:text-gray-900"
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <Icon className="w-4 h-4" />
-                    <span className="text-sm font-medium">{category.label}</span>
+                    <Icon className="h-4 w-4 shrink-0 opacity-90" />
+                    <span className="text-[13px]">{category.label}</span>
                   </div>
                   {count > 0 && (
                     <span
-                      className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        isActive ? "bg-white/20 text-white" : "brand-pill--accent !px-2 !py-0.5"
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        isActive ? "bg-white/20 text-white" : "bg-[#FF7F66]/14 text-[#c14d38]"
                       }`}
                     >
                       {count}
@@ -294,151 +297,177 @@ export function BrandLibrary() {
           </div>
         </div>
 
-        <div className="p-4 border-t border-[rgba(0,0,0,0.06)] bg-[#EBE8E3]">
-          <div className="flex items-start gap-3 p-3 bg-white border border-[rgba(0,0,0,0.06)] rounded-2xl shadow-sm">
-            <div className="w-8 h-8 bg-[#FF7F66]/10 rounded-lg flex items-center justify-center shrink-0">
-              <Package className="w-4 h-4 text-[#FF7F66]" />
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-1">승인된 에셋만 제공</h3>
-              <p className="text-xs text-gray-500 leading-relaxed">
-                모든 자료는 브랜드 가이드라인에 부합하며 사용 승인되었습니다.
-              </p>
+        <div className="border-t border-[rgba(0,0,0,0.06)] bg-[#E5E2DD] p-3 sm:p-4">
+          <div className="rounded-2xl border border-[rgba(0,0,0,0.06)] bg-white p-3 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)]">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FF7F66]/12">
+                <Package className="h-5 w-5 text-[#FF7F66]" />
+              </div>
+              <div>
+                <h3 className="mb-0.5 text-sm font-semibold text-gray-900">승인된 에셋만 제공</h3>
+                <p className="text-[11px] leading-relaxed text-gray-500">
+                  모든 자료는 브랜드 가이드라인에 부합하며 사용 승인되었습니다.
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0">
-        <header className="bg-white border-b border-[rgba(0,0,0,0.06)] px-8 py-4 shadow-[0_4px_24px_-6px_rgba(0,0,0,0.06)]">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                {categories.find((c) => c.id === selectedCategory)?.label || "전체 에셋"}
-              </h2>
-              <p className="text-sm text-gray-500 mt-0.5">
-                {loading ? "불러오는 중..." : `${sortedAssets.length}개의 에셋을 찾았습니다`}
-              </p>
+      <main className="flex min-w-0 flex-1 flex-col bg-[#F5F3F0]">
+        <div className="border-b border-[rgba(0,0,0,0.05)] bg-[#F5F3F0] px-5 py-5 sm:px-8 sm:py-6">
+          <div className="brand-surface mb-5 flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+            <div className="flex min-w-0 items-center gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#FF7F66]/12">
+                <FolderOpen className="h-7 w-7 text-[#FF7F66]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[13px] text-gray-500">
+                  {categories.find((c) => c.id === selectedCategory)?.label || "전체 에셋"}
+                </p>
+                <p className="text-4xl font-bold tabular-nums tracking-tight text-black sm:text-[2.5rem]">
+                  {loading ? "—" : sortedAssets.length}
+                </p>
+                <p className="mt-0.5 text-xs text-gray-400">
+                  {loading ? "불러오는 중…" : "표시 중인 에셋 수"}
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant={favoritesOnly ? "default" : "outline"}
-                size="sm"
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
                 onClick={() => setFavoritesOnly((v) => !v)}
-                className={favoritesOnly ? "rounded-full bg-black text-white hover:bg-zinc-900" : "rounded-full border-[rgba(0,0,0,0.1)]"}
+                className={
+                  favoritesOnly
+                    ? "inline-flex h-9 items-center gap-2 rounded-full bg-black px-4 text-[13px] font-semibold text-white shadow-sm"
+                    : "inline-flex h-9 items-center gap-2 rounded-full border border-[rgba(0,0,0,0.1)] bg-white px-4 text-[13px] font-medium text-gray-700 shadow-sm hover:bg-[#FAFAF8]"
+                }
               >
-                <Star className="w-4 h-4 mr-2" />
+                <Star className={`h-4 w-4 ${favoritesOnly ? "fill-white" : ""}`} />
                 즐겨찾기만
-              </Button>
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
+          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
                 type="text"
-                placeholder="에셋 검색... (이름, 태그, 설명)"
+                placeholder="에셋 검색… (이름, 태그, 설명)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="brand-library-search"
               />
             </div>
-
-            <div className="flex items-center gap-2">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortBy)}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
-              >
-                <option value="recent">최근 등록순</option>
-                <option value="popular">인기순</option>
-                <option value="name">이름순</option>
-              </select>
-
-              <div className="flex items-center gap-1 border border-gray-200 rounded-lg p-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex rounded-full border border-[rgba(0,0,0,0.08)] bg-white p-1 shadow-sm">
+                {(
+                  [
+                    { id: "recent" as const, label: "최신" },
+                    { id: "popular" as const, label: "인기" },
+                    { id: "name" as const, label: "이름" },
+                  ] as const
+                ).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setSortBy(t.id)}
+                    className={`rounded-full px-4 py-1.5 text-[12px] font-semibold transition-colors ${
+                      sortBy === t.id ? "bg-black text-white shadow-sm" : "text-gray-500 hover:text-gray-800"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              <div className="inline-flex rounded-full border border-[rgba(0,0,0,0.08)] bg-white p-1 shadow-sm">
                 <button
                   type="button"
                   onClick={() => setViewMode("grid")}
-                  className={`p-1.5 rounded ${viewMode === "grid" ? "bg-gray-100 text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
+                  className={`rounded-full p-2 ${viewMode === "grid" ? "bg-[#F0EFEC] text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
+                  aria-label="그리드 보기"
                 >
-                  <Grid3x3 className="w-4 h-4" />
+                  <Grid3x3 className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
                   onClick={() => setViewMode("list")}
-                  className={`p-1.5 rounded ${viewMode === "list" ? "bg-gray-100 text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
+                  className={`rounded-full p-2 ${viewMode === "list" ? "bg-[#F0EFEC] text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
+                  aria-label="목록 보기"
                 >
-                  <LayoutList className="w-4 h-4" />
+                  <LayoutList className="h-4 w-4" />
                 </button>
               </div>
             </div>
           </div>
-        </header>
+        </div>
 
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto px-5 py-6 sm:px-8 sm:py-8">
           {loading ? (
-            <div className="flex items-center justify-center py-20 text-gray-500">
-              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-              <span className="text-sm">에셋을 불러오는 중...</span>
+            <div className="flex items-center justify-center py-24 text-gray-500">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              <span className="text-sm">에셋을 불러오는 중…</span>
             </div>
           ) : viewMode === "grid" ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {sortedAssets.map((asset) => (
                 <div
                   key={asset.id}
-                  className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg hover:border-gray-300 transition-all cursor-pointer"
+                  className="group cursor-pointer overflow-hidden rounded-[22px] border border-[rgba(0,0,0,0.06)] bg-white shadow-[0_4px_24px_-8px_rgba(0,0,0,0.08),0_2px_8px_-4px_rgba(0,0,0,0.04)] transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_28px_-8px_rgba(0,0,0,0.1)]"
                   onClick={() => setSelectedAsset(asset)}
                 >
                   <div
-                    className={`aspect-[4/3] bg-gradient-to-br ${getThumbnailColor(asset.category)} flex items-center justify-center relative overflow-hidden`}
+                    className={`relative flex aspect-[4/3] items-center justify-center overflow-hidden ${getThumbnailSurface(asset.category)}`}
                   >
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all" />
-                    <div className="relative z-10 text-white">
-                      <FileImage className="w-16 h-16 opacity-50" />
-                    </div>
+                    <div className="absolute inset-0 bg-black/0 transition-all group-hover:bg-black/[0.04]" />
+                    <FileImage className="relative z-10 h-16 w-16 opacity-40" />
                     {asset.favorite && (
-                      <div className="absolute top-3 right-3 w-7 h-7 bg-white/90 rounded-full flex items-center justify-center">
-                        <Heart className="w-4 h-4 text-red-500 fill-red-500" />
+                      <div className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm">
+                        <Heart className="h-4 w-4 fill-red-500 text-red-500" />
                       </div>
                     )}
-                    <div className="absolute bottom-3 left-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button size="sm" className="flex-1 bg-white text-gray-900 hover:bg-gray-100">
-                        <Eye className="w-3 h-3 mr-1" />
+                    <div className="absolute bottom-3 left-3 right-3 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button
+                        size="sm"
+                        className="h-8 flex-1 rounded-full border-0 bg-white/95 text-[12px] font-medium text-gray-900 shadow-sm hover:bg-white"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Eye className="mr-1 h-3.5 w-3.5" />
                         미리보기
                       </Button>
                       <Button
                         size="sm"
-                        className="bg-gray-800 text-white hover:bg-gray-900"
+                        className="h-8 rounded-full bg-black px-3 text-white shadow-sm hover:bg-black/90"
                         onClick={(e) => {
                           e.stopPropagation();
                           void handleDownload(asset);
                         }}
                       >
-                        <Download className="w-3 h-3" />
+                        <Download className="h-3.5 w-3.5" />
                       </Button>
                       {isAdmin && (
                         <Button
                           size="sm"
                           variant="outline"
-                          className="bg-white/90 text-red-600 hover:bg-white border-red-200"
+                          className="h-8 rounded-full border-red-200/80 bg-white/95 text-red-600 hover:bg-white"
                           onClick={(e) => {
                             e.stopPropagation();
                             void handleDelete(asset);
                           }}
                           title="삭제 (관리자)"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       )}
                     </div>
                   </div>
 
-                  <div className="p-4">
-                    <h3 className="font-medium text-gray-900 mb-1 line-clamp-1">{asset.name}</h3>
-                    <p className="text-xs text-gray-500 mb-3 line-clamp-2">{asset.description || "—"}</p>
+                  <div className="p-4 sm:p-5">
+                    <h3 className="mb-1 line-clamp-1 text-[15px] font-semibold text-gray-900">{asset.name}</h3>
+                    <p className="mb-3 line-clamp-2 text-[12px] leading-relaxed text-gray-500">{asset.description || "—"}</p>
 
-                    <div className="flex flex-wrap gap-1 mb-3">
+                    <div className="mb-3 flex flex-wrap gap-1.5">
                       {asset.formats.slice(0, 3).map((format) => (
                         <span key={format} className="brand-pill--accent !px-2 !py-0.5 !text-[10px]">
                           {format}
@@ -446,9 +475,9 @@ export function BrandLibrary() {
                       ))}
                     </div>
 
-                    <div className="flex items-center justify-between text-xs text-gray-400">
+                    <div className="flex items-center justify-between text-[11px] text-gray-400">
                       <div className="flex items-center gap-1">
-                        <Download className="w-3 h-3" />
+                        <Download className="h-3 w-3" />
                         <span>{asset.downloads.toLocaleString()}</span>
                       </div>
                       <span>{humanFileSize(asset.fileSize)}</span>
@@ -458,86 +487,137 @@ export function BrandLibrary() {
               ))}
             </div>
           ) : (
-            <div className="space-y-2">
-              {sortedAssets.map((asset) => (
-                <div
-                  key={asset.id}
-                  className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md hover:border-gray-300 transition-all cursor-pointer flex items-center gap-4"
-                  onClick={() => setSelectedAsset(asset)}
-                >
-                  <div className={`w-20 h-20 rounded-lg bg-gradient-to-br ${getThumbnailColor(asset.category)} flex items-center justify-center shrink-0`}>
-                    <FileImage className="w-8 h-8 text-white opacity-50" />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between mb-1">
-                      <h3 className="font-medium text-gray-900">{asset.name}</h3>
-                      {asset.favorite && <Heart className="w-4 h-4 text-red-500 fill-red-500 shrink-0" />}
-                    </div>
-                    <p className="text-sm text-gray-500 mb-2 line-clamp-1">{asset.description || "—"}</p>
-                    <div className="flex items-center gap-4 text-xs text-gray-400">
-                      <div className="flex items-center gap-1">
-                        <Download className="w-3 h-3" />
-                        <span>{asset.downloads.toLocaleString()}회</span>
+            <div className="brand-surface overflow-hidden">
+              <div className="hidden grid-cols-[minmax(0,1.2fr)_auto_auto_auto_auto] gap-4 border-b border-[rgba(0,0,0,0.06)] px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-gray-400 sm:grid">
+                <span>에셋</span>
+                <span className="text-center">형식</span>
+                <span className="text-right">다운로드</span>
+                <span className="text-right">용량</span>
+                <span className="text-right">작업</span>
+              </div>
+              <ul className="divide-y divide-[rgba(0,0,0,0.05)]">
+                {sortedAssets.map((asset) => (
+                  <li
+                    key={asset.id}
+                    className="flex cursor-pointer flex-col gap-4 p-4 transition-colors hover:bg-[#FAFAF8] sm:flex-row sm:items-center sm:gap-5 sm:px-5"
+                    onClick={() => setSelectedAsset(asset)}
+                  >
+                    <div className="flex min-w-0 flex-1 items-center gap-4">
+                      <div
+                        className={`flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-xl ${getThumbnailSurface(asset.category)}`}
+                      >
+                        <FileImage className="h-9 w-9 opacity-50" />
                       </div>
-                      <span>{humanFileSize(asset.fileSize)}</span>
-                      <div className="flex gap-1">
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-0.5 flex items-start justify-between gap-2">
+                          <h3 className="font-semibold text-gray-900">{asset.name}</h3>
+                          {asset.favorite && <Heart className="h-4 w-4 shrink-0 fill-red-500 text-red-500" />}
+                        </div>
+                        <p className="line-clamp-1 text-[13px] text-gray-500">{asset.description || "—"}</p>
+                        <div className="mt-2 flex flex-wrap gap-1 sm:hidden">
+                          {asset.formats.map((format) => (
+                            <span key={format} className="brand-pill--accent !px-2 !py-0.5 !text-[10px]">
+                              {format}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="hidden flex-wrap items-center justify-end gap-3 sm:flex sm:w-[420px] sm:shrink-0">
+                      <div className="flex min-w-[120px] flex-wrap justify-end gap-1">
                         {asset.formats.map((format) => (
                           <span key={format} className="brand-pill--accent !px-2 !py-0.5 !text-[10px]">
                             {format}
                           </span>
                         ))}
                       </div>
+                      <span className="w-16 text-right text-[13px] tabular-nums text-gray-700">
+                        {asset.downloads.toLocaleString()}
+                      </span>
+                      <span className="w-20 text-right text-[13px] tabular-nums text-gray-600">{humanFileSize(asset.fileSize)}</span>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 rounded-full border-gray-200 bg-white text-[12px]"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Eye className="mr-1 h-3.5 w-3.5" />
+                          보기
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-8 rounded-full bg-black px-3 text-[12px] text-white"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDownload(asset);
+                          }}
+                        >
+                          <Download className="mr-1 h-3.5 w-3.5" />
+                          받기
+                        </Button>
+                        {isAdmin && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 rounded-full border-red-200 text-red-600"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleDelete(asset);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Button variant="outline" size="sm">
-                      <Eye className="w-4 h-4 mr-1" />
-                      미리보기
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="bg-gray-800 text-white hover:bg-gray-900"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleDownload(asset);
-                      }}
+                    <div
+                      className="flex w-full gap-2 border-t border-[rgba(0,0,0,0.06)] pt-3 sm:hidden"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <Download className="w-4 h-4 mr-1" />
-                      다운로드
-                    </Button>
-                    {isAdmin && (
                       <Button
                         size="sm"
-                        variant="outline"
-                        className="text-red-600 border-red-200 hover:bg-red-50"
+                        className="h-9 flex-1 rounded-full bg-black text-[13px] text-white"
                         onClick={(e) => {
                           e.stopPropagation();
-                          void handleDelete(asset);
+                          void handleDownload(asset);
                         }}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Download className="mr-1.5 h-3.5 w-3.5" />
+                        다운로드
                       </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                      {isAdmin && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-9 rounded-full border-red-200 px-3 text-red-600"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDelete(asset);
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
           {!loading && sortedAssets.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20">
-              <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center mb-4">
-                <Search className="w-10 h-10 text-gray-300" />
+            <div className="brand-surface flex flex-col items-center justify-center py-20">
+              <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-[#F0EFEC]">
+                <Search className="h-10 w-10 text-gray-300" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
+              <h3 className="mb-2 text-lg font-semibold text-gray-900">
                 {assets.length === 0 ? "아직 등록된 에셋이 없습니다" : "검색 결과가 없습니다"}
               </h3>
-              <p className="text-gray-500 text-center max-w-md">
+              <p className="max-w-md text-center text-[14px] text-gray-500">
                 {assets.length === 0
                   ? "관리자가 Supabase Storage에 자료를 업로드하면 이곳에 표시됩니다."
-                  : "다른 검색어를 시도하거나 카테고리를 변경해보세요."}
+                  : "다른 검색어를 시도하거나 카테고리를 변경해 보세요."}
               </p>
             </div>
           )}
@@ -545,46 +625,62 @@ export function BrandLibrary() {
       </main>
 
       {selectedAsset && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6" onClick={() => setSelectedAsset(null)}>
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">{selectedAsset.name}</h2>
-              <button type="button" onClick={() => setSelectedAsset(null)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors">
-                <span className="text-gray-400 text-2xl leading-none">&times;</span>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 sm:p-6"
+          onClick={() => setSelectedAsset(null)}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[24px] border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_12px_48px_-12px_rgba(0,0,0,0.2)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] px-5 py-4 sm:px-6">
+              <h2 className="truncate pr-4 text-lg font-bold text-gray-900">{selectedAsset.name}</h2>
+              <button
+                type="button"
+                onClick={() => setSelectedAsset(null)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-white hover:text-gray-900"
+                aria-label="닫기"
+              >
+                <span className="text-2xl leading-none">&times;</span>
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-6 p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+            <div className="grid max-h-[calc(90vh-88px)] grid-cols-1 gap-6 overflow-y-auto p-5 sm:grid-cols-2 sm:p-6">
               <div>
-                <div className={`aspect-[4/3] bg-gradient-to-br ${getThumbnailColor(selectedAsset.category)} rounded-xl flex items-center justify-center mb-4`}>
-                  <FileImage className="w-24 h-24 text-white opacity-30" />
+                <div
+                  className={`mb-4 flex aspect-[4/3] items-center justify-center rounded-[20px] ${getThumbnailSurface(selectedAsset.category)}`}
+                >
+                  <FileImage className="h-24 w-24 opacity-35" />
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    className="flex-1 bg-[#FF7F66] text-white hover:bg-[#E55A3E]"
-                    onClick={() => void handleDownload(selectedAsset)}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
+                <div className="flex flex-wrap gap-2">
+                  <Button className="brand-btn-primary flex-1 min-w-[140px]" onClick={() => void handleDownload(selectedAsset)}>
+                    <Download className="mr-2 h-4 w-4" />
                     다운로드
                   </Button>
-                  <Button variant="outline" title="파일 경로 복사" onClick={() => {
-                    navigator.clipboard.writeText(selectedAsset.filePath).then(
-                      () => toast.success("경로를 복사했습니다."),
-                      () => toast.error("클립보드 복사 실패")
-                    );
-                  }}>
-                    <Copy className="w-4 h-4" />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="rounded-full border-gray-200"
+                    title="파일 경로 복사"
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedAsset.filePath).then(
+                        () => toast.success("경로를 복사했습니다."),
+                        () => toast.error("클립보드 복사 실패")
+                      );
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
                   </Button>
-                  <Button variant="outline">
-                    <Heart className={`w-4 h-4 ${selectedAsset.favorite ? "text-red-500 fill-red-500" : ""}`} />
+                  <Button variant="outline" size="icon" className="rounded-full border-gray-200">
+                    <Heart className={`h-4 w-4 ${selectedAsset.favorite ? "fill-red-500 text-red-500" : ""}`} />
                   </Button>
                   {isAdmin && (
                     <Button
                       variant="outline"
-                      className="text-red-600 border-red-200 hover:bg-red-50"
+                      className="rounded-full border-red-200 text-red-600 hover:bg-red-50"
                       onClick={() => void handleDelete(selectedAsset)}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   )}
                 </div>
@@ -593,15 +689,18 @@ export function BrandLibrary() {
               <div>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">설명</label>
-                    <p className="text-sm text-gray-700 leading-relaxed">{selectedAsset.description || "—"}</p>
+                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">설명</label>
+                    <p className="text-[14px] leading-relaxed text-gray-600">{selectedAsset.description || "—"}</p>
                   </div>
 
                   <div>
-                    <label className="text-xs font-medium text-gray-500 uppercase mb-2 block">포함 형식</label>
+                    <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">포함 형식</label>
                     <div className="flex flex-wrap gap-2">
                       {selectedAsset.formats.map((format) => (
-                        <span key={format} className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium">
+                        <span
+                          key={format}
+                          className="rounded-lg bg-[#F0EFEC] px-3 py-1.5 text-[13px] font-medium text-gray-800"
+                        >
                           {format}
                         </span>
                       ))}
@@ -610,18 +709,18 @@ export function BrandLibrary() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">파일 크기</label>
-                      <p className="text-sm text-gray-900 font-medium">{humanFileSize(selectedAsset.fileSize)}</p>
+                      <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">파일 크기</label>
+                      <p className="text-[15px] font-semibold text-black">{humanFileSize(selectedAsset.fileSize)}</p>
                     </div>
                     <div>
-                      <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">다운로드</label>
-                      <p className="text-sm text-gray-900 font-medium">{selectedAsset.downloads.toLocaleString()}회</p>
+                      <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">다운로드</label>
+                      <p className="text-[15px] font-semibold text-black">{selectedAsset.downloads.toLocaleString()}회</p>
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-xs font-medium text-gray-500 uppercase mb-1 block">등록일</label>
-                    <p className="text-sm text-gray-900 font-medium">
+                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">등록일</label>
+                    <p className="text-[14px] font-medium text-gray-800">
                       {new Date(selectedAsset.uploadDate).toLocaleDateString("ko-KR", {
                         year: "numeric",
                         month: "long",
@@ -632,10 +731,13 @@ export function BrandLibrary() {
 
                   {selectedAsset.tags.length > 0 && (
                     <div>
-                      <label className="text-xs font-medium text-gray-500 uppercase mb-2 block">태그</label>
+                      <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-gray-400">태그</label>
                       <div className="flex flex-wrap gap-2">
                         {selectedAsset.tags.map((tag) => (
-                          <span key={tag} className="bg-[#FF7F66]/10 text-[#FF7F66] px-3 py-1 rounded-full text-xs font-medium">
+                          <span
+                            key={tag}
+                            className="rounded-full bg-[#FF7F66]/12 px-3 py-1 text-[12px] font-medium text-[#c14d38]"
+                          >
                             #{tag}
                           </span>
                         ))}
@@ -643,15 +745,15 @@ export function BrandLibrary() {
                     </div>
                   )}
 
-                  <div className="pt-4 border-t border-gray-200">
-                    <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <div className="w-5 h-5 bg-blue-500 rounded flex items-center justify-center shrink-0 mt-0.5">
-                        <span className="text-white text-xs">ℹ</span>
+                  <div className="border-t border-[rgba(0,0,0,0.06)] pt-4">
+                    <div className="flex items-start gap-3 rounded-[14px] border border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] p-3">
+                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#FF7F66]/12">
+                        <span className="text-[12px] font-bold text-[#FF7F66]">i</span>
                       </div>
                       <div>
-                        <h4 className="text-sm font-medium text-blue-900 mb-1">사용 가이드</h4>
-                        <p className="text-xs text-blue-700 leading-relaxed">
-                          이 에셋은 브랜드 가이드라인에 따라 승인되었습니다. 상업적 용도로 자유롭게 사용 가능합니다.
+                        <h4 className="mb-1 text-[13px] font-semibold text-gray-900">사용 가이드</h4>
+                        <p className="text-[12px] leading-relaxed text-gray-600">
+                          이 에셋은 브랜드 가이드라인에 따라 승인되었습니다. 상업적 용도로 자유롭게 사용할 수 있습니다.
                         </p>
                       </div>
                     </div>
