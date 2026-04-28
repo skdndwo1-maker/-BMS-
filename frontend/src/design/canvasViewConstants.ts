@@ -2,4 +2,4 @@
  * 편집 화면 기본 표시 배율 (모든 디자인 제작 템플릿 공통).
  * 돋보기·줌에서 80%로 보던 화면 크기를, 줌 100% 기본이 그에 해당하도록 ×(1/0.8) 보정.
  */
-export const DESIGN_CANVAS_BASE_VIEW_SCALE = 1 / 0.8;
+export const DESIGN_CANVAS_BASE_VIEW_SCALE = 1.0;
