@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type ChangeEvent, type FormEvent } from "react";
+import { useState, useRef, useEffect, type ChangeEvent, type FormEvent, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Palette,
@@ -23,58 +23,94 @@ import { apiUrl } from "@/lib/apiUrl";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { APP_DISPLAY_NAME } from "@/constants/appBranding";
 
+/** Soft UI ref: warm cream bg, salmon coral, black CTAs, sage badges, large radius, soft lift shadows */
+const PALETTE = {
+  bg: "#F5F3F0",
+  card: "#FFFFFF",
+  cardMuted: "#FAF8F6",
+  border: "rgba(0,0,0,0.04)",
+  borderSubtle: "rgba(0,0,0,0.06)",
+  ink: "#1A1A1A",
+  inkSoft: "#2A2A2A",
+  muted: "#6B6B6B",
+  mutedSoft: "#9A9A9A",
+  coral: "#FF7F66",
+  coralSoft: "rgba(255, 127, 102, 0.14)",
+  onCoral: "#FFFFFF",
+  black: "#000000",
+  blackSoft: "#1A1A1A",
+  sage: "#C8D9C4",
+  sageInk: "#2F4A38",
+  shadow:
+    "0 4px 24px -6px rgba(0,0,0,0.08), 0 2px 10px -4px rgba(0,0,0,0.04)",
+  shadowHover: "0 8px 32px -8px rgba(0,0,0,0.10), 0 4px 16px -6px rgba(0,0,0,0.06)",
+  shadowLg: "0 12px 40px -12px rgba(0,0,0,0.10)",
+} as const;
+
+const pageFont: CSSProperties = {
+  fontFamily: '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif',
+};
+
+/** Coral bullet — ref ~6–8px circle */
+function SectionDot({ size = 8, style }: { size?: 6 | 7 | 8; style?: CSSProperties }) {
+  const px = size;
+  return (
+    <span
+      aria-hidden
+      style={{
+        display: "inline-block",
+        width: `${px}px`,
+        height: `${px}px`,
+        borderRadius: "50%",
+        background: PALETTE.coral,
+        flexShrink: 0,
+        boxShadow: "0 0 0 1px rgba(255, 127, 102, 0.15)",
+        ...style,
+      }}
+    />
+  );
+}
+
 const mainOptions = [
   {
     id: "graphic",
     icon: Palette,
     badge: "Create",
-    badgeStyle: { background: "rgba(244,49,130,0.12)", color: "#F43182" },
     title: "브랜드 그래픽 제작",
     description:
       "포스터·플래카드·SNS 등 다양한 사이즈의 템플릿으로 브랜드 가이드에 맞는 비주얼을 손쉽게 디자인합니다.",
     cta: "스튜디오 열기",
     route: "/brand-graphics",
-    iconBg: { background: "rgba(244,49,130,0.10)", color: "#F43182" },
-    accentBar: "#F43182",
   },
   {
     id: "inspection",
     icon: ScanSearch,
     badge: "AI Powered",
-    badgeStyle: { background: "rgba(139,92,246,0.10)", color: "#7C3AED" },
     title: "브랜드 디자인 검수",
     description:
       "그래픽·영상·사진·템플릿을 업로드하면 Gemini AI가 브랜드 가이드라인 부합 여부를 자동으로 검토합니다.",
     cta: "검수 시작하기",
     route: "/inspection",
-    iconBg: { background: "rgba(139,92,246,0.10)", color: "#7C3AED" },
-    accentBar: "#7C3AED",
   },
   {
     id: "naming",
     icon: PenTool,
     badge: "AI Integrated",
-    badgeStyle: { background: "rgba(14,165,233,0.10)", color: "#0EA5E9" },
     title: "브랜드 네이밍 검토",
     description:
       "로고·브랜드명·슬로건이 브랜드 원칙에 부합하는지 AI가 즉시 피드백을 제공합니다.",
     cta: "네이밍 검토하기",
     route: "/naming",
-    iconBg: { background: "rgba(14,165,233,0.10)", color: "#0EA5E9" },
-    accentBar: "#0EA5E9",
   },
   {
     id: "library",
     icon: Library,
     badge: "Cloud Hub",
-    badgeStyle: { background: "rgba(16,185,129,0.10)", color: "#059669" },
     title: "브랜드 라이브러리",
     description:
       "BI/CI 로고, .ai 마스터, 공식 슬로건, 픽토그램·아이콘 등 승인 에셋을 한 곳에서 관리합니다.",
     cta: "라이브러리 보기",
     route: "/library",
-    iconBg: { background: "rgba(16,185,129,0.10)", color: "#059669" },
-    accentBar: "#059669",
   },
 ];
 
@@ -101,6 +137,7 @@ export function OptionSelection() {
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [attachedFileName, setAttachedFileName] = useState<string | null>(null);
   const [showImageOptions, setShowImageOptions] = useState(false);
+  const [hoveredOptionId, setHoveredOptionId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -156,7 +193,7 @@ export function OptionSelection() {
     const userMsg: OptionsChatMessage = { role: "user", content: text };
     const historyForApi: OptionsChatMessage[] = [
       ...chatMessages.map(({ role, content }) => ({ role, content })),
-      userMsg
+      userMsg,
     ];
 
     setChatError(null);
@@ -215,25 +252,69 @@ export function OptionSelection() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "#F0E9DF" }}>
-      {/* Header */}
+    <div
+      style={{
+        minHeight: "100vh",
+        background: PALETTE.bg,
+        display: "flex",
+        flexDirection: "column",
+        ...pageFont,
+      }}
+    >
       <header
-        className="sticky top-0 z-10"
-        style={{ background: "#1A2535", borderBottom: "1px solid rgba(240,233,223,0.06)" }}
+        style={{
+          background: PALETTE.card,
+          borderBottom: `1px solid ${PALETTE.borderSubtle}`,
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+          boxShadow: PALETTE.shadow,
+        }}
       >
-        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 shrink-0">
-              <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="h-full w-full object-contain" />
-            </div>
-            <div>
-              <span className="font-semibold text-white text-lg block leading-tight">{APP_DISPLAY_NAME}</span>
-              <span className="text-xs block leading-tight" style={{ color: "#8A9BB8" }}>
-                Brand design &amp; content platform
-              </span>
-            </div>
+        <div
+          style={{
+            maxWidth: "1080px",
+            margin: "0 auto",
+            padding: "14px 24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              justifyContent: "center",
+              gap: "4px",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif',
+                fontSize: "24px",
+                fontWeight: 700,
+                color: "#0F1115",
+                letterSpacing: "-0.03em",
+                lineHeight: 1.2,
+              }}
+            >
+              {APP_DISPLAY_NAME}
+            </span>
+            <span
+              style={{
+                fontFamily: '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif',
+                fontSize: "15px",
+                fontWeight: 400,
+                color: "#6B7280",
+                lineHeight: 1.35,
+              }}
+            >
+              Brand Contents Manager
+            </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <button
               type="button"
               onClick={() => {
@@ -246,122 +327,287 @@ export function OptionSelection() {
                   ? "관리자 모드로 이동"
                   : "권한이 없습니다. 관리자 검토 페이지에서 Admin Key를 입력한 사용자만 접근할 수 있습니다."
               }
-              className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition-all"
-              style={
-                canOpenAdmin
-                  ? { background: "rgba(240,233,223,0.08)", color: "#F0E9DF" }
-                  : { color: "rgba(240,233,223,0.25)", cursor: "not-allowed" }
-              }
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "13px",
+                fontWeight: 600,
+                color: canOpenAdmin ? "#FFFFFF" : PALETTE.mutedSoft,
+                cursor: canOpenAdmin ? "pointer" : "not-allowed",
+                background: canOpenAdmin ? PALETTE.black : "rgba(0,0,0,0.06)",
+                border: "none",
+                borderRadius: "999px",
+                padding: "8px 16px 8px 10px",
+                boxShadow: canOpenAdmin ? "0 4px 14px -4px rgba(0,0,0,0.25)" : "none",
+                transition: "transform 0.15s, box-shadow 0.15s",
+              }}
             >
-              <Crown className="w-3.5 h-3.5" />
+              <Crown
+                style={{
+                  width: "16px",
+                  height: "16px",
+                  color: canOpenAdmin ? "#FFFFFF" : PALETTE.mutedSoft,
+                  flexShrink: 0,
+                }}
+              />
               <span>Admin</span>
             </button>
             <button
               type="button"
               onClick={() => void handleLogout()}
               title="로그아웃 후 로그인 화면으로 이동"
-              className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition-all"
-              style={{ background: "rgba(240,233,223,0.08)", color: "#F0E9DF" }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "13px",
+                fontWeight: 600,
+                color: "#FFFFFF",
+                cursor: "pointer",
+                background: PALETTE.black,
+                border: "none",
+                borderRadius: "999px",
+                padding: "8px 16px 8px 10px",
+                boxShadow: "0 4px 14px -4px rgba(0,0,0,0.2)",
+                transition: "transform 0.15s, box-shadow 0.15s",
+              }}
             >
-              <LogOut className="w-3.5 h-3.5" aria-hidden />
+              <LogOut style={{ width: "16px", height: "16px", color: "#FFFFFF" }} aria-hidden />
               <span>로그아웃</span>
             </button>
           </div>
         </div>
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col justify-between max-w-6xl w-full mx-auto px-6 py-6">
+      <main
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          maxWidth: "1080px",
+          width: "100%",
+          margin: "0 auto",
+          padding: "28px 24px 32px",
+          minHeight: 0,
+        }}
+      >
         <div>
-          {/* Page intro */}
-          <div className="mb-6">
+          <div style={{ marginBottom: "28px" }}>
             <div
-              className="inline-flex items-center gap-2 rounded-full px-3 py-1 mb-3 text-xs font-medium"
-              style={{ background: "rgba(26,37,53,0.08)", color: "#6B7280" }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                background: PALETTE.sage,
+                color: PALETTE.sageInk,
+                border: `1px solid rgba(47, 74, 56, 0.12)`,
+                borderRadius: "999px",
+                padding: "6px 14px",
+                marginBottom: "14px",
+                fontWeight: 600,
+              }}
             >
-              <Sparkles className="w-3.5 h-3.5" style={{ color: "#8A8FA8" }} />
-              <span>AI-Powered Brand Management</span>
+              <Sparkles style={{ width: "14px", height: "14px" }} />
+              <span style={{ fontSize: "12px" }}>AI-powered brand management</span>
+              <SectionDot size={6} style={{ boxShadow: "0 0 0 1px rgba(255, 127, 102, 0.25)" }} />
             </div>
             <h1
-              className="mb-1"
-              style={{ fontSize: "26px", fontWeight: 700, color: "#1A2535", letterSpacing: "-0.02em" }}
+              style={{
+                color: PALETTE.ink,
+                fontSize: "clamp(24px, 2.2vw, 30px)",
+                fontWeight: 700,
+                margin: "0 0 8px 0",
+                letterSpacing: "-0.03em",
+                lineHeight: 1.2,
+              }}
             >
               오늘 무엇을 도와드릴까요?
             </h1>
-            <p style={{ color: "#8A8FA8", fontSize: "13px" }}>
+            <p style={{ color: PALETTE.muted, fontSize: "15px", maxWidth: "520px", lineHeight: 1.55 }}>
               작업할 메뉴를 선택하거나, 아래 검색창에 필요한 내용을 직접 입력해보세요.
             </p>
           </div>
 
-          {/* Option cards */}
-          <div className="grid grid-cols-1 gap-4 min-[640px]:grid-cols-2 min-[1024px]:grid-cols-4">
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+              marginBottom: "12px",
+              padding: "0 2px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span
+                style={{
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  color: PALETTE.ink,
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                브랜드 작업
+              </span>
+              <SectionDot size={8} />
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: "16px",
+            }}
+          >
             {mainOptions.map((option) => {
               const Icon = option.icon;
+              const isHovered = hoveredOptionId === option.id;
               return (
                 <button
                   key={option.id}
                   type="button"
                   onClick={() => handleOptionClick(option.route)}
-                  className="group relative text-left rounded-2xl flex flex-col items-stretch min-h-[200px] transition-all duration-200 focus:outline-none"
+                  onMouseEnter={() => setHoveredOptionId(option.id)}
+                  onMouseLeave={() => setHoveredOptionId(null)}
                   style={{
-                    background: "#FFFFFF",
-                    border: "1px solid rgba(26,37,53,0.08)",
-                    padding: "20px",
-                    boxShadow: "0 1px 4px rgba(26,37,53,0.06)",
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.boxShadow =
-                      "0 6px 20px rgba(26,37,53,0.10)";
-                    (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-2px)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLButtonElement).style.boxShadow =
-                      "0 1px 4px rgba(26,37,53,0.06)";
-                    (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+                    textAlign: "left",
+                    background: isHovered ? PALETTE.coralSoft : PALETTE.card,
+                    border: isHovered ? `1px solid ${PALETTE.coral}` : `1px solid ${PALETTE.borderSubtle}`,
+                    borderRadius: "24px",
+                    padding: "22px 20px 20px",
+                    cursor: "pointer",
+                    transition: "background 0.2s, border-color 0.2s, box-shadow 0.2s, transform 0.2s",
+                    display: "flex",
+                    flexDirection: "column",
+                    minHeight: "200px",
+                    outline: "none",
+                    boxShadow: isHovered ? PALETTE.shadowHover : PALETTE.shadow,
+                    transform: isHovered ? "translateY(-2px)" : "translateY(0)",
                   }}
                 >
-                  {/* Top accent bar */}
                   <div
-                    className="absolute top-0 left-0 right-0 h-0.5 rounded-t-2xl opacity-0 group-hover:opacity-100 transition-opacity"
-                    style={{ background: option.accentBar }}
-                  />
-
-                  <div className="flex items-start justify-between mb-4 w-full gap-2">
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      justifyContent: "space-between",
+                      marginBottom: "14px",
+                      gap: "8px",
+                    }}
+                  >
                     <div
-                      className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                      style={option.iconBg}
+                      style={{
+                        width: "44px",
+                        height: "44px",
+                        borderRadius: "14px",
+                        background: isHovered ? PALETTE.coral : PALETTE.bg,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                        transition: "background 0.2s",
+                        boxShadow: isHovered ? "0 4px 12px -4px rgba(255,127,102,0.5)" : "none",
+                      }}
                     >
-                      <Icon style={{ width: "17px", height: "17px" }} />
+                      <Icon
+                        style={{
+                          width: "19px",
+                          height: "19px",
+                          color: isHovered ? "#FFFFFF" : PALETTE.inkSoft,
+                        }}
+                      />
                     </div>
                     <span
-                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
-                      style={option.badgeStyle}
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        padding: "4px 10px",
+                        borderRadius: "999px",
+                        background: PALETTE.sage,
+                        color: PALETTE.sageInk,
+                        whiteSpace: "nowrap",
+                        letterSpacing: "0.01em",
+                      }}
                     >
                       {option.badge}
                     </span>
                   </div>
-
-                  <h2
-                    className="mb-1.5 leading-snug break-keep"
-                    style={{ fontSize: "16px", fontWeight: 700, color: "#1A2535", letterSpacing: "-0.01em" }}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      marginBottom: "8px",
+                    }}
                   >
-                    {option.title}
-                  </h2>
+                    <h2
+                      style={{
+                        color: isHovered ? PALETTE.coral : PALETTE.ink,
+                        fontSize: "16px",
+                        fontWeight: 700,
+                        margin: 0,
+                        lineHeight: 1.35,
+                        letterSpacing: "-0.02em",
+                        wordBreak: "keep-all",
+                        transition: "color 0.2s",
+                        flex: "0 1 auto",
+                        minWidth: 0,
+                      }}
+                    >
+                      {option.title}
+                    </h2>
+                    <div
+                      aria-hidden
+                      style={{
+                        flex: 1,
+                        minWidth: "12px",
+                        height: "1px",
+                        background: PALETTE.coral,
+                        opacity: isHovered ? 0.7 : 0.45,
+                        borderRadius: "1px",
+                        transition: "opacity 0.2s",
+                        alignSelf: "center",
+                        transform: "scaleY(0.35)",
+                        transformOrigin: "center",
+                      }}
+                    />
+                    <SectionDot size={6} style={{ flexShrink: 0, alignSelf: "center" }} />
+                  </div>
                   <p
-                    className="break-keep flex-1"
-                    style={{ fontSize: "12px", lineHeight: 1.6, color: "#8A8FA8" }}
+                    style={{
+                      color: PALETTE.muted,
+                      fontSize: "12.5px",
+                      lineHeight: 1.6,
+                      wordBreak: "keep-all",
+                      flexGrow: 1,
+                    }}
                   >
                     {option.description}
                   </p>
                   <div
-                    className="mt-4 pt-3 flex items-center gap-1.5 font-semibold transition-colors"
                     style={{
+                      marginTop: "14px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
                       fontSize: "12px",
-                      color: option.accentBar,
-                      borderTop: "1px solid rgba(26,37,53,0.06)",
+                      fontWeight: 600,
+                      color: isHovered ? PALETTE.black : PALETTE.inkSoft,
+                      letterSpacing: "0.01em",
+                      transition: "color 0.2s",
                     }}
                   >
                     {option.cta}
-                    <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
+                    <ArrowRight
+                      style={{
+                        width: "14px",
+                        height: "14px",
+                        transform: isHovered ? "translateX(3px)" : "translateX(0)",
+                        transition: "transform 0.2s",
+                      }}
+                    />
                   </div>
                 </button>
               );
@@ -369,37 +615,75 @@ export function OptionSelection() {
           </div>
         </div>
 
-        {/* Bottom chat area */}
-        <div className="mt-auto flex min-h-0 flex-col">
-          <div className="flex items-center gap-4 mb-3 shrink-0">
-            <div className="flex-1 h-px" style={{ background: "rgba(26,37,53,0.12)" }} />
-            <div className="flex items-center gap-2 text-xs" style={{ color: "#A8A49C" }}>
-              <Sparkles className="w-3 h-3" />
-              <span>or ask anything</span>
-            </div>
-            <div className="flex-1 h-px" style={{ background: "rgba(26,37,53,0.12)" }} />
+        <div
+          style={{ marginTop: "auto", display: "flex", flexDirection: "column", minHeight: 0, gap: "4px" }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "16px",
+              marginBottom: "10px",
+              flexShrink: 0,
+            }}
+          >
+            <div style={{ flex: 1, height: "1px", background: PALETTE.borderSubtle }} />
+            <span style={{ fontSize: "11px", color: PALETTE.muted, fontWeight: 600 }}>
+              or ask anything
+            </span>
+            <div style={{ flex: 1, height: "1px", background: PALETTE.borderSubtle }} />
           </div>
 
-          {/* Quick suggestions */}
-          <div className="flex flex-wrap gap-1.5 mb-3 justify-center shrink-0">
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: "8px",
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ fontSize: "11px", fontWeight: 600, color: PALETTE.muted, letterSpacing: "0.02em" }}>
+              Quick prompts
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "6px",
+              marginBottom: "12px",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
             {quickSuggestions.map((s) => (
               <button
                 key={s}
                 type="button"
                 onClick={() => handleSuggestion(s)}
-                className="text-xs rounded-full px-3 py-1 transition-all"
                 style={{
-                  background: "#FFFFFF",
-                  border: "1px solid rgba(26,37,53,0.10)",
-                  color: "#6B7280",
+                  fontSize: "12px",
+                  color: PALETTE.inkSoft,
+                  background: PALETTE.card,
+                  border: `1px solid ${PALETTE.borderSubtle}`,
+                  borderRadius: "999px",
+                  padding: "6px 14px",
+                  cursor: "pointer",
+                  fontWeight: 500,
+                  boxShadow: "0 2px 8px -4px rgba(0,0,0,0.06)",
+                  transition: "border-color 0.15s, color 0.15s, box-shadow 0.15s",
                 }}
                 onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(244,49,130,0.35)";
-                  (e.currentTarget as HTMLButtonElement).style.color = "#F43182";
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = PALETTE.coral;
+                  (e.currentTarget as HTMLButtonElement).style.color = PALETTE.coral;
+                  (e.currentTarget as HTMLButtonElement).style.boxShadow = PALETTE.shadow;
                 }}
                 onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(26,37,53,0.10)";
-                  (e.currentTarget as HTMLButtonElement).style.color = "#6B7280";
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = PALETTE.borderSubtle;
+                  (e.currentTarget as HTMLButtonElement).style.color = PALETTE.inkSoft;
+                  (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 2px 8px -4px rgba(0,0,0,0.06)";
                 }}
               >
                 {s}
@@ -407,72 +691,169 @@ export function OptionSelection() {
             ))}
           </div>
 
-          {/* Chat messages */}
           <div
             ref={chatScrollRef}
-            className="mb-3 max-h-[min(29.4vh,280px)] min-h-[84px] overflow-y-auto overscroll-contain rounded-2xl px-3 py-3"
             style={{
-              background: "#FFFFFF",
-              border: "1px solid rgba(26,37,53,0.08)",
-              boxShadow: "0 1px 4px rgba(26,37,53,0.04)",
+              marginBottom: "14px",
+              maxHeight: "min(29.4vh, 280px)",
+              minHeight: "88px",
+              overflowY: "auto",
+              overscrollBehavior: "contain",
+              borderRadius: "24px",
+              border: `1px solid ${PALETTE.borderSubtle}`,
+              background: PALETTE.card,
+              padding: "16px",
+              boxShadow: PALETTE.shadow,
             }}
           >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "12px",
+                paddingBottom: "10px",
+                borderBottom: `1px solid ${PALETTE.borderSubtle}`,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: PALETTE.ink, letterSpacing: "-0.01em" }}>
+                  AI assistant
+                </span>
+                <SectionDot size={7} />
+              </div>
+              <span
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 500,
+                  color: PALETTE.mutedSoft,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                }}
+              >
+                chat
+              </span>
+            </div>
             {chatMessages.length === 0 && !chatLoading && (
-              <p className="text-center text-xs" style={{ color: "#A8A49C" }}>
+              <p
+                style={{
+                  textAlign: "center",
+                  fontSize: "12px",
+                  color: PALETTE.mutedSoft,
+                  margin: 0,
+                }}
+              >
                 질문을 입력하면 여기에 답변이 표시됩니다. 이전 대화 맥락이 유지됩니다.
               </p>
             )}
-            <div className="space-y-3">
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               {chatMessages.map((m) => (
                 <div
                   key={m.id}
-                  className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    justifyContent: m.role === "user" ? "flex-end" : "flex-start",
+                    gap: "8px",
+                  }}
                 >
+                  {m.role === "assistant" && (
+                    <SectionDot size={6} style={{ marginTop: "10px", flexShrink: 0 }} />
+                  )}
                   <div
-                    className="max-w-[min(100%,42rem)] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm"
-                    style={
-                      m.role === "user"
-                        ? { background: "#1A2535", color: "#F0E9DF" }
-                        : {
-                            background: "#F5F0E8",
-                            color: "#1A2535",
-                            border: "1px solid rgba(26,37,53,0.08)",
-                          }
-                    }
+                    style={{
+                      maxWidth: "min(100%, 42rem)",
+                      borderRadius: "20px",
+                      padding: "10px 14px",
+                      fontSize: "14px",
+                      lineHeight: 1.55,
+                      background: m.role === "user" ? PALETTE.black : PALETTE.bg,
+                      color: m.role === "user" ? "#FFFFFF" : PALETTE.ink,
+                      border: m.role === "user" ? "none" : `1px solid ${PALETTE.borderSubtle}`,
+                      boxShadow:
+                        m.role === "user"
+                          ? "0 4px 14px -6px rgba(0,0,0,0.2)"
+                          : "0 2px 8px -4px rgba(0,0,0,0.04)",
+                    }}
                   >
-                    <span className="whitespace-pre-wrap break-words">{m.content}</span>
+                    <span style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                      {m.content}
+                    </span>
                   </div>
+                  {m.role === "user" && <SectionDot size={6} style={{ marginTop: "10px", flexShrink: 0 }} />}
                 </div>
               ))}
             </div>
             {chatLoading && (
-              <div className="mt-3 flex items-center gap-2 text-sm" style={{ color: "#8A8FA8" }}>
-                <Loader2 className="h-4 w-4 shrink-0 animate-spin" style={{ color: "#F43182" }} aria-hidden />
+              <div
+                style={{
+                  marginTop: "12px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "14px",
+                  color: PALETTE.muted,
+                }}
+              >
+                <SectionDot size={6} />
+                <Loader2
+                  style={{ width: "16px", height: "16px", flexShrink: 0, color: PALETTE.coral }}
+                  className="animate-spin"
+                  aria-hidden
+                />
                 <span>답변 생성 중…</span>
               </div>
             )}
             {chatError && (
-              <p className="mt-2 text-xs text-red-600" role="alert">
+              <p style={{ marginTop: "8px", fontSize: "12px", color: "#DC2626" }} role="alert">
                 {chatError}
               </p>
             )}
           </div>
 
-          {/* Chat input */}
-          <form onSubmit={handleChatSubmit} className="relative shrink-0">
+          <form onSubmit={handleChatSubmit} style={{ position: "relative", flexShrink: 0 }}>
             <div
-              className="rounded-2xl transition-all"
               style={{
-                background: "#FFFFFF",
-                border: "1px solid rgba(26,37,53,0.10)",
-                boxShadow: "0 1px 4px rgba(26,37,53,0.04)",
+                background: PALETTE.card,
+                border: `1px solid ${PALETTE.borderSubtle}`,
+                borderRadius: "28px",
+                overflow: "hidden",
+                boxShadow: PALETTE.shadowLg,
               }}
             >
-              {/* Mode tabs */}
               <div
-                className="flex items-center gap-1 px-4 pt-3 pb-2"
-                style={{ borderBottom: "1px solid rgba(26,37,53,0.06)" }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                  borderBottom: `1px solid ${PALETTE.borderSubtle}`,
+                  background: PALETTE.card,
+                  padding: "12px 16px 10px",
+                }}
               >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    paddingRight: "10px",
+                    marginRight: "4px",
+                    borderRight: `1px solid ${PALETTE.borderSubtle}`,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: PALETTE.muted,
+                      letterSpacing: "0.02em",
+                    }}
+                  >
+                    Mode
+                  </span>
+                  <SectionDot size={6} />
+                </div>
                 {searchModes.map((mode) => {
                   const ModeIcon = mode.icon;
                   const isActive = activeMode === mode.id;
@@ -485,75 +866,134 @@ export function OptionSelection() {
                         if (mode.id === "image") setShowImageOptions(true);
                         else setShowImageOptions(false);
                       }}
-                      className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all"
-                      style={
-                        isActive
-                          ? {
-                              background: "rgba(244,49,130,0.08)",
-                              color: "#F43182",
-                              border: "1px solid rgba(244,49,130,0.18)",
-                            }
-                          : { color: "#8A8FA8", border: "1px solid transparent" }
-                      }
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        borderRadius: "999px",
+                        padding: "7px 12px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        transition: "background 0.15s, color 0.15s, box-shadow 0.15s",
+                        background: isActive ? PALETTE.black : "transparent",
+                        border: isActive ? "none" : "1px solid transparent",
+                        color: isActive ? "#FFFFFF" : PALETTE.muted,
+                        boxShadow: isActive ? "0 4px 12px -4px rgba(0,0,0,0.2)" : "none",
+                      }}
                     >
-                      <ModeIcon className="h-3.5 w-3.5" />
+                      <ModeIcon style={{ width: "14px", height: "14px" }} />
                       {mode.label}
                     </button>
                   );
                 })}
               </div>
 
-              {/* Attached image */}
               {attachedImage && (
                 <div
-                  className="mx-4 mt-3 flex items-center gap-2 rounded-xl px-3 py-2"
-                  style={{ border: "1px solid rgba(26,37,53,0.10)", background: "#F5F0E8" }}
+                  style={{
+                    margin: "12px 16px 0",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    borderRadius: "16px",
+                    border: `1px solid ${PALETTE.borderSubtle}`,
+                    background: PALETTE.cardMuted,
+                    padding: "8px 12px",
+                  }}
                 >
                   <img
                     src={attachedImage}
                     alt="attachment"
-                    className="h-10 w-10 rounded-lg border object-cover"
-                    style={{ borderColor: "rgba(26,37,53,0.10)" }}
+                    style={{
+                      width: "40px",
+                      height: "40px",
+                      borderRadius: "10px",
+                      border: `1px solid ${PALETTE.borderSubtle}`,
+                      objectFit: "cover",
+                    }}
                   />
-                  <span className="flex-1 truncate text-xs" style={{ color: "#8A8FA8" }}>
+                  <span
+                    style={{
+                      flex: 1,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      fontSize: "12px",
+                      color: PALETTE.muted,
+                    }}
+                  >
                     {attachedFileName}
                   </span>
-                  <button type="button" onClick={clearAttachment} style={{ color: "#A8A49C" }}>
-                    <X className="h-4 w-4" />
+                  <button
+                    type="button"
+                    onClick={clearAttachment}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: PALETTE.mutedSoft,
+                      padding: 0,
+                    }}
+                  >
+                    <X style={{ width: "16px", height: "16px" }} />
                   </button>
                 </div>
               )}
 
-              {/* Image options */}
               {activeMode === "image" && showImageOptions && !attachedImage && (
-                <div className="mx-4 mt-3 flex items-center gap-2">
+                <div
+                  style={{
+                    margin: "12px 16px 0",
+                    display: "flex",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "8px",
+                  }}
+                >
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm transition-all"
                     style={{
-                      border: "1px solid rgba(26,37,53,0.10)",
-                      background: "#FFFFFF",
-                      color: "#1A2535",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      borderRadius: "999px",
+                      border: `1px solid ${PALETTE.borderSubtle}`,
+                      background: PALETTE.card,
+                      padding: "8px 16px",
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      color: PALETTE.inkSoft,
+                      cursor: "pointer",
+                      boxShadow: "0 2px 8px -4px rgba(0,0,0,0.05)",
                     }}
                   >
-                    <ImagePlus className="h-4 w-4" style={{ color: "#F43182" }} />
+                    <ImagePlus style={{ width: "15px", height: "15px", color: PALETTE.coral }} />
                     이미지 첨부
                   </button>
                   <button
                     type="button"
                     onClick={() => cameraInputRef.current?.click()}
-                    className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm transition-all"
                     style={{
-                      border: "1px solid rgba(26,37,53,0.10)",
-                      background: "#FFFFFF",
-                      color: "#1A2535",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      borderRadius: "999px",
+                      border: `1px solid ${PALETTE.borderSubtle}`,
+                      background: PALETTE.card,
+                      padding: "8px 16px",
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      color: PALETTE.inkSoft,
+                      cursor: "pointer",
+                      boxShadow: "0 2px 8px -4px rgba(0,0,0,0.05)",
                     }}
                   >
-                    <Camera className="h-4 w-4" style={{ color: "#F43182" }} />
+                    <Camera style={{ width: "15px", height: "15px", color: PALETTE.coral }} />
                     카메라 촬영
                   </button>
-                  <span className="ml-1 text-xs" style={{ color: "#A8A49C" }}>
+                  <span style={{ marginLeft: "2px", fontSize: "12px", color: PALETTE.mutedSoft }}>
                     또는 이미지 URL을 입력하세요
                   </span>
                 </div>
@@ -569,8 +1009,15 @@ export function OptionSelection() {
                 onChange={handleFileAttach}
               />
 
-              {/* Text input area */}
-              <div className="flex items-end gap-3 px-4 py-3">
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-end",
+                  gap: "12px",
+                  background: PALETTE.bg,
+                  padding: "14px 16px",
+                }}
+              >
                 <textarea
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
@@ -591,53 +1038,104 @@ export function OptionSelection() {
                   }
                   rows={3}
                   disabled={chatLoading}
-                  className="min-w-0 flex-1 resize-none text-sm leading-relaxed tracking-normal bg-transparent focus:outline-none disabled:opacity-60"
-                  style={{ color: "#1A2535" }}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    resize: "none",
+                    background: "transparent",
+                    fontSize: "14px",
+                    lineHeight: 1.55,
+                    color: PALETTE.ink,
+                    border: "none",
+                    outline: "none",
+                    opacity: chatLoading ? 0.6 : 1,
+                  }}
                 />
-                <div className="flex shrink-0 flex-col items-center gap-2 pb-0.5">
+                <div
+                  style={{
+                    display: "flex",
+                    flexShrink: 0,
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "8px",
+                    paddingBottom: "2px",
+                  }}
+                >
                   <button
                     type="button"
-                    className="flex h-9 w-9 items-center justify-center rounded-xl transition-all"
                     style={{
-                      border: "1px solid rgba(26,37,53,0.10)",
-                      background: "#F5F0E8",
-                      color: "#8A8FA8",
+                      display: "flex",
+                      width: "40px",
+                      height: "40px",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: "12px",
+                      border: `1px solid ${PALETTE.borderSubtle}`,
+                      background: PALETTE.card,
+                      color: PALETTE.muted,
+                      cursor: "pointer",
                     }}
                     title="Voice input"
                   >
-                    <Mic className="h-4 w-4" />
+                    <Mic style={{ width: "15px", height: "15px" }} />
                   </button>
                   <button
                     type="submit"
                     disabled={!chatInput.trim() || chatLoading}
-                    className="flex h-9 w-9 items-center justify-center rounded-xl transition-all shadow-sm"
-                    style={
-                      !chatInput.trim() || chatLoading
-                        ? { background: "#E8E0D6", color: "#A8A49C" }
-                        : { background: "#F43182", color: "#FFFFFF" }
-                    }
+                    style={{
+                      display: "flex",
+                      width: "40px",
+                      height: "40px",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: "12px",
+                      background: !chatInput.trim() || chatLoading ? "rgba(0,0,0,0.08)" : PALETTE.black,
+                      color: !chatInput.trim() || chatLoading ? PALETTE.mutedSoft : "#FFFFFF",
+                      border: "none",
+                      cursor: !chatInput.trim() || chatLoading ? "not-allowed" : "pointer",
+                      boxShadow:
+                        !chatInput.trim() || chatLoading
+                          ? "none"
+                          : "0 4px 14px -4px rgba(0,0,0,0.25)",
+                      transition: "background 0.15s, box-shadow 0.15s",
+                    }}
                   >
                     {chatLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                      <Loader2
+                        style={{ width: "15px", height: "15px" }}
+                        className="animate-spin"
+                        aria-hidden
+                      />
                     ) : (
-                      <Send className="h-4 w-4" />
+                      <Send style={{ width: "15px", height: "15px" }} />
                     )}
                   </button>
                 </div>
               </div>
 
-              {/* Footer bar */}
               <div
-                className="flex items-center justify-between rounded-b-2xl px-4 py-2"
-                style={{ borderTop: "1px solid rgba(26,37,53,0.06)" }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  borderTop: `1px solid ${PALETTE.borderSubtle}`,
+                  background: PALETTE.card,
+                  padding: "10px 16px",
+                }}
               >
-                <span className="flex items-center gap-1 text-xs" style={{ color: "#A8A49C" }}>
-                  <Sparkles className="h-3 w-3" />
+                <span
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    fontSize: "11px",
+                    color: PALETTE.muted,
+                  }}
+                >
+                  <Sparkles style={{ width: "11px", height: "11px", color: PALETTE.mutedSoft }} />
                   Powered by Gemini AI · Based on brand guidelines
                 </span>
-                <span className="text-xs" style={{ color: "#C8C2B8" }}>
-                  Shift+Enter로 줄바꿈
-                </span>
+                <span style={{ fontSize: "11px", color: PALETTE.mutedSoft }}>Shift+Enter로 줄바꿈</span>
               </div>
             </div>
           </form>
@@ -645,8 +1143,13 @@ export function OptionSelection() {
       </main>
 
       <footer
-        className="py-4 text-center text-xs"
-        style={{ color: "#A8A49C", borderTop: "1px solid rgba(26,37,53,0.08)" }}
+        style={{
+          padding: "16px",
+          textAlign: "center",
+          fontSize: "11px",
+          color: PALETTE.mutedSoft,
+          borderTop: `1px solid ${PALETTE.borderSubtle}`,
+        }}
       >
         © 2026 {APP_DISPLAY_NAME}. All rights reserved.
       </footer>

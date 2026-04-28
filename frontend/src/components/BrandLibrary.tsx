@@ -244,35 +244,30 @@ export function BrandLibrary() {
   };
 
   return (
-    <div className="min-h-screen flex" style={{ background: "#F0E9DF" }}>
-      {/* Sidebar — dark navy like Reference */}
-      <aside
-        className="w-64 flex flex-col shrink-0"
-        style={{ background: "#1A2535", borderRight: "1px solid rgba(240,233,223,0.06)" }}
-      >
-        <div className="p-5" style={{ borderBottom: "1px solid rgba(240,233,223,0.08)" }}>
+    <div className="min-h-screen bg-[#FAFAFA] flex">
+      <aside className="w-72 bg-white border-r border-gray-200 flex flex-col">
+        <div className="p-6 border-b border-gray-200">
           <button
             type="button"
             onClick={() => navigate("/options")}
-            className="flex items-center gap-2 mb-5 transition-colors text-sm"
-            style={{ color: "rgba(240,233,223,0.55)" }}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>홈으로</span>
+            <span className="text-sm">홈으로</span>
           </button>
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 shrink-0">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 shrink-0">
               <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="w-full h-full object-contain" />
             </div>
             <div>
-              <h1 className="font-semibold text-base" style={{ color: "#F0E9DF" }}>{APP_DISPLAY_NAME}</h1>
-              <p className="text-xs" style={{ color: "#8A9BB8" }}>브랜드 라이브러리</p>
+              <h1 className="font-semibold text-gray-900 text-xl">{APP_DISPLAY_NAME}</h1>
+              <p className="text-xs text-gray-500">브랜드 라이브러리 · Brand Library</p>
             </div>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3">
-          <div className="space-y-0.5">
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="space-y-1">
             {categories.map((category) => {
               const Icon = category.icon;
               const isActive = selectedCategory === category.id;
@@ -282,25 +277,17 @@ export function BrandLibrary() {
                   key={category.id}
                   type="button"
                   onClick={() => setSelectedCategory(category.id)}
-                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all"
-                  style={
-                    isActive
-                      ? { background: "#F43182", color: "#FFFFFF" }
-                      : { color: "rgba(240,233,223,0.60)" }
-                  }
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all ${
+                    isActive ? "bg-[#F43182] text-white shadow-sm" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                  }`}
                 >
                   <div className="flex items-center gap-3">
-                    <Icon className="w-4 h-4 shrink-0" />
+                    <Icon className="w-4 h-4" />
                     <span className="text-sm font-medium">{category.label}</span>
                   </div>
                   {count > 0 && (
                     <span
-                      className="text-xs px-2 py-0.5 rounded-full"
-                      style={
-                        isActive
-                          ? { background: "rgba(255,255,255,0.20)", color: "#FFFFFF" }
-                          : { background: "rgba(240,233,223,0.10)", color: "rgba(240,233,223,0.50)" }
-                      }
+                      className={`text-xs px-2 py-0.5 rounded-full ${isActive ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}
                     >
                       {count}
                     </span>
@@ -311,20 +298,14 @@ export function BrandLibrary() {
           </div>
         </div>
 
-        <div className="p-4" style={{ borderTop: "1px solid rgba(240,233,223,0.08)" }}>
-          <div
-            className="flex items-start gap-3 p-3 rounded-xl"
-            style={{ background: "rgba(240,233,223,0.05)" }}
-          >
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-              style={{ background: "rgba(244,49,130,0.15)" }}
-            >
-              <Package className="w-4 h-4" style={{ color: "#F87AB8" }} />
+        <div className="p-4 border-t border-gray-200 bg-gray-50">
+          <div className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-lg">
+            <div className="w-8 h-8 bg-[#F43182]/10 rounded-lg flex items-center justify-center shrink-0">
+              <Package className="w-4 h-4 text-[#F43182]" />
             </div>
             <div>
-              <h3 className="text-sm font-medium mb-1" style={{ color: "#F0E9DF" }}>승인된 에셋만 제공</h3>
-              <p className="text-xs leading-relaxed" style={{ color: "#8A9BB8" }}>
+              <h3 className="text-sm font-medium text-gray-900 mb-1">승인된 에셋만 제공</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
                 모든 자료는 브랜드 가이드라인에 부합하며 사용 승인되었습니다.
               </p>
             </div>
@@ -332,34 +313,22 @@ export function BrandLibrary() {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0">
-        <header
-          className="px-8 py-4"
-          style={{ background: "#FFFFFF", borderBottom: "1px solid rgba(26,37,53,0.08)" }}
-        >
+      <main className="flex-1 flex flex-col">
+        <header className="bg-white border-b border-gray-200 px-8 py-4">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-xl font-semibold" style={{ color: "#1A2535" }}>
+              <h2 className="text-xl font-semibold text-gray-900">
                 {categories.find((c) => c.id === selectedCategory)?.label || "전체 에셋"}
               </h2>
-              <p className="text-sm mt-0.5" style={{ color: "#8A8FA8" }}>
+              <p className="text-sm text-gray-500 mt-0.5">
                 {loading ? "불러오는 중..." : `${sortedAssets.length}개의 에셋을 찾았습니다`}
               </p>
             </div>
             <div className="flex items-center gap-2">
               <Button
+                variant={favoritesOnly ? "default" : "outline"}
                 size="sm"
                 onClick={() => setFavoritesOnly((v) => !v)}
-                style={
-                  favoritesOnly
-                    ? { background: "#1A2535", color: "#F0E9DF", borderRadius: "10px", border: "none" }
-                    : {
-                        background: "#FFFFFF",
-                        color: "#6B7280",
-                        border: "1px solid rgba(26,37,53,0.12)",
-                        borderRadius: "10px",
-                      }
-                }
               >
                 <Star className="w-4 h-4 mr-2" />
                 즐겨찾기만
@@ -369,20 +338,13 @@ export function BrandLibrary() {
 
           <div className="flex items-center gap-3">
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#8A8FA8" }} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 type="text"
                 placeholder="에셋 검색... (이름, 태그, 설명)"
-                style={{
-                  paddingLeft: "2.5rem",
-                  background: "#F5F0E8",
-                  border: "1px solid rgba(26,37,53,0.10)",
-                  borderRadius: "10px",
-                  color: "#1A2535",
-                }}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-10 text-sm"
+                className="pl-10"
               />
             </div>
 
@@ -390,44 +352,25 @@ export function BrandLibrary() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortBy)}
-                className="px-3 py-2 text-sm cursor-pointer"
-                style={{
-                  border: "1px solid rgba(26,37,53,0.10)",
-                  borderRadius: "10px",
-                  background: "#F5F0E8",
-                  color: "#1A2535",
-                }}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
               >
                 <option value="recent">최근 등록순</option>
                 <option value="popular">인기순</option>
                 <option value="name">이름순</option>
               </select>
 
-              <div
-                className="flex items-center gap-1 p-1 rounded-xl"
-                style={{ border: "1px solid rgba(26,37,53,0.10)", background: "#F5F0E8" }}
-              >
+              <div className="flex items-center gap-1 border border-gray-200 rounded-lg p-1">
                 <button
                   type="button"
                   onClick={() => setViewMode("grid")}
-                  className="p-1.5 rounded-lg transition-all"
-                  style={
-                    viewMode === "grid"
-                      ? { background: "#FFFFFF", color: "#1A2535", boxShadow: "0 1px 3px rgba(26,37,53,0.08)" }
-                      : { color: "#A8A49C" }
-                  }
+                  className={`p-1.5 rounded ${viewMode === "grid" ? "bg-gray-100 text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
                 >
                   <Grid3x3 className="w-4 h-4" />
                 </button>
                 <button
                   type="button"
                   onClick={() => setViewMode("list")}
-                  className="p-1.5 rounded-lg transition-all"
-                  style={
-                    viewMode === "list"
-                      ? { background: "#FFFFFF", color: "#1A2535", boxShadow: "0 1px 3px rgba(26,37,53,0.08)" }
-                      : { color: "#A8A49C" }
-                  }
+                  className={`p-1.5 rounded ${viewMode === "list" ? "bg-gray-100 text-gray-900" : "text-gray-400 hover:text-gray-600"}`}
                 >
                   <LayoutList className="w-4 h-4" />
                 </button>
@@ -436,9 +379,9 @@ export function BrandLibrary() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8" style={{ background: "#F0E9DF" }}>
+        <div className="flex-1 overflow-y-auto p-8">
           {loading ? (
-            <div className="flex items-center justify-center py-20" style={{ color: "#8A8FA8" }}>
+            <div className="flex items-center justify-center py-20 text-gray-500">
               <Loader2 className="w-5 h-5 mr-2 animate-spin" />
               <span className="text-sm">에셋을 불러오는 중...</span>
             </div>
@@ -495,22 +438,18 @@ export function BrandLibrary() {
                   </div>
 
                   <div className="p-4">
-                    <h3 className="font-medium mb-1 line-clamp-1" style={{ color: "#1A2535" }}>{asset.name}</h3>
-                    <p className="text-xs mb-3 line-clamp-2" style={{ color: "#8A8FA8" }}>{asset.description || "—"}</p>
+                    <h3 className="font-medium text-gray-900 mb-1 line-clamp-1">{asset.name}</h3>
+                    <p className="text-xs text-gray-500 mb-3 line-clamp-2">{asset.description || "—"}</p>
 
                     <div className="flex flex-wrap gap-1 mb-3">
                       {asset.formats.slice(0, 3).map((format) => (
-                        <span
-                          key={format}
-                          className="text-xs px-2 py-0.5 rounded-full"
-                          style={{ background: "#EDE6DC", color: "#6B7280" }}
-                        >
+                        <span key={format} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
                           {format}
                         </span>
                       ))}
                     </div>
 
-                    <div className="flex items-center justify-between text-xs" style={{ color: "#A8A49C" }}>
+                    <div className="flex items-center justify-between text-xs text-gray-400">
                       <div className="flex items-center gap-1">
                         <Download className="w-3 h-3" />
                         <span>{asset.downloads.toLocaleString()}</span>
@@ -526,25 +465,20 @@ export function BrandLibrary() {
               {sortedAssets.map((asset) => (
                 <div
                   key={asset.id}
-                  className="rounded-2xl p-4 transition-all cursor-pointer flex items-center gap-4"
-                  style={{
-                    background: "#FFFFFF",
-                    border: "1px solid rgba(26,37,53,0.08)",
-                    boxShadow: "0 1px 3px rgba(26,37,53,0.04)",
-                  }}
+                  className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md hover:border-gray-300 transition-all cursor-pointer flex items-center gap-4"
                   onClick={() => setSelectedAsset(asset)}
                 >
-                  <div className={`w-20 h-20 rounded-xl bg-gradient-to-br ${getThumbnailColor(asset.category)} flex items-center justify-center shrink-0`}>
+                  <div className={`w-20 h-20 rounded-lg bg-gradient-to-br ${getThumbnailColor(asset.category)} flex items-center justify-center shrink-0`}>
                     <FileImage className="w-8 h-8 text-white opacity-50" />
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between mb-1">
-                      <h3 className="font-medium" style={{ color: "#1A2535" }}>{asset.name}</h3>
+                      <h3 className="font-medium text-gray-900">{asset.name}</h3>
                       {asset.favorite && <Heart className="w-4 h-4 text-red-500 fill-red-500 shrink-0" />}
                     </div>
-                    <p className="text-sm mb-2 line-clamp-1" style={{ color: "#8A8FA8" }}>{asset.description || "—"}</p>
-                    <div className="flex items-center gap-4 text-xs" style={{ color: "#A8A49C" }}>
+                    <p className="text-sm text-gray-500 mb-2 line-clamp-1">{asset.description || "—"}</p>
+                    <div className="flex items-center gap-4 text-xs text-gray-400">
                       <div className="flex items-center gap-1">
                         <Download className="w-3 h-3" />
                         <span>{asset.downloads.toLocaleString()}회</span>
@@ -552,11 +486,7 @@ export function BrandLibrary() {
                       <span>{humanFileSize(asset.fileSize)}</span>
                       <div className="flex gap-1">
                         {asset.formats.map((format) => (
-                          <span
-                            key={format}
-                            className="px-2 py-0.5 rounded-full"
-                            style={{ background: "#EDE6DC", color: "#6B7280" }}
-                          >
+                          <span key={format} className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
                             {format}
                           </span>
                         ))}
@@ -565,21 +495,13 @@ export function BrandLibrary() {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <Button
-                      size="sm"
-                      style={{
-                        border: "1px solid rgba(26,37,53,0.12)",
-                        borderRadius: "10px",
-                        background: "#FFFFFF",
-                        color: "#6B7280",
-                      }}
-                    >
+                    <Button variant="outline" size="sm">
                       <Eye className="w-4 h-4 mr-1" />
                       미리보기
                     </Button>
                     <Button
                       size="sm"
-                      style={{ background: "#1A2535", color: "#F0E9DF", borderRadius: "10px", border: "none" }}
+                      className="bg-gray-800 text-white hover:bg-gray-900"
                       onClick={(e) => {
                         e.stopPropagation();
                         void handleDownload(asset);

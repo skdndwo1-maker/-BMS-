@@ -1,12 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { APP_DISPLAY_NAME } from "@/constants/appBranding";
+
+/** Reference: minimalist login — white bg, grey inputs, coral CTA (#FF7051) */
+const PALETTE = {
+  bg: "#FFFFFF",
+  ink: "#0F1115",
+  muted: "#6B7280",
+  mutedSoft: "#9CA3AF",
+  inputBg: "#E5E5E5",
+  coral: "#FF7051",
+  coralHover: "#E85E42",
+} as const;
+
+const font: React.CSSProperties = {
+  fontFamily: '"Inter", system-ui, -apple-system, sans-serif',
+};
 
 export function LoginScreen() {
   const navigate = useNavigate();
@@ -21,6 +33,8 @@ export function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [submitHovered, setSubmitHovered] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
 
   useEffect(() => {
     if (!sb) return;
@@ -32,8 +46,11 @@ export function LoginScreen() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!agreeTerms) {
+      toast.error("약관에 동의해 주세요.");
+      return;
+    }
     setIsLoading(true);
-
     try {
       if (!sb) {
         toast.error("Supabase 설정이 필요합니다. (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)");
@@ -56,191 +73,308 @@ export function LoginScreen() {
     }
   };
 
+  const inputBase: React.CSSProperties = {
+    height: 52,
+    padding: "0 16px",
+    background: PALETTE.inputBg,
+    border: "none",
+    borderRadius: 12,
+    fontSize: 15,
+    color: PALETTE.ink,
+    outline: "none",
+    width: "100%",
+    boxSizing: "border-box",
+    transition: "box-shadow 0.15s ease",
+  };
+
   return (
-    <div className="min-h-screen flex" style={{ background: "#F0E9DF" }}>
-      {/* Left panel — dark navy brand */}
-      <div
-        className="hidden lg:flex lg:w-[420px] xl:w-[480px] shrink-0 flex-col justify-between px-12 py-12"
-        style={{ background: "#1A2535" }}
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 shrink-0">
-            <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="h-full w-full object-contain" />
-          </div>
-          <span className="text-white font-semibold text-lg tracking-tight">{APP_DISPLAY_NAME}</span>
-        </div>
-
-        <div>
-          <div
-            className="inline-flex items-center gap-2 rounded-full px-3 py-1 mb-5 text-xs font-medium"
-            style={{ background: "rgba(244,49,130,0.18)", color: "#F87AB8" }}
+    <div
+      style={{
+        minHeight: "100vh",
+        background: PALETTE.bg,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "28px 16px 40px",
+        ...font,
+      }}
+    >
+      <div style={{ width: "100%", maxWidth: 440 }}>
+        <header style={{ textAlign: "center", marginBottom: 28 }}>
+          <p
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: "0.14em",
+              textTransform: "uppercase",
+              color: PALETTE.muted,
+              margin: "0 0 12px",
+            }}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-[#F43182] inline-block" />
-            AI-Powered Brand Management
-          </div>
-          <h2
-            className="font-bold leading-tight mb-4"
-            style={{ fontSize: "32px", color: "#F0E9DF", letterSpacing: "-0.02em" }}
-          >
-            브랜드 디자인을<br />더 스마트하게
-          </h2>
-          <p style={{ color: "#8A9BB8", fontSize: "14px", lineHeight: 1.7 }}>
-            브랜드 가이드라인 기반의 그래픽 제작,<br />
-            AI 검수, 네이밍 검토, 에셋 라이브러리를<br />
-            한 플랫폼에서 관리하세요.
+            {APP_DISPLAY_NAME}
           </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {[
-            { num: "4", label: "핵심 기능" },
-            { num: "AI", label: "Gemini 연동" },
-            { num: "∞", label: "에셋 관리" },
-          ].map((item) => (
-            <div
-              key={item.label}
-              className="flex-1 rounded-xl px-3 py-3 text-center"
-              style={{ background: "rgba(240,233,223,0.06)" }}
-            >
-              <div className="font-bold text-white text-lg leading-none mb-0.5">{item.num}</div>
-              <div style={{ color: "#8A9BB8", fontSize: "11px" }}>{item.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Right panel — login form */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
-        {/* Mobile logo */}
-        <div className="lg:hidden flex items-center gap-3 mb-10">
-          <div className="w-9 h-9 shrink-0">
-            <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="h-full w-full object-contain" />
-          </div>
-          <span className="font-semibold text-lg" style={{ color: "#1A2535" }}>{APP_DISPLAY_NAME}</span>
-        </div>
-
-        <div className="w-full max-w-[400px]">
-          <div className="mb-8">
-            <h1
-              className="font-bold mb-1.5"
-              style={{ fontSize: "26px", color: "#1A2535", letterSpacing: "-0.02em" }}
-            >
-              로그인
-            </h1>
-            <p style={{ color: "#8A8FA8", fontSize: "14px" }}>계정 정보를 입력하여 로그인하세요.</p>
-          </div>
-
-          <div
-            className="rounded-2xl p-7 shadow-lg"
-            style={{ background: "#FFFFFF", border: "1px solid rgba(26,37,53,0.08)" }}
+          <h1
+            style={{
+              fontSize: 32,
+              fontWeight: 700,
+              color: PALETTE.ink,
+              margin: "0 0 8px",
+              letterSpacing: "-0.03em",
+              lineHeight: 1.15,
+            }}
           >
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="space-y-1.5">
-                <Label htmlFor="email" style={{ color: "#1A2535", fontSize: "13px", fontWeight: 500 }}>
-                  이메일
-                </Label>
-                <div className="relative">
-                  <Mail
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4"
-                    style={{ color: "#8A8FA8" }}
-                  />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="name@company.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 h-11 text-sm"
-                    style={{
-                      background: "#F5F0E8",
-                      border: "1px solid rgba(26,37,53,0.10)",
-                      borderRadius: "10px",
-                      color: "#1A2535",
-                    }}
-                    required
-                  />
-                </div>
-              </div>
+            Log in
+          </h1>
+          <p style={{ fontSize: 15, color: PALETTE.muted, margin: 0, fontWeight: 400 }}>
+            Enter your details to continue
+          </p>
+        </header>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="password" style={{ color: "#1A2535", fontSize: "13px", fontWeight: 500 }}>
-                  비밀번호
-                </Label>
-                <div className="relative">
-                  <Lock
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4"
-                    style={{ color: "#8A8FA8" }}
-                  />
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 pr-10 h-11 text-sm"
-                    style={{
-                      background: "#F5F0E8",
-                      border: "1px solid rgba(26,37,53,0.10)",
-                      borderRadius: "10px",
-                      color: "#1A2535",
-                    }}
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors"
-                    style={{ color: "#8A8FA8" }}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <label
+              htmlFor="email"
+              style={{ fontSize: 13, fontWeight: 700, color: PALETTE.ink, letterSpacing: "-0.01em" }}
+            >
+              Enter your email
+            </label>
+            <input
+              id="email"
+              type="email"
+              placeholder="email@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              style={inputBase}
+              onFocus={(e) => {
+                e.target.style.boxShadow = `0 0 0 2px rgba(255, 112, 81, 0.35)`;
+              }}
+              onBlur={(e) => {
+                e.target.style.boxShadow = "none";
+              }}
+            />
+          </div>
 
-              <div className="text-right -mt-1">
-                <button
-                  type="button"
-                  className="text-xs transition-colors hover:underline"
-                  style={{ color: "#C8C2B8", fontWeight: 350 }}
-                >
-                  비밀번호 찾기
-                </button>
-              </div>
-
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="w-full h-11 text-sm font-semibold transition-all shadow-sm"
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+              <label
+                htmlFor="password"
+                style={{ fontSize: 13, fontWeight: 700, color: PALETTE.ink, letterSpacing: "-0.01em" }}
+              >
+                Enter your password
+              </label>
+              <button
+                type="button"
+                onClick={() => toast.info("비밀번호 재설정은 관리자에게 문의해 주세요.")}
                 style={{
-                  background: "#F43182",
-                  color: "#FFFFFF",
-                  borderRadius: "10px",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: PALETTE.ink,
+                  background: "none",
                   border: "none",
+                  cursor: "pointer",
+                  padding: 0,
+                  textDecoration: "none",
+                  flexShrink: 0,
                 }}
               >
-                {isLoading ? "Signing In..." : "Sign In"}
-              </Button>
-            </form>
-
-            <div
-              className="mt-5 pt-5 text-center text-xs"
-              style={{ borderTop: "1px solid rgba(26,37,53,0.08)", color: "#8A8FA8" }}
-            >
-              계정 발급은 IT 관리자에게 문의해주세요.
+                Recover password
+              </button>
+            </div>
+            <div style={{ position: "relative" }}>
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                style={{
+                  ...inputBase,
+                  paddingRight: 48,
+                }}
+                onFocus={(e) => {
+                  e.target.style.boxShadow = `0 0 0 2px rgba(255, 112, 81, 0.35)`;
+                }}
+                onBlur={(e) => {
+                  e.target.style.boxShadow = "none";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+                style={{
+                  position: "absolute",
+                  right: 14,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: PALETTE.mutedSoft,
+                  padding: 0,
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
+                {showPassword ? (
+                  <EyeOff style={{ width: 18, height: 18 }} />
+                ) : (
+                  <Eye style={{ width: 18, height: 18 }} />
+                )}
+              </button>
             </div>
           </div>
 
-          <div className="mt-8 text-center" style={{ fontSize: "12px", color: "#A8A49C" }}>
-            <p>© 2026 {APP_DISPLAY_NAME}. All rights reserved.</p>
-            <div className="mt-1.5 space-x-3" style={{ fontSize: "10px" }}>
-              <button type="button" className="transition-colors hover:underline" style={{ color: "#C8C2B8" }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+              cursor: "pointer",
+              fontSize: 13,
+              color: PALETTE.ink,
+              lineHeight: 1.45,
+              fontWeight: 400,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={agreeTerms}
+              onChange={(e) => setAgreeTerms(e.target.checked)}
+              style={{
+                width: 18,
+                height: 18,
+                marginTop: 2,
+                flexShrink: 0,
+                cursor: "pointer",
+                accentColor: PALETTE.coral,
+              }}
+            />
+            <span>
+              I agree with{" "}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  toast.info("Terms 내용은 준비 중입니다.");
+                }}
+                style={{
+                  font: "inherit",
+                  color: PALETTE.ink,
+                  textDecoration: "underline",
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                }}
+              >
+                Terms and Conditions
+              </button>{" "}
+              and{" "}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  toast.info("Privacy Policy 내용은 준비 중입니다.");
+                }}
+                style={{
+                  font: "inherit",
+                  color: PALETTE.ink,
+                  textDecoration: "underline",
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                }}
+              >
                 Privacy Policy
               </button>
-              <span style={{ color: "#C8C2B8" }}>•</span>
-              <button type="button" className="transition-colors hover:underline" style={{ color: "#C8C2B8" }}>
-                Terms of Service
-              </button>
-            </div>
+              .
+            </span>
+          </label>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            onMouseEnter={() => setSubmitHovered(true)}
+            onMouseLeave={() => setSubmitHovered(false)}
+            style={{
+              height: 52,
+              background: submitHovered && !isLoading ? PALETTE.coralHover : PALETTE.coral,
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: 12,
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: isLoading ? "not-allowed" : "pointer",
+              transition: "background 0.15s",
+              opacity: isLoading ? 0.75 : 1,
+              letterSpacing: "0.01em",
+            }}
+          >
+            {isLoading ? "Signing in…" : "Sign in"}
+          </button>
+
+          <p style={{ textAlign: "center", fontSize: 13, color: PALETTE.ink, margin: 0 }}>
+            <span>I don&apos;t have an account? </span>
+            <button
+              type="button"
+              onClick={() => toast.info("계정 발급은 IT 관리자에게 문의해 주세요.")}
+              style={{
+                font: "inherit",
+                fontWeight: 600,
+                color: PALETTE.ink,
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                textDecoration: "underline",
+              }}
+            >
+              Sign up
+            </button>
+          </p>
+        </form>
+
+        <div style={{ marginTop: 28, textAlign: "center" }}>
+          <p style={{ fontSize: 12, color: PALETTE.muted, margin: "0 0 8px", lineHeight: 1.5 }}>
+            계정 발급은 IT 관리자에게 문의해주세요.
+          </p>
+          <p style={{ fontSize: 11, color: PALETTE.mutedSoft, margin: 0 }}>
+            © 2026 {APP_DISPLAY_NAME}. All rights reserved.
+          </p>
+          <div style={{ marginTop: 8, display: "flex", justifyContent: "center", gap: 10, alignItems: "center" }}>
+            <button
+              type="button"
+              onClick={() => toast.info("Privacy Policy 내용은 준비 중입니다.")}
+              style={{
+                fontSize: 10,
+                color: PALETTE.mutedSoft,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              Privacy Policy
+            </button>
+            <span style={{ fontSize: 10, color: PALETTE.mutedSoft }}>•</span>
+            <button
+              type="button"
+              onClick={() => toast.info("Terms 내용은 준비 중입니다.")}
+              style={{
+                fontSize: 10,
+                color: PALETTE.mutedSoft,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              Terms of Service
+            </button>
           </div>
         </div>
       </div>
