@@ -455,59 +455,31 @@ export function OptionSelection() {
                   onClick={() => handleOptionClick(option.route)}
                   onMouseEnter={() => setHoveredOptionId(option.id)}
                   onMouseLeave={() => setHoveredOptionId(null)}
+                  className={isHovered ? "option-card-breathe" : undefined}
                   style={{
                     position: "relative",
                     textAlign: "left",
-                    background: isHovered ? "rgba(255, 127, 102, 0.22)" : PALETTE.card,
-                    border: isHovered ? "1px solid rgba(255, 127, 102, 0.5)" : `1px solid ${PALETTE.borderSubtle}`,
+                    background: isHovered ? PALETTE.coral : PALETTE.card,
+                    border: isHovered ? "1px solid rgba(255, 255, 255, 0.3)" : `1px solid ${PALETTE.borderSubtle}`,
                     borderRadius: "24px",
                     padding: "22px 20px 20px",
                     cursor: "pointer",
                     transition:
-                      "background 0.28s ease, border-color 0.25s, box-shadow 0.22s, transform 0.22s",
+                      "background 0.28s ease, border-color 0.25s, box-shadow 0.22s, transform 0.22s, color 0.2s",
                     display: "flex",
                     flexDirection: "column",
                     minHeight: "200px",
                     outline: "none",
-                    boxShadow: isHovered ? PALETTE.shadowHover : PALETTE.shadow,
+                    boxShadow: isHovered ? undefined : PALETTE.shadow,
                     transform: isHovered ? "translateY(-2px)" : "translateY(0)",
                     overflow: "hidden",
                   }}
                 >
-                  {isHovered ? (
-                    <svg
-                      aria-hidden
-                      className="pointer-events-none absolute inset-0 h-full w-full"
-                      viewBox="0 0 100 100"
-                      preserveAspectRatio="none"
-                      style={{ zIndex: 2 }}
-                    >
-                      <rect
-                        x="1.5"
-                        y="1.5"
-                        width="97"
-                        height="97"
-                        rx="11"
-                        ry="11"
-                        fill="none"
-                        stroke="rgba(255, 255, 255, 0.95)"
-                        strokeWidth="2.25"
-                        strokeLinecap="round"
-                        pathLength={100}
-                        strokeDasharray="7 93"
-                        strokeDashoffset={0}
-                        className="option-card-border-trail-dash"
-                        style={{
-                          filter: "drop-shadow(0 0 4px rgba(255, 127, 102, 0.75))",
-                        }}
-                      />
-                    </svg>
-                  ) : null}
                   <span
                     style={{
                       textAlign: "left",
                       position: "relative",
-                      zIndex: 3,
+                      zIndex: 1,
                       display: "flex",
                       flexDirection: "column",
                       width: "100%",
@@ -530,13 +502,13 @@ export function OptionSelection() {
                         width: "44px",
                         height: "44px",
                         borderRadius: "14px",
-                        background: isHovered ? PALETTE.coral : PALETTE.bg,
+                        background: isHovered ? "rgba(255, 255, 255, 0.22)" : PALETTE.bg,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         flexShrink: 0,
                         transition: "background 0.2s",
-                        boxShadow: isHovered ? "0 4px 12px -4px rgba(255,127,102,0.5)" : "none",
+                        boxShadow: isHovered ? "0 2px 8px rgba(0,0,0,0.12)" : "none",
                       }}
                     >
                       <Icon
@@ -555,13 +527,11 @@ export function OptionSelection() {
                         borderRadius: "999px",
                         whiteSpace: "nowrap",
                         letterSpacing: "0.02em",
-                        border: isHovered
-                          ? "1px solid rgba(255, 127, 102, 0.55)"
-                          : "1px solid rgba(255, 127, 102, 0.3)",
-                        background: isHovered ? PALETTE.coral : PALETTE.coralSoft,
-                        color: isHovered ? "#FFFFFF" : PALETTE.coralInk,
+                        border: isHovered ? "1px solid rgba(255, 255, 255, 0.45)" : "1px solid rgba(255, 127, 102, 0.3)",
+                        background: isHovered ? "rgba(255, 255, 255, 0.95)" : PALETTE.coralSoft,
+                        color: isHovered ? PALETTE.coral : PALETTE.coralInk,
                         transition: "background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s",
-                        boxShadow: isHovered ? "0 2px 10px -2px rgba(255, 127, 102, 0.45)" : "none",
+                        boxShadow: isHovered ? "0 2px 8px rgba(0,0,0,0.12)" : "none",
                       }}
                     >
                       {option.badge}
@@ -577,7 +547,7 @@ export function OptionSelection() {
                   >
                     <h2
                       style={{
-                        color: isHovered ? PALETTE.black : PALETTE.ink,
+                        color: isHovered ? "#FFFFFF" : PALETTE.ink,
                         fontSize: "16px",
                         fontWeight: 700,
                         margin: 0,
@@ -597,20 +567,28 @@ export function OptionSelection() {
                         flex: 1,
                         minWidth: "12px",
                         height: "1px",
-                        background: PALETTE.coral,
-                        opacity: isHovered ? 0.7 : 0.45,
+                        background: isHovered ? "rgba(255, 255, 255, 0.45)" : PALETTE.coral,
+                        opacity: isHovered ? 1 : 0.45,
                         borderRadius: "1px",
-                        transition: "opacity 0.2s",
+                        transition: "opacity 0.2s, background 0.2s",
                         alignSelf: "center",
                         transform: "scaleY(0.35)",
                         transformOrigin: "center",
                       }}
                     />
-                    <SectionDot size={6} style={{ flexShrink: 0, alignSelf: "center" }} />
+                    <SectionDot
+                      size={6}
+                      style={{
+                        flexShrink: 0,
+                        alignSelf: "center",
+                        background: isHovered ? "#FFFFFF" : PALETTE.coral,
+                        boxShadow: isHovered ? "0 0 0 1px rgba(255,255,255,0.35)" : undefined,
+                      }}
+                    />
                   </div>
                   <p
                     style={{
-                      color: isHovered ? PALETTE.inkSoft : PALETTE.muted,
+                      color: isHovered ? "rgba(255, 255, 255, 0.9)" : PALETTE.muted,
                       fontSize: "12.5px",
                       lineHeight: 1.6,
                       wordBreak: "keep-all",
@@ -628,7 +606,7 @@ export function OptionSelection() {
                       gap: "6px",
                       fontSize: "12px",
                       fontWeight: 600,
-                      color: isHovered ? PALETTE.black : PALETTE.inkSoft,
+                      color: isHovered ? "#FFFFFF" : PALETTE.inkSoft,
                       letterSpacing: "0.01em",
                       transition: "color 0.2s",
                     }}

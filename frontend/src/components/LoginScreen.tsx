@@ -92,15 +92,28 @@ export function LoginScreen() {
     <div
       style={{
         minHeight: "100vh",
-        background: PALETTE.bg,
+        position: "relative",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         padding: "28px 16px 40px",
+        boxSizing: "border-box",
+        background: PALETTE.bg,
         ...font,
       }}
     >
-      <div style={{ width: "100%", maxWidth: 440 }}>
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          maxWidth: 440,
+          background: "#FFFFFF",
+          borderRadius: 24,
+          padding: "36px 32px 28px",
+          boxShadow: "0 4px 24px rgba(15, 17, 21, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04)",
+        }}
+      >
+      <div style={{ width: "100%" }}>
         <header style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
             <AxisBrandTitle subtitle="Brand Contents Manager" />
@@ -369,6 +382,7 @@ export function LoginScreen() {
             </button>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
