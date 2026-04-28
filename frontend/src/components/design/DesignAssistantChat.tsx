@@ -479,7 +479,7 @@ export function DesignAssistantChat({
         if (id === "text") setTextSuggestSectionOpen(true);
       }}
       className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-2 text-[10px] font-medium transition-colors ${
-        tab === id ? "bg-white text-[#F43182] shadow-sm" : "text-gray-600 hover:bg-white/60"
+        tab === id ? "bg-white text-[#FF7F66] shadow-sm" : "text-gray-600 hover:bg-white/60"
       }`}
     >
       {icon}
@@ -520,7 +520,7 @@ export function DesignAssistantChat({
         <div className="space-y-2">
           <div className="flex items-start gap-1.5">
             <p className="min-w-0 flex-1 text-[11px] leading-snug text-gray-600">
-              전체 문맥·목적을 반영한 U+ Simple 톤 문안을 제안합니다.
+              전체 문맥·목적을 반영한 브랜드 Simple 톤 문안을 제안합니다.
             </p>
             <Button
               type="button"
@@ -569,14 +569,14 @@ export function DesignAssistantChat({
                 ))}
               </div>
               {textPreview && (
-                <div className="rounded-lg border border-[#F43182]/25 bg-white p-2 text-[11px]">
+                <div className="rounded-lg border border-[#FF7F66]/25 bg-white p-2 text-[11px]">
                   <p className="mb-1 font-medium text-gray-800">제안 ({labelForTextTarget(textPreview.target)})</p>
                   <p className="whitespace-pre-wrap text-gray-700">{textPreview.text}</p>
                   <div className="mt-2 flex gap-2">
                     <Button type="button" size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => setTextPreview(null)}>
                       취소
                     </Button>
-                    <Button type="button" size="sm" className="h-7 bg-[#F43182] text-[11px]" onClick={applyTextSuggestion}>
+                    <Button type="button" size="sm" className="h-7 bg-[#FF7F66] text-[11px]" onClick={applyTextSuggestion}>
                       적용
                     </Button>
                   </div>
@@ -628,7 +628,7 @@ export function DesignAssistantChat({
           <Button
             type="button"
             size="sm"
-            className="w-full bg-gradient-to-r from-[#F43182] to-purple-600"
+            className="w-full bg-gradient-to-r from-[#FF7F66] to-purple-600"
             disabled={loading}
             onClick={() => void runHolisticCorrection()}
           >
@@ -734,7 +734,7 @@ export function DesignAssistantChat({
             <Button
               type="button"
               size="sm"
-              className="min-w-[200px] bg-[#F43182] hover:bg-[#F43182]/90"
+              className="min-w-[200px] bg-[#FF7F66] hover:bg-[#FF7F66]/90"
               disabled={loading || !inspection}
               onClick={() => void runInspectCorrection()}
             >
@@ -776,7 +776,7 @@ export function DesignAssistantChat({
             <Button type="button" variant="outline" size="sm" onClick={() => setPreviewOpen(false)}>
               닫기
             </Button>
-            <Button type="button" size="sm" className="bg-[#F43182]" onClick={applyPreview}>
+            <Button type="button" size="sm" className="bg-[#FF7F66]" onClick={applyPreview}>
               적용
             </Button>
           </DialogFooter>
@@ -793,7 +793,7 @@ export function DesignAssistantChat({
             <Button type="button" variant="outline" size="sm" onClick={() => setImageDialogOpen(false)}>
               닫기
             </Button>
-            <Button type="button" size="sm" className="bg-[#F43182]" onClick={applyImageStaged}>
+            <Button type="button" size="sm" className="bg-[#FF7F66]" onClick={applyImageStaged}>
               적용
             </Button>
           </DialogFooter>

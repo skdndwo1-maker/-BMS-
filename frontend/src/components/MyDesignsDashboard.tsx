@@ -9,7 +9,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { deleteDesign, getDesignById, listDesignsForUser, requireAuthedUserId, type DesignListItem } from "@/lib/designsApi";
 import { DesignCanvas } from "@/components/design/DesignCanvas";
 import type { DesignContent } from "@/design/types";
-import { APP_DISPLAY_NAME } from "@/constants/appBranding";
+import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 
 function templateLabel(templateId: string): string {
   return templates.find((t) => t.id === templateId)?.name ?? templateId;
@@ -101,28 +101,35 @@ export function MyDesignsDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
-      <header className="border-b border-gray-200 bg-white">
+    <div className="min-h-screen brand-app-shell">
+      <header className="border-b border-[rgba(0,0,0,0.06)] bg-white shadow-[0_4px_24px_-6px_rgba(0,0,0,0.08),0_2px_10px_-4px_rgba(0,0,0,0.04)]">
         <div className="mx-auto max-w-7xl px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" type="button" onClick={() => navigate("/brand-graphics")}>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-4 min-w-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                onClick={() => navigate("/brand-graphics")}
+                className="h-auto shrink-0 rounded-[12px] px-2.5 py-2 text-[13px] font-medium text-[#6B6B6B] hover:bg-black/[0.04] hover:text-[#1A1A1A]"
+              >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 템플릿으로
               </Button>
-              <div className="h-6 w-px bg-gray-200" />
-              <div className="flex items-center gap-3">
-                <div className="h-11 w-11 shrink-0">
-                  <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="h-full w-full object-contain" />
-                </div>
-                <div className="flex h-10 flex-col justify-between py-px">
-                  <h1 className="text-xl font-semibold leading-none text-gray-900">내 디자인</h1>
-                  <p className="text-xs leading-none text-gray-500">저장된 디자인 목록</p>
-                </div>
+              <div className="h-6 w-px shrink-0 bg-[rgba(0,0,0,0.08)]" />
+              <div className="flex min-w-0 items-center gap-0">
+                <AxisBrandTitle subtitle="내 디자인" />
               </div>
             </div>
 
-            <Button variant="outline" size="sm" type="button" onClick={load} disabled={busy}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={load}
+              disabled={busy}
+              className="shrink-0 rounded-full border-[rgba(0,0,0,0.1)] bg-black text-white hover:bg-zinc-900 hover:text-white"
+            >
               {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               새로고침
             </Button>
@@ -137,13 +144,13 @@ export function MyDesignsDashboard() {
             불러오는 중…
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-[12px] border border-gray-200 bg-white p-10 text-center text-sm text-gray-500">
+          <div className="brand-surface rounded-[20px] p-10 text-center text-sm text-gray-500">
             저장된 디자인이 없습니다.
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((it) => (
-              <div key={it.id} className="rounded-[12px] border border-gray-200 bg-white shadow-sm overflow-hidden">
+              <div key={it.id} className="brand-surface overflow-hidden rounded-[20px]">
                 <div className="aspect-[4/3] w-full bg-gray-50">
                   {it.thumbnail_url ? (
                     <img src={it.thumbnail_url} alt={it.name} className="h-full w-full object-cover" />

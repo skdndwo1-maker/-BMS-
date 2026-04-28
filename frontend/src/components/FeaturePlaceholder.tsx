@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
+import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 
 const titles: Record<string, string> = {
   "/dashboard": "내 디자인",
@@ -13,10 +14,13 @@ export function FeaturePlaceholder() {
   const title = titles[pathname] ?? "페이지";
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#F8F8F9] px-4">
-      <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
-      <p className="text-gray-500 text-sm text-center max-w-md">이 기능은 준비 중입니다.</p>
-      <Link to="/options" className="text-[#F43182] hover:underline text-sm">
+    <div className="min-h-screen brand-app-shell flex flex-col items-center justify-center gap-4 px-4">
+      <AxisBrandTitle subtitle={title} />
+      <p className="text-sm text-center max-w-md text-gray-500">이 기능은 준비 중입니다.</p>
+      <Link
+        to="/options"
+        className="text-sm font-semibold text-[#C14D38] underline-offset-2 hover:underline"
+      >
         옵션으로 돌아가기
       </Link>
     </div>

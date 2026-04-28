@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { APP_DISPLAY_NAME } from "@/constants/appBranding";
+import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 import {
   deleteLibraryAsset,
   extractExtensionLabel,
@@ -181,7 +181,7 @@ export function BrandLibrary() {
   const getThumbnailColor = (category: string) => {
     switch (category) {
       case "logo":
-        return "from-[#F43182] to-[#C41F65]";
+        return "from-[#FF7F66] to-[#E55A3E]";
       case "icon":
         return "from-blue-500 to-indigo-600";
       case "pictogram":
@@ -244,25 +244,19 @@ export function BrandLibrary() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] flex">
-      <aside className="w-72 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-6 border-b border-gray-200">
+    <div className="min-h-screen brand-app-shell flex">
+      <aside className="w-72 border-r border-[rgba(0,0,0,0.06)] bg-[#F0EFEC] flex flex-col">
+        <div className="p-6 border-b border-[rgba(0,0,0,0.06)]">
           <button
             type="button"
             onClick={() => navigate("/options")}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+            className="flex items-center gap-2 text-[13px] font-medium text-[#6B6B6B] hover:text-[#1A1A1A] mb-4 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm">홈으로</span>
           </button>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 shrink-0">
-              <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="w-full h-full object-contain" />
-            </div>
-            <div>
-              <h1 className="font-semibold text-gray-900 text-xl">{APP_DISPLAY_NAME}</h1>
-              <p className="text-xs text-gray-500">브랜드 라이브러리 · Brand Library</p>
-            </div>
+          <div className="mb-1">
+            <AxisBrandTitle subtitle="브랜드 라이브러리" />
           </div>
         </div>
 
@@ -277,8 +271,8 @@ export function BrandLibrary() {
                   key={category.id}
                   type="button"
                   onClick={() => setSelectedCategory(category.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all ${
-                    isActive ? "bg-[#F43182] text-white shadow-sm" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                  className={`w-full flex items-center justify-between rounded-xl px-3 py-2.5 transition-all ${
+                    isActive ? "bg-black text-white shadow-sm" : "text-gray-600 hover:bg-white/60 hover:text-gray-900"
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -287,7 +281,9 @@ export function BrandLibrary() {
                   </div>
                   {count > 0 && (
                     <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${isActive ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}
+                      className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        isActive ? "bg-white/20 text-white" : "brand-pill--accent !px-2 !py-0.5"
+                      }`}
                     >
                       {count}
                     </span>
@@ -298,10 +294,10 @@ export function BrandLibrary() {
           </div>
         </div>
 
-        <div className="p-4 border-t border-gray-200 bg-gray-50">
-          <div className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-lg">
-            <div className="w-8 h-8 bg-[#F43182]/10 rounded-lg flex items-center justify-center shrink-0">
-              <Package className="w-4 h-4 text-[#F43182]" />
+        <div className="p-4 border-t border-[rgba(0,0,0,0.06)] bg-[#EBE8E3]">
+          <div className="flex items-start gap-3 p-3 bg-white border border-[rgba(0,0,0,0.06)] rounded-2xl shadow-sm">
+            <div className="w-8 h-8 bg-[#FF7F66]/10 rounded-lg flex items-center justify-center shrink-0">
+              <Package className="w-4 h-4 text-[#FF7F66]" />
             </div>
             <div>
               <h3 className="text-sm font-medium text-gray-900 mb-1">승인된 에셋만 제공</h3>
@@ -313,8 +309,8 @@ export function BrandLibrary() {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col">
-        <header className="bg-white border-b border-gray-200 px-8 py-4">
+      <main className="flex-1 flex flex-col min-w-0">
+        <header className="bg-white border-b border-[rgba(0,0,0,0.06)] px-8 py-4 shadow-[0_4px_24px_-6px_rgba(0,0,0,0.06)]">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-xl font-semibold text-gray-900">
@@ -329,6 +325,7 @@ export function BrandLibrary() {
                 variant={favoritesOnly ? "default" : "outline"}
                 size="sm"
                 onClick={() => setFavoritesOnly((v) => !v)}
+                className={favoritesOnly ? "rounded-full bg-black text-white hover:bg-zinc-900" : "rounded-full border-[rgba(0,0,0,0.1)]"}
               >
                 <Star className="w-4 h-4 mr-2" />
                 즐겨찾기만
@@ -443,7 +440,7 @@ export function BrandLibrary() {
 
                     <div className="flex flex-wrap gap-1 mb-3">
                       {asset.formats.slice(0, 3).map((format) => (
-                        <span key={format} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                        <span key={format} className="brand-pill--accent !px-2 !py-0.5 !text-[10px]">
                           {format}
                         </span>
                       ))}
@@ -486,7 +483,7 @@ export function BrandLibrary() {
                       <span>{humanFileSize(asset.fileSize)}</span>
                       <div className="flex gap-1">
                         {asset.formats.map((format) => (
-                          <span key={format} className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                          <span key={format} className="brand-pill--accent !px-2 !py-0.5 !text-[10px]">
                             {format}
                           </span>
                         ))}
@@ -564,7 +561,7 @@ export function BrandLibrary() {
                 </div>
                 <div className="flex gap-2">
                   <Button
-                    className="flex-1 bg-[#F43182] text-white hover:bg-[#d41f6e]"
+                    className="flex-1 bg-[#FF7F66] text-white hover:bg-[#E55A3E]"
                     onClick={() => void handleDownload(selectedAsset)}
                   >
                     <Download className="w-4 h-4 mr-2" />
@@ -638,7 +635,7 @@ export function BrandLibrary() {
                       <label className="text-xs font-medium text-gray-500 uppercase mb-2 block">태그</label>
                       <div className="flex flex-wrap gap-2">
                         {selectedAsset.tags.map((tag) => (
-                          <span key={tag} className="bg-[#F43182]/10 text-[#F43182] px-3 py-1 rounded-full text-xs font-medium">
+                          <span key={tag} className="bg-[#FF7F66]/10 text-[#FF7F66] px-3 py-1 rounded-full text-xs font-medium">
                             #{tag}
                           </span>
                         ))}
@@ -654,7 +651,7 @@ export function BrandLibrary() {
                       <div>
                         <h4 className="text-sm font-medium text-blue-900 mb-1">사용 가이드</h4>
                         <p className="text-xs text-blue-700 leading-relaxed">
-                          이 에셋은 LG U+ 브랜드 가이드라인에 따라 승인되었습니다. 상업적 용도로 자유롭게 사용 가능합니다.
+                          이 에셋은 브랜드 가이드라인에 따라 승인되었습니다. 상업적 용도로 자유롭게 사용 가능합니다.
                         </p>
                       </div>
                     </div>

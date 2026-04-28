@@ -1,6 +1,7 @@
 @import "./styles/fonts.css";
 @import "tailwindcss";
 @import "./styles/theme.css";
+@import "./styles/brandPages.css";
 
 /* 에디터 등 전체 뷰포트 레이아웃: html/body/#root 높이를 정확히 뷰포트로 고정.
  * 1) 어느 한 단계라도 height 체인이 끊기면 자식의 % 높이가 0이 되어
@@ -24,4 +25,74 @@ body {
 /* 하단 상태줄 아래에 흰색이 비치는 잔여 케이스 방지(뷰포트 픽셀 반올림 등) */
 body {
   background: #f5f5f5;
+}
+
+/* Option page: 4 option cards — hover 시 라운드 사각형 테두리를 따라 작은 코랄 도트(링) 궤도 */
+.option-card-orbit {
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+}
+.option-card-orbit::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  padding: 2px;
+  /* 두 개의 짧은 코랄 띠(불릿) — 회전 시 테두리를 따라 이동하는 느낌 */
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 2deg,
+    #ff7f66 2deg 5deg,
+    transparent 5deg 7deg,
+    #ff7f66 7deg 9deg,
+    transparent 9deg 180deg,
+    #ff7f66 180deg 183deg,
+    transparent 183deg 185deg,
+    #ff7f66 185deg 187deg,
+    transparent 187deg 360deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+  transform-origin: 50% 50%;
+  transition: opacity 0.25s ease;
+  animation: option-orbit-rotate 2.75s linear infinite;
+  animation-play-state: paused;
+  will-change: transform;
+}
+.option-card-orbit:hover::before,
+.option-card-orbit:focus-visible::before {
+  opacity: 1;
+  animation-play-state: running;
+}
+@keyframes option-orbit-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.option-card-orbit__inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .option-card-orbit::before {
+    animation: none;
+    transform: none;
+  }
+  .option-card-orbit:hover::before,
+  .option-card-orbit:focus-visible::before {
+    opacity: 0.4;
+  }
 }

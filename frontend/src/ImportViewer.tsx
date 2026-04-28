@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import "./App.css";
 import { FigmaTsxPreview } from "./FigmaTsxPreview";
 import { JsonImportView } from "./JsonImportView";
+import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 
 type Tab = "tsx" | "json";
 
@@ -12,10 +13,13 @@ export function ImportViewer() {
   return (
     <div className="page">
       <header className="header">
-        <h1>Figma Import Viewer</h1>
+        <div className="mb-3">
+          <AxisBrandTitle subtitle="Figma Import" compact />
+        </div>
+        <h1 className="!text-lg !font-semibold !mt-0">Figma Import Viewer</h1>
         <p className="sub">
           Figma에서 내보낸 TSX는 <code>src/figma-import/</code>에 넣고, 아래 탭에서 미리보기 하세요.{" "}
-          <Link to="/" className="text-[#FF2E99]">
+          <Link to="/" className="text-[#FF7F66] hover:underline">
             로그인
           </Link>
         </p>

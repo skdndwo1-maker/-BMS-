@@ -4,6 +4,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { APP_DISPLAY_NAME } from "@/constants/appBranding";
+import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 
 /** Reference: minimalist login — white bg, grey inputs, coral CTA (#FF7051) */
 const PALETTE = {
@@ -101,18 +102,9 @@ export function LoginScreen() {
     >
       <div style={{ width: "100%", maxWidth: 440 }}>
         <header style={{ textAlign: "center", marginBottom: 28 }}>
-          <p
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: "0.14em",
-              textTransform: "uppercase",
-              color: PALETTE.muted,
-              margin: "0 0 12px",
-            }}
-          >
-            {APP_DISPLAY_NAME}
-          </p>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+            <AxisBrandTitle subtitle="Brand Contents Manager" />
+          </div>
           <h1
             style={{
               fontSize: 32,

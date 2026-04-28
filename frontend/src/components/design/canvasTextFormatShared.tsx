@@ -35,7 +35,7 @@ const LH_MAX = 2.6;
 /** 문자 색 빠른 선택 + 커스텀 컬러 */
 export const TEXT_COLOR_PRESETS: { hex: string; label: string }[] = [
   { hex: "#1A1A1A", label: "블랙" },
-  { hex: "#F43182", label: "마젠타" },
+  { hex: "#FF7F66", label: "코랄" },
   { hex: "#404040", label: "다크그레이" },
   { hex: "#B0B0B0", label: "라이트그레이" },
   { hex: "#FFFFFF", label: "화이트" },
@@ -267,8 +267,8 @@ export function CanvasTextFormatControls({
   const setCase = (c: PosterTextCase) => applyTypo({ textTransform: c });
 
   const iconBtn =
-    "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-700 shadow-sm hover:border-[#F43182] hover:text-[#F43182] disabled:opacity-40";
-  const iconActive = "border-[#F43182] bg-[#F43182]/10 text-[#F43182]";
+    "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-700 shadow-sm hover:border-[#FF7F66] hover:text-[#FF7F66] disabled:opacity-40";
+  const iconActive = "border-[#FF7F66] bg-[#FF7F66]/10 text-[#FF7F66]";
 
   const safeColor = color.length === 7 ? color : "#1A1A1A";
 
@@ -331,7 +331,7 @@ export function CanvasTextFormatControls({
           step={1}
           value={Math.min(SCALE_MAX, Math.max(SCALE_MIN, scale))}
           onChange={(e) => setScale(Number(e.target.value))}
-          className="flex-1 min-w-0 h-2 accent-[#F43182] cursor-pointer"
+          className="flex-1 min-w-0 h-2 accent-[#FF7F66] cursor-pointer"
           aria-label="글자 크기 슬라이더"
         />
         <span className="text-[9px] text-gray-500 w-7 shrink-0 text-right">크게</span>
@@ -384,7 +384,7 @@ export function CanvasTextFormatControls({
               onClick={() => setColor(p.hex)}
               className={`h-7 w-7 shrink-0 rounded-md border-2 transition-all ${
                 safeColor.toUpperCase() === p.hex.toUpperCase()
-                  ? "border-[#F43182] ring-1 ring-[#F43182]/30"
+                  ? "border-[#FF7F66] ring-1 ring-[#FF7F66]/30"
                   : "border-gray-200 hover:border-gray-400"
               }`}
               style={{

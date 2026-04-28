@@ -198,7 +198,7 @@ export function ExportDialog({ open, onOpenChange, templateName, canvasSize }: E
                 value={quality}
                 disabled={isExporting}
                 onChange={(e) => setQuality(Number(e.target.value))}
-                className="h-2 w-full flex-1 cursor-pointer appearance-none rounded-full bg-gray-200 accent-[#F43182] disabled:opacity-50"
+                className="h-2 w-full flex-1 cursor-pointer appearance-none rounded-full bg-gray-200 accent-[#FF7F66] disabled:opacity-50"
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={quality}

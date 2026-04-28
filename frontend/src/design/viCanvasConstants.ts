@@ -1,10 +1,10 @@
 /**
- * LG U+ VI 캔버스 원칙 — 여백·간격·타이포·컬러를 단일 출처로 고정합니다.
+ * Axis / 브랜드 VI 캔버스 원칙 — 여백·간격·타이포·컬러를 단일 출처로 고정합니다.
  * 플래카드/포스터 렌더러는 이 상수를 기준으로 배치합니다.
  */
 
 export const VI_COLORS = {
-  brandMagenta: "#F43182",
+  brandMagenta: "#FF7F66",
   textPrimary: "#1A1A1A",
   textSecondary: "#5A5A5A",
   border: "#C8C8C8",

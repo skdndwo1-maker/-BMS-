@@ -160,7 +160,7 @@ export function DraggableAsset({
         opacity:   asset.opacity,
         transform: `rotate(${asset.rotation}deg)`,
         cursor:    asset.locked ? 'default' : 'move',
-        outline:   isSelected ? '2px solid #F43182' : '2px solid transparent',
+        outline:   isSelected ? '2px solid #FF7F66' : '2px solid transparent',
         outlineOffset: '1px',
         userSelect: 'none',
         zIndex:    isSelected ? 100 : 10,
@@ -190,7 +190,7 @@ export function DraggableAsset({
                 position:  'absolute',
                 width:     `${HANDLE_SIZE}px`,
                 height:    `${HANDLE_SIZE}px`,
-                background: '#F43182',
+                background: '#FF7F66',
                 border:    '1.5px solid #fff',
                 borderRadius: '2px',
                 ...h.style,
@@ -231,7 +231,7 @@ export function DraggableAsset({
             <input
               type="range" min={10} max={100} value={Math.round(asset.opacity * 100)}
               onChange={(e) => onUpdate(asset.id, { opacity: Number(e.target.value) / 100 })}
-              style={{ width: '50px', accentColor: '#F43182', cursor: 'pointer' }}
+              style={{ width: '50px', accentColor: '#FF7F66', cursor: 'pointer' }}
               onClick={(e) => e.stopPropagation()}
               title="투명도"
             />
@@ -258,7 +258,7 @@ export function DraggableAsset({
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <Lock size={10} color="#F43182" />
+          <Lock size={10} color="#FF7F66" />
           <span style={{ color: '#fff', fontSize: '10px' }}>잠김</span>
           <button
             onClick={(e) => { e.stopPropagation(); onUpdate(asset.id, { locked: false }); }}

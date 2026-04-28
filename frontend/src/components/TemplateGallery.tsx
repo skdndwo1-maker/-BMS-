@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search,
@@ -12,14 +12,32 @@ import {
   Presentation,
   Layers,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { templates as designTemplates, templateCategories } from "@/design/templates";
-import { APP_DISPLAY_NAME } from "@/constants/appBranding";
+import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 
 type MediaType = "online" | "offline";
 
-const categoryIconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+/** Align with Option / Login: cream canvas, white cards, coral accent, black primary CTAs */
+const PAL = {
+  bg: "#F5F3F0",
+  card: "#FFFFFF",
+  borderSubtle: "rgba(0,0,0,0.06)",
+  ink: "#1A1A1A",
+  muted: "#6B6B6B",
+  mutedSoft: "#9A9A9A",
+  coral: "#FF7F66",
+  coralSoft: "rgba(255, 127, 102, 0.12)",
+  black: "#000000",
+  inputBg: "#E5E5E5",
+  shadow: "0 4px 24px -6px rgba(0,0,0,0.08), 0 2px 10px -4px rgba(0,0,0,0.04)",
+  shadowHover: "0 8px 32px -8px rgba(0,0,0,0.10), 0 4px 16px -6px rgba(0,0,0,0.06)",
+} as const;
+
+const pageFont: CSSProperties = {
+  fontFamily: '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif',
+};
+
+const categoryIconMap: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   LayoutTemplate,
   FileImage,
   Share2,
@@ -28,11 +46,6 @@ const categoryIconMap: Record<string, React.ComponentType<{ className?: string }
   Presentation,
   RectangleHorizontal,
 };
-
-const categoryTabBase =
-  "inline-flex items-center justify-center rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F43182]/40";
-const categoryTabIdle = "border-gray-200 bg-white text-gray-700 hover:border-gray-300";
-const categoryTabActive = "border-[#F43182] bg-[#F43182]/10 text-[#F43182]";
 
 function parseCategoryFromSearch(searchParams: URLSearchParams): string | "all" {
   const c = searchParams.get("category");
@@ -93,108 +106,268 @@ export function TemplateGallery() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto max-w-7xl px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                type="button"
-                onClick={() => navigate("/options")}
-                className="text-gray-600 hover:text-gray-900"
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                옵션으로
-              </Button>
-              <div className="h-6 w-px bg-gray-200" />
-              <div className="flex items-center gap-3">
-                <div className="h-11 w-11 shrink-0">
-                  <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="h-full w-full object-contain" />
-                </div>
-                <div className="flex h-10 flex-col justify-between py-px">
-                  <h1 className="text-xl font-semibold leading-none text-gray-900">{APP_DISPLAY_NAME}</h1>
-                  <p className="text-xs leading-none text-gray-500">브랜드 그래픽 제작 · Brand Design Create</p>
-                </div>
-              </div>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: PAL.bg,
+        ...pageFont,
+      }}
+    >
+      <header
+        style={{
+          background: PAL.card,
+          borderBottom: `1px solid ${PAL.borderSubtle}`,
+          position: "sticky",
+          top: 0,
+          zIndex: 20,
+          boxShadow: PAL.shadow,
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1200,
+            margin: "0 auto",
+            padding: "12px 24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0, flex: "1 1 auto" }}>
+            <button
+              type="button"
+              onClick={() => navigate("/options")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 13,
+                fontWeight: 500,
+                color: PAL.muted,
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: "8px 10px",
+                borderRadius: 12,
+                flexShrink: 0,
+                transition: "color 0.15s, background 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,0,0,0.04)";
+                (e.currentTarget as HTMLButtonElement).style.color = PAL.ink;
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                (e.currentTarget as HTMLButtonElement).style.color = PAL.muted;
+              }}
+            >
+              <ArrowLeft style={{ width: 18, height: 18 }} />
+              <span>옵션으로</span>
+            </button>
+            <div style={{ width: 1, height: 24, background: PAL.borderSubtle, flexShrink: 0 }} aria-hidden />
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                flexWrap: "wrap",
+                alignItems: "center",
+                columnGap: 14,
+                rowGap: 4,
+                minWidth: 0,
+              }}
+            >
+              <AxisBrandTitle subtitle="브랜드 그래픽 제작" />
             </div>
-            <Button variant="outline" size="sm" type="button" onClick={() => navigate("/dashboard")}>
-              내 디자인
-            </Button>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate("/dashboard")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              color: "#FFFFFF",
+              background: PAL.black,
+              border: "none",
+              borderRadius: 999,
+              padding: "8px 18px",
+              cursor: "pointer",
+              boxShadow: "0 4px 14px -4px rgba(0,0,0,0.2)",
+              flexShrink: 0,
+              transition: "box-shadow 0.15s, transform 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 6px 20px -6px rgba(0,0,0,0.28)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 14px -4px rgba(0,0,0,0.2)";
+            }}
+          >
+            내 디자인
+          </button>
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-8 rounded-[12px] border border-gray-200 bg-white px-[32px] pb-6 pt-[21px]">
-          <div className="mb-[16px] flex min-w-0 items-center gap-[8px]">
-            <Layers className="h-[26px] w-[26px] shrink-0 text-[#F43182]" />
-            <h2 className="text-[19.5px] font-semibold text-gray-900">카테고리 선택</h2>
-          </div>
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setMediaType("online")}
-                className={`${categoryTabBase} ${mediaType === "online" ? categoryTabActive : categoryTabIdle}`}
-              >
-                온라인
-              </button>
-              <span className="select-none text-[13px] font-medium text-gray-300" aria-hidden>
-                -
-              </span>
-              <button
-                type="button"
-                onClick={() => setMediaType("offline")}
-                className={`${categoryTabBase} ${mediaType === "offline" ? categoryTabActive : categoryTabIdle}`}
-              >
-                오프라인
-              </button>
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px 40px" }}>
+        <section
+          style={{
+            background: PAL.card,
+            border: `1px solid ${PAL.borderSubtle}`,
+            borderRadius: 24,
+            padding: "22px 24px 24px",
+            marginBottom: 24,
+            boxShadow: PAL.shadow,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                background: PAL.coralSoft,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Layers style={{ width: 20, height: 20, color: PAL.coral }} />
             </div>
-            <div className="flex min-h-0 flex-wrap content-start gap-2">
-              <button
-                type="button"
-                onClick={() => setCategory("all")}
-                className={`${categoryTabBase} ${selectedCategory === "all" ? categoryTabActive : categoryTabIdle}`}
-              >
-                전체
-              </button>
-              {availableCategories.map((category) => {
-                const Icon = categoryIconMap[category.icon] ?? LayoutTemplate;
-                const active = selectedCategory === category.id;
+            <h2
+              style={{
+                margin: 0,
+                fontSize: 19,
+                fontWeight: 700,
+                color: PAL.ink,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              카테고리 선택
+            </h2>
+            <span
+              style={{
+                display: "inline-block",
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: PAL.coral,
+                marginLeft: 2,
+                boxShadow: "0 0 0 1px rgba(255, 127, 102, 0.2)",
+              }}
+              aria-hidden
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+              {(["online", "offline"] as const).map((m) => {
+                const active = mediaType === m;
                 return (
                   <button
-                    key={category.id}
+                    key={m}
                     type="button"
-                    onClick={() => setCategory(category.id)}
-                    className={`${categoryTabBase} ${active ? categoryTabActive : categoryTabIdle}`}
+                    onClick={() => setMediaType(m)}
+                    style={{
+                      borderRadius: 999,
+                      padding: "8px 16px",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      transition: "background 0.15s, color 0.15s, box-shadow 0.15s, border 0.15s",
+                      background: active ? PAL.black : PAL.card,
+                      color: active ? "#FFFFFF" : PAL.muted,
+                      border: active ? "none" : `1px solid ${PAL.borderSubtle}`,
+                      boxShadow: active ? "0 4px 12px -4px rgba(0,0,0,0.2)" : "0 1px 3px rgba(0,0,0,0.04)",
+                    }}
                   >
-                    <Icon className="mr-1.5 h-4 w-4 shrink-0" />
-                    {category.label}
+                    {m === "online" ? "온라인" : "오프라인"}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignContent: "flex-start" }}>
+              {(["all", ...availableCategories.map((c) => c.id)] as (string | "all")[]).map((id) => {
+                const isAll = id === "all";
+                const active = selectedCategory === id;
+                const label = isAll
+                  ? "전체"
+                  : (availableCategories.find((c) => c.id === id)?.label ?? id);
+                const cat = !isAll ? availableCategories.find((c) => c.id === id) : null;
+                const Icon = cat ? (categoryIconMap[cat.icon] ?? LayoutTemplate) : null;
+                return (
+                  <button
+                    key={isAll ? "all" : id}
+                    type="button"
+                    onClick={() => setCategory(isAll ? "all" : (id as string))}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      borderRadius: 999,
+                      padding: "6px 14px",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      transition: "background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s",
+                      background: active ? PAL.coral : PAL.card,
+                      color: active ? "#FFFFFF" : PAL.ink,
+                      border: `1px solid ${active ? PAL.coral : PAL.borderSubtle}`,
+                      boxShadow: active ? "0 2px 8px -2px rgba(255, 127, 102, 0.4)" : "none",
+                    }}
+                  >
+                    {Icon && <Icon style={{ width: 14, height: 14 }} className="shrink-0" />}
+                    {label}
                   </button>
                 );
               })}
             </div>
           </div>
-        </div>
+        </section>
 
-        <div className="mb-8">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <Input
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ position: "relative", maxWidth: 420 }}>
+            <Search
+              style={{
+                position: "absolute",
+                left: 16,
+                top: "50%",
+                transform: "translateY(-50%)",
+                width: 18,
+                height: 18,
+                color: PAL.mutedSoft,
+                pointerEvents: "none",
+              }}
+            />
+            <input
               type="search"
-              placeholder="템플릿 검색..."
+              placeholder="템플릿 검색…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              style={{
+                width: "100%",
+                height: 48,
+                paddingLeft: 48,
+                paddingRight: 16,
+                fontSize: 15,
+                color: PAL.ink,
+                background: PAL.inputBg,
+                border: "none",
+                borderRadius: 999,
+                outline: "none",
+                boxSizing: "border-box",
+                boxShadow: "0 0 0 1px rgba(0,0,0,0.04)",
+              }}
             />
           </div>
         </div>
 
         <div
-          className="grid w-full min-w-0 grid-cols-4 gap-2 min-[768px]:gap-4 [grid-template-columns:repeat(4,minmax(0,1fr))]"
-          style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
+          className="grid w-full min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          style={{ alignItems: "stretch" }}
         >
           {filteredTemplates.map((template) => {
             const isPlacard = template.category === "placard";
@@ -209,46 +382,135 @@ export function TemplateGallery() {
                     handleSelectTemplate(template.id);
                   }
                 }}
-                className={`group min-w-0 cursor-pointer overflow-hidden rounded-lg border bg-white transition-all hover:shadow-lg ${
-                  isPlacard ? "border-gray-200 hover:border-[#F43182]/40" : "border-gray-200"
-                }`}
                 onClick={() => handleSelectTemplate(template.id)}
+                className="group"
+                style={{
+                  minWidth: 0,
+                  cursor: "pointer",
+                  background: PAL.card,
+                  borderRadius: 20,
+                  border: `1px solid ${PAL.borderSubtle}`,
+                  overflow: "hidden",
+                  boxShadow: PAL.shadow,
+                  transition: "transform 0.2s, box-shadow 0.2s, border-color 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.transform = "translateY(-3px)";
+                  (e.currentTarget as HTMLDivElement).style.boxShadow = PAL.shadowHover;
+                  (e.currentTarget as HTMLDivElement).style.border = `1px solid ${
+                    isPlacard ? PAL.coral : "rgba(0,0,0,0.08)"
+                  }`;
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
+                  (e.currentTarget as HTMLDivElement).style.boxShadow = PAL.shadow;
+                  (e.currentTarget as HTMLDivElement).style.border = `1px solid ${PAL.borderSubtle}`;
+                }}
               >
-                <div className="relative flex h-20 items-center justify-center overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 sm:h-24">
-                  <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-indigo-600/10 opacity-0 transition-opacity group-hover:opacity-100" />
-                  <div className="z-10 text-center">
-                    <div className="mx-auto mb-1 flex h-10 w-10 items-center justify-center rounded-md bg-white shadow-sm sm:h-12 sm:w-12">
+                <div
+                  style={{
+                    position: "relative",
+                    display: "flex",
+                    height: 96,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                    background: "linear-gradient(145deg, #FAF8F6 0%, #F0EEEB 100%)",
+                  }}
+                >
+                  <div
+                    style={{
+                      zIndex: 1,
+                      textAlign: "center",
+                    }}
+                  >
+                    <div
+                      style={{
+                        margin: "0 auto 6px",
+                        display: "flex",
+                        height: 48,
+                        width: 48,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 14,
+                        background: PAL.card,
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                      }}
+                    >
                       {isPlacard ? (
-                        <RectangleHorizontal className="h-6 w-6 text-gray-400 sm:h-7 sm:w-7" />
+                        <RectangleHorizontal style={{ width: 22, height: 22, color: PAL.coral }} />
                       ) : (
-                        <LayoutTemplate className="h-6 w-6 text-gray-400 sm:h-7 sm:w-7" />
+                        <LayoutTemplate style={{ width: 22, height: 22, color: PAL.coral }} />
                       )}
                     </div>
-                    <div className="text-[11px] font-medium text-gray-500">{template.size.name}</div>
+                    <div style={{ fontSize: 11, fontWeight: 500, color: PAL.muted }}>{template.size.name}</div>
                   </div>
                 </div>
-
-                <div className="min-w-0 p-2 sm:p-3">
-                  <h3 className="mb-0.5 truncate text-[13px] font-medium text-gray-900">{template.name}</h3>
-                  <p className="mb-2 hidden truncate text-[12px] text-gray-500 sm:block">{template.description}</p>
-                  <div className="flex min-w-0 items-center justify-between gap-2">
-                    <span className="min-w-0 truncate text-[11px] text-gray-400">
+                <div style={{ minWidth: 0, padding: "12px 14px" }}>
+                  <h3
+                    style={{
+                      margin: "0 0 4px 0",
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: PAL.ink,
+                      letterSpacing: "-0.01em",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {template.name}
+                  </h3>
+                  <p
+                    className="mb-0 hidden sm:line-clamp-2 sm:mb-2 sm:block"
+                    style={{ color: PAL.muted, fontSize: 12, lineHeight: 1.4, margin: "0 0 8px 0" }}
+                  >
+                    {template.description}
+                  </p>
+                  <div
+                    style={{
+                      display: "flex",
+                      minWidth: 0,
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                    }}
+                  >
+                    <span
+                      style={{
+                        minWidth: 0,
+                        flex: 1,
+                        fontSize: 11,
+                        color: PAL.mutedSoft,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       {template.size.width} × {template.size.height} {template.size.unit}
                     </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
+                    <button
                       type="button"
-                      className={`h-7 px-2 text-[12px] opacity-0 transition-opacity group-hover:opacity-100 ${
-                        isPlacard ? "text-[#F43182] hover:bg-[#F43182]/10 hover:text-[#F43182]" : ""
-                      }`}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleSelectTemplate(template.id);
                       }}
+                      className="opacity-0 group-hover:opacity-100"
+                      style={{
+                        flexShrink: 0,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: isPlacard ? PAL.coral : PAL.ink,
+                        background: isPlacard ? PAL.coralSoft : "rgba(0,0,0,0.04)",
+                        border: "none",
+                        borderRadius: 999,
+                        padding: "4px 10px",
+                        cursor: "pointer",
+                        transition: "opacity 0.15s, background 0.15s",
+                      }}
                     >
                       사용하기
-                    </Button>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -257,10 +519,19 @@ export function TemplateGallery() {
         </div>
 
         {filteredTemplates.length === 0 && (
-          <div className="py-16 text-center">
-            <FileImage className="mx-auto mb-4 h-16 w-16 text-gray-300" />
-            <h3 className="mb-2 text-lg font-medium text-gray-900">검색 결과가 없습니다.</h3>
-            <p className="text-gray-500">검색어나 카테고리 필터를 변경해보세요.</p>
+          <div
+            style={{
+              padding: "64px 24px",
+              textAlign: "center",
+              background: PAL.card,
+              borderRadius: 24,
+              border: `1px solid ${PAL.borderSubtle}`,
+              boxShadow: PAL.shadow,
+            }}
+          >
+            <FileImage style={{ width: 56, height: 56, color: PAL.mutedSoft, margin: "0 auto 16px" }} />
+            <h3 style={{ margin: "0 0 8px 0", fontSize: 17, fontWeight: 600, color: PAL.ink }}>검색 결과가 없습니다</h3>
+            <p style={{ margin: 0, fontSize: 14, color: PAL.muted }}>검색어나 카테고리 필터를 바꿔 보세요.</p>
           </div>
         )}
       </div>

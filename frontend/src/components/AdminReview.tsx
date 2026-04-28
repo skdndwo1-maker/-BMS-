@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { approveRun, listRuns, rejectRun, type AdminRunRow } from "@/lib/adminApi";
 import { toast } from "sonner";
+import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 
 export function AdminReview() {
   const navigate = useNavigate();
@@ -44,18 +45,18 @@ export function AdminReview() {
   }, [status]);
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] px-6 py-8">
+    <div className="min-h-screen brand-app-shell px-6 py-8">
       <div className="mx-auto max-w-5xl space-y-6">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">관리자 검토</h1>
-            <p className="text-sm text-gray-500">Supabase에 저장된 검수/생성 결과를 승인/거부합니다.</p>
+            <AxisBrandTitle subtitle="관리자 검토" />
+            <p className="mt-2 text-sm text-gray-500">Supabase에 저장된 검수/생성 결과를 승인/거부합니다.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" onClick={() => navigate("/options")}>
+            <Button type="button" variant="outline" className="rounded-full border-[rgba(0,0,0,0.1)]" onClick={() => navigate("/options")}>
               옵션으로
             </Button>
-            <Button type="button" onClick={() => void load()} disabled={!canLoad || loading}>
+            <Button type="button" className="rounded-full bg-black text-white hover:bg-zinc-900" onClick={() => void load()} disabled={!canLoad || loading}>
               새로고침
             </Button>
           </div>

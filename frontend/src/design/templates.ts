@@ -145,7 +145,7 @@ export const templates: Template[] = [
     category: 'placard',
     size: { width: 4700, height: 700, unit: 'mm', name: '4700×700mm' },
     thumbnail: '',
-    description: 'LG U+ 브랜드 가이드 기반 가로형 현수막',
+    description: '브랜드 가이드 기반 가로형 현수막',
     mediaType: 'offline',
     customizable: true,
   },

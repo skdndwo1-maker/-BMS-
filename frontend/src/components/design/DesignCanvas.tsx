@@ -1803,7 +1803,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             <button
               key={mode}
               type="button"
-              className="rounded border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 hover:border-[#F43182] hover:text-[#F43182]"
+              className="rounded border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 hover:border-[#FF7F66] hover:text-[#FF7F66]"
               onClick={() => runAlign(mode)}
             >
               {label}
@@ -1811,7 +1811,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           ))}
           <button
             type="button"
-            className="rounded border border-gray-300 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-700 hover:border-[#F43182] hover:text-[#F43182]"
+            className="rounded border border-gray-300 bg-gray-50 px-2 py-0.5 text-[10px] font-medium text-gray-700 hover:border-[#FF7F66] hover:text-[#FF7F66]"
             onClick={() => setSelectedKeys([])}
           >
             모두 해제
@@ -1819,7 +1819,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           <button
             type="button"
             disabled={!canGroupSelection(contentRef.current, selectedKeys)}
-            className="rounded border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 hover:border-[#F43182] hover:text-[#F43182] disabled:opacity-40"
+            className="rounded border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 hover:border-[#FF7F66] hover:text-[#FF7F66] disabled:opacity-40"
             onClick={groupSelection}
           >
             그룹
@@ -1827,7 +1827,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           <button
             type="button"
             disabled={!canUngroupSelection(contentRef.current, selectedKeys)}
-            className="rounded border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 hover:border-[#F43182] hover:text-[#F43182] disabled:opacity-40"
+            className="rounded border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 hover:border-[#FF7F66] hover:text-[#FF7F66] disabled:opacity-40"
             onClick={ungroupSelection}
           >
             그룹 해제
@@ -2368,7 +2368,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               zIndex: 12,
               pointerEvents: "auto",
               cursor: "pointer",
-              outline: selectedKeys.includes("logo") ? "2px solid #F43182" : undefined,
+              outline: selectedKeys.includes("logo") ? "2px solid #FF7F66" : undefined,
               outlineOffset: selectedKeys.includes("logo") ? "2px" : undefined,
               borderRadius: selectedKeys.includes("logo") ? "4px" : undefined,
               isolation: "isolate",
@@ -2414,7 +2414,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                 .map((b, idx) => {
                   const rect = rects[b.id] ?? (idx === 0 ? badgeRect : { ...badgeRect, y: Math.min(0.92, badgeRect.y + idx * 0.07) });
                   const m = computeBadgeAutoText(rect);
-                  const fill = (b.color ?? "magenta") === "black" ? "#000000" : "#F43182";
+                  const fill = (b.color ?? "magenta") === "black" ? "#000000" : "#FF7F66";
                   return (
                     <DraggableCanvasOverlay
                       key={b.id}
@@ -2545,7 +2545,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               resize: "none",
               padding: 4,
               border: "none",
-              outline: "2px solid #F43182",
+              outline: "2px solid #FF7F66",
               boxSizing: "border-box",
               background: "rgba(255,255,255,0.92)",
               ...titleTextStyle(content, titleFontSize, titleColor),
@@ -2581,7 +2581,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               resize: "none",
               padding: 4,
               border: "none",
-              outline: "2px solid #F43182",
+              outline: "2px solid #FF7F66",
               boxSizing: "border-box",
               background: "rgba(255,255,255,0.92)",
               ...footerTextStyle(content, disclaimerSize),
@@ -2629,7 +2629,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                   resize: "none",
                   padding: 4,
                   border: "none",
-                  outline: "2px solid #F43182",
+                  outline: "2px solid #FF7F66",
                   boxSizing: "border-box",
                   background: "rgba(255,255,255,0.92)",
                   ...bodyTextStyle(content, b.id, bodyFontSize, bodyColor),
@@ -2690,7 +2690,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                   resize: "none",
                   padding: 4,
                   border: "none",
-                  outline: "2px solid #F43182",
+                  outline: "2px solid #FF7F66",
                   boxSizing: "border-box",
                   background: "rgba(255,255,255,0.92)",
                   ...subtitleTextStyle(content, s.id, subtitleFontSize, subtitleColor),
@@ -2743,7 +2743,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                   resize: "none",
                   padding: 4,
                   border: "none",
-                  outline: "2px solid #F43182",
+                  outline: "2px solid #FF7F66",
                   boxSizing: "border-box",
                   background: "rgba(255,255,255,0.92)",
                   fontFamily: VI_FONT_STACK,

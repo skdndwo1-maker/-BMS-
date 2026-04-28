@@ -97,7 +97,7 @@ function AssetPresetPickerDialogOpen({
                     type="button"
                     onClick={() => setIlluGroup(k)}
                     className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-semibold transition-colors ${
-                      active ? "bg-white text-[#F43182] shadow-sm" : "text-gray-600 hover:bg-white/60"
+                      active ? "bg-white text-[#FF7F66] shadow-sm" : "text-gray-600 hover:bg-white/60"
                     }`}
                   >
                     {k}
@@ -119,7 +119,7 @@ function AssetPresetPickerDialogOpen({
             <div
               {...getRootProps()}
               className={`shrink-0 cursor-pointer rounded-lg border-2 border-dashed px-4 py-2 text-center text-xs transition-colors ${
-                isDragActive ? "border-[#F43182] bg-[#F43182]/5" : "border-gray-300 hover:border-gray-400"
+                isDragActive ? "border-[#FF7F66] bg-[#FF7F66]/5" : "border-gray-300 hover:border-gray-400"
               }`}
             >
               <input {...getInputProps()} />
@@ -132,7 +132,7 @@ function AssetPresetPickerDialogOpen({
                 key={`${layout}-${p.name}-${idx}`}
                 type="button"
                 onClick={() => onPick(p)}
-                className="group flex flex-col items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-2 hover:border-[#F43182] hover:bg-[#F43182]/5"
+                className="group flex flex-col items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-2 hover:border-[#FF7F66] hover:bg-[#FF7F66]/5"
                 title={p.name}
               >
                 <span
@@ -144,7 +144,7 @@ function AssetPresetPickerDialogOpen({
                     className={layout === "picto" ? "h-7 w-7 object-contain" : "h-12 w-full object-contain"}
                   />
                 </span>
-                <span className="w-full truncate text-[10px] font-medium text-gray-600 group-hover:text-[#F43182]">
+                <span className="w-full truncate text-[10px] font-medium text-gray-600 group-hover:text-[#FF7F66]">
                   {p.name}
                 </span>
               </button>

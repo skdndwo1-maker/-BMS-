@@ -159,7 +159,7 @@ export async function downloadInspectionReport(
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const margin = 48;
     addCanvasToPdfPages(doc, canvas, margin);
-    doc.save(`uplus-brand-inspection-report-${stamp}.pdf`);
+    doc.save(`axis-brand-inspection-report-${stamp}.pdf`);
     return;
   }
 
@@ -169,7 +169,7 @@ export async function downloadInspectionReport(
     canvas.toBlob(
       (blob) => {
         if (!blob) return;
-        triggerBlobDownload(blob, `uplus-brand-inspection-report-${stamp}.jpg`);
+        triggerBlobDownload(blob, `axis-brand-inspection-report-${stamp}.jpg`);
       },
       "image/jpeg",
       0.92
@@ -177,7 +177,7 @@ export async function downloadInspectionReport(
   } else {
     canvas.toBlob((blob) => {
       if (!blob) return;
-      triggerBlobDownload(blob, `uplus-brand-inspection-report-${stamp}.png`);
+      triggerBlobDownload(blob, `axis-brand-inspection-report-${stamp}.png`);
     }, "image/png");
   }
 }
@@ -199,12 +199,12 @@ export function downloadRevisedImageInFormat(dataUrl: string, format: ExportForm
     ctx.drawImage(img, 0, 0);
 
     if (format === "png") {
-      canvas.toBlob((blob) => blob && triggerBlobDownload(blob, `uplus-brand-revised-${stamp}.png`), "image/png");
+      canvas.toBlob((blob) => blob && triggerBlobDownload(blob, `axis-brand-revised-${stamp}.png`), "image/png");
       return;
     }
     if (format === "jpeg") {
       canvas.toBlob(
-        (blob) => blob && triggerBlobDownload(blob, `uplus-brand-revised-${stamp}.jpg`),
+        (blob) => blob && triggerBlobDownload(blob, `axis-brand-revised-${stamp}.jpg`),
         "image/jpeg",
         0.92
       );
@@ -222,7 +222,7 @@ export function downloadRevisedImageInFormat(dataUrl: string, format: ExportForm
     const ox = (pageW - dw) / 2;
     const oy = (pageH - dh) / 2;
     pdf.addImage(imgData, "PNG", ox, oy, dw, dh);
-    pdf.save(`uplus-brand-revised-${stamp}.pdf`);
+    pdf.save(`axis-brand-revised-${stamp}.pdf`);
   };
   img.onerror = () => {
     /* ignore */
@@ -541,7 +541,7 @@ export async function downloadBrandNamingReport(
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const margin = 48;
     addCanvasToPdfPages(doc, canvas, margin);
-    doc.save(`uplus-brand-${slug}-${stamp}.pdf`);
+    doc.save(`axis-brand-${slug}-${stamp}.pdf`);
     return;
   }
 
@@ -551,7 +551,7 @@ export async function downloadBrandNamingReport(
     canvas.toBlob(
       (blob) => {
         if (!blob) return;
-        triggerBlobDownload(blob, `uplus-brand-${slug}-${stamp}.jpg`);
+        triggerBlobDownload(blob, `axis-brand-${slug}-${stamp}.jpg`);
       },
       "image/jpeg",
       0.92
@@ -559,7 +559,7 @@ export async function downloadBrandNamingReport(
   } else {
     canvas.toBlob((blob) => {
       if (!blob) return;
-      triggerBlobDownload(blob, `uplus-brand-${slug}-${stamp}.png`);
+      triggerBlobDownload(blob, `axis-brand-${slug}-${stamp}.png`);
     }, "image/png");
   }
 }

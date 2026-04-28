@@ -9,7 +9,7 @@ import {
   type GuidelineInfo,
 } from "@/lib/guidelineApi";
 import { GUIDELINE_REFERENCE_OPTIONS } from "@/constants/guidelineReferences";
-import { APP_DISPLAY_NAME } from "@/constants/appBranding";
+import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 import {
   downloadInspectionReport,
   downloadRevisedImageInFormat,
@@ -18,7 +18,6 @@ import {
 import {
   Upload,
   FileText,
-  Image as ImageIcon,
   CheckCircle2,
   XCircle,
   AlertCircle,
@@ -31,6 +30,8 @@ import {
   ChevronDown,
   X,
   RotateCcw,
+  BarChart3,
+  TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -60,16 +61,48 @@ const ETC_TOOLTIP_TEXT = [
   "작명 업무 시 사용",
 ].join("\n");
 
-// 네이밍 검수 카테고리 탭과 동일 스타일
+/** 대시보드 ref: 필터·칩 — 비활성 베이지 톤, 활성 검은 pill */
 const categoryTabBase =
-  "inline-flex items-center justify-center rounded-lg border px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F43182]/40";
-const categoryTabIdle = "border-gray-200 bg-white text-gray-700 hover:border-gray-300";
-const categoryTabActive = "border-[#F43182] bg-[#F43182]/10 text-[#F43182]";
+  "inline-flex items-center justify-center rounded-full border px-3.5 py-2 text-[13px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20";
+const categoryTabIdle =
+  "border-[rgba(0,0,0,0.08)] bg-white text-[#5C5C5C] hover:bg-[#EBE9E1] hover:border-[rgba(0,0,0,0.1)]";
+const categoryTabActive = "border-black bg-black text-white shadow-[0_4px_14px_-4px_rgba(0,0,0,0.25)]";
+
+const inspectionCard =
+  "rounded-[22px] border border-[rgba(0,0,0,0.06)] bg-white p-6 shadow-[0_4px_28px_-10px_rgba(0,0,0,0.08),0_2px_12px_-6px_rgba(0,0,0,0.04)]";
+
+function InspectionSectionTitle({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <h2
+      className={`flex items-center gap-2.5 text-[17px] font-bold tracking-tight text-[#1A1A1A] ${className}`.trim()}
+    >
+      <span
+        className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#FF7F66] shadow-[0_0_0_3px_rgba(255,127,102,0.22)]"
+        aria-hidden
+      />
+      {children}
+    </h2>
+  );
+}
 
 interface Violation {
   category: string;
   issue: string;
   severity: "high" | "medium" | "low";
+}
+
+function inspectionResultBadges(score: number, violationCount: number) {
+  const tierLabel = score >= 80 ? "우수" : score >= 60 ? "보통" : "주의";
+  const delta = score - 60;
+  const pass: "pass" | "warn" | "fail" =
+    score >= 80 && violationCount === 0 ? "pass" : score >= 60 && violationCount <= 3 ? "warn" : "fail";
+  return { tierLabel, pass, delta };
+}
+
+function severityLabel(sev: Violation["severity"]): { text: string; pill: string } {
+  if (sev === "high") return { text: "높음", pill: "bg-red-500 text-white" };
+  if (sev === "medium") return { text: "중간", pill: "bg-[#FF7F66] text-white" };
+  return { text: "낮음", pill: "bg-[#E5E3DD] text-[#4B4B4B]" };
 }
 
 interface Suggestion {
@@ -307,24 +340,24 @@ export function BrandInspection() {
   const currentStepIndex = getStepIndex(currentStep);
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
-      <header className="sticky top-0 z-10 border-b border-gray-200 bg-white">
+    <div className="min-h-screen bg-[#F8F7F4] font-[family-name:var(--font-inter,Inter),system-ui,sans-serif]">
+      <header className="sticky top-0 z-10 border-b border-[rgba(0,0,0,0.06)] bg-white/95 shadow-[0_4px_24px_-6px_rgba(0,0,0,0.06)] backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" type="button" onClick={() => navigate("/options")}>
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                onClick={() => navigate("/options")}
+                className="h-auto rounded-[12px] px-2.5 py-2 text-[13px] font-medium text-[#6B6B6B] hover:bg-black/[0.04] hover:text-[#1A1A1A]"
+              >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 옵션으로
               </Button>
-              <div className="h-6 w-px bg-gray-200" />
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 shrink-0">
-                  <img src="/uplus-main-logo.png" alt={APP_DISPLAY_NAME} className="h-full w-full object-contain" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-semibold text-gray-900">{APP_DISPLAY_NAME}</h1>
-                  <p className="text-xs text-gray-500">브랜드 디자인 검수 Brand Design Inspection</p>
-                </div>
+              <div className="h-6 w-px bg-[rgba(0,0,0,0.08)]" />
+              <div className="flex min-w-0 items-center gap-0">
+                <AxisBrandTitle subtitle="브랜드 디자인 검수" />
               </div>
             </div>
           </div>
@@ -332,22 +365,28 @@ export function BrandInspection() {
       </header>
 
       {currentStep !== "idle" && (
-        <div className="border-b border-gray-200 bg-white">
-          <div className="mx-auto max-w-7xl px-6 py-4">
-            {/* 스텝 고정 폭 + 구간 연결선만 flex-1로 등간격 분배 */}
+        <div className="border-b border-[rgba(0,0,0,0.06)] bg-[#EBE9E1]/50">
+          <div className="mx-auto max-w-7xl px-6 py-5">
             <div className="flex w-full items-center">
               {steps.map((step, index) => {
                 const StepIcon = step.icon;
                 const isActive = index <= currentStepIndex - 1;
                 const isCurrent = index === currentStepIndex - 1;
+                const allComplete = currentStep === "complete";
 
                 return (
                   <Fragment key={step.id}>
                     <div className="flex w-[72px] shrink-0 flex-col items-center gap-2 sm:w-[88px]">
                       <div
-                        className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
-                          isActive || isCurrent ? "bg-[#F43182] text-white" : "bg-gray-100 text-gray-400"
-                        } ${isCurrent ? "ring-4 ring-[#F43182]/20" : ""}`}
+                        className={`flex h-11 w-11 items-center justify-center rounded-full transition-all ${
+                          allComplete
+                            ? "bg-black text-white shadow-[0_4px_12px_-4px_rgba(0,0,0,0.3)]"
+                            : isActive && !isCurrent
+                              ? "bg-black text-white shadow-[0_4px_12px_-4px_rgba(0,0,0,0.3)]"
+                              : isCurrent
+                                ? "bg-[#FF7F66] text-white shadow-[0_4px_16px_-4px_rgba(255,127,102,0.45)] ring-4 ring-[#FF7F66]/25"
+                                : "bg-[#E5E3DD] text-[#9CA3AF]"
+                        }`}
                       >
                         {isCurrent && currentStep !== "complete" ? (
                           <Loader2 className="h-5 w-5 animate-spin" />
@@ -356,14 +395,16 @@ export function BrandInspection() {
                         )}
                       </div>
                       <span
-                        className={`text-center text-xs font-medium ${isActive || isCurrent ? "text-gray-900" : "text-gray-400"}`}
+                        className={`text-center text-[11px] font-semibold ${isActive || isCurrent ? "text-[#1A1A1A]" : "text-gray-400"}`}
                       >
                         {step.label}
                       </span>
                     </div>
                     {index < steps.length - 1 ? (
                       <div
-                        className={`mx-1 h-0.5 min-w-[8px] flex-1 transition-all sm:mx-2 ${index <= currentStepIndex - 1 ? "bg-[#F43182]" : "bg-gray-200"}`}
+                        className={`mx-1 h-[3px] min-w-[8px] flex-1 rounded-full transition-all sm:mx-2 ${
+                          allComplete || index <= currentStepIndex - 2 ? "bg-black" : "bg-[#D6D4CD]"
+                        }`}
                       />
                     ) : null}
                   </Fragment>
@@ -374,18 +415,18 @@ export function BrandInspection() {
         </div>
       )}
 
-      <main className="mx-auto max-w-7xl px-6 py-8">
-        <div className="space-y-6">
-          {/* ── 카테고리 선택 (업로드 영역 위, 좌/우 배치) ── */}
-          <div className="rounded-[12px] border border-gray-200 bg-white px-[32px] pb-4 pt-[21px]">
-            <div className="mb-[16px] flex min-w-0 items-center gap-[8px]">
-              <ScanSearch className="h-[20px] w-[20px] shrink-0 text-[#F43182]" />
-              <h2 className="text-[19.5px] font-semibold text-gray-900">카테고리 선택</h2>
+      <main className="mx-auto max-w-7xl px-5 py-8 sm:px-6 sm:py-10">
+        <div className="space-y-8">
+          {/* ── 카테고리 선택 ── */}
+          <div className={`${inspectionCard} px-5 py-5 sm:px-8`}>
+            <div className="mb-5">
+              <InspectionSectionTitle>카테고리 선택</InspectionSectionTitle>
+              <p className="mt-2 text-sm text-[#6B6B6B]">검수 맥락에 맞는 영역·채널·제작물 유형을 지정하세요.</p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 min-[900px]:grid-cols-2">
               <div>
-                <p className="mb-2 text-xs font-medium text-gray-500">영역 선택</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6B6B6B]">영역 선택</p>
                 <div className="flex flex-wrap gap-2">
                   <TooltipProvider>
                     {BUSINESS_CATEGORIES.map((c) =>
@@ -440,7 +481,7 @@ export function BrandInspection() {
               </div>
 
               <div>
-                <p className="mb-2 text-xs font-medium text-gray-500">제작물 유형</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6B6B6B]">제작물 유형</p>
                 <div className="flex flex-col gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     {DESIGN_GROUPS.map((g) => (
@@ -475,10 +516,10 @@ export function BrandInspection() {
           </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
-            <div className="flex min-h-0 flex-col rounded-xl border border-gray-200 bg-white p-4 lg:self-start">
-              <div className="mb-2 flex items-center gap-2">
-                <ImageIcon className="h-5 w-5 text-[#F43182]" />
-                <h2 className="font-semibold text-gray-900">검수할 디자인 업로드</h2>
+            <div className={`flex min-h-0 flex-col ${inspectionCard} !p-5 lg:self-start`}>
+              <div className="mb-4">
+                <InspectionSectionTitle className="!text-[16px]">검수할 디자인 업로드</InspectionSectionTitle>
+                <p className="mt-1.5 text-xs text-[#6B6B6B]">PNG · JPEG · PDF · 최대 10MB</p>
               </div>
 
               <div
@@ -491,7 +532,7 @@ export function BrandInspection() {
                     designInputRef.current?.click();
                   }
                 }}
-                className="flex h-[320px] w-full shrink-0 cursor-pointer flex-col overflow-hidden rounded-xl border-2 border-dashed border-gray-300 text-center transition-all hover:border-[#F43182] hover:bg-[#F43182]/5"
+                className="flex h-[320px] w-full shrink-0 cursor-pointer flex-col overflow-hidden rounded-[20px] border-2 border-dashed border-[rgba(0,0,0,0.1)] bg-[#FAFAF8] text-center transition-all hover:border-[#FF7F66]/60 hover:bg-[#FFF7F5]"
               >
                 {designPreview ? (
                   <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
@@ -512,7 +553,7 @@ export function BrandInspection() {
                             variant="outline"
                             size="sm"
                             type="button"
-                            className="h-[22px] min-h-0 shrink-0 px-2 py-0 text-[10px] leading-none"
+                            className="h-[22px] min-h-0 shrink-0 rounded-full border-[rgba(0,0,0,0.12)] px-3 py-0 text-[10px] leading-none"
                             onClick={(e) => {
                               e.stopPropagation();
                               designInputRef.current?.click();
@@ -524,7 +565,7 @@ export function BrandInspection() {
                             variant="ghost"
                             size="sm"
                             type="button"
-                            className="h-[22px] min-h-0 shrink-0 px-2 py-0 text-[10px] leading-none text-gray-600"
+                            className="h-[22px] min-h-0 shrink-0 rounded-full px-2 py-0 text-[10px] leading-none text-gray-600"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDesignUploadCancel();
@@ -538,12 +579,12 @@ export function BrandInspection() {
                   </div>
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
-                    <div className="mx-auto flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gray-100">
-                      <Upload className="h-8 w-8 text-gray-400" />
+                    <div className="mx-auto flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#EBE9E1]">
+                      <Upload className="h-8 w-8 text-[#6B6B6B]" />
                     </div>
                     <div className="space-y-1">
-                      <p className="text-sm font-medium text-gray-900">클릭하여 파일 업로드</p>
-                      <p className="text-xs text-gray-500">PNG, JPEG, PDF 지원 (최대 10MB)</p>
+                      <p className="text-sm font-semibold text-[#1A1A1A]">클릭하여 파일 업로드</p>
+                      <p className="text-xs text-[#6B6B6B]">PNG, JPEG, PDF 지원 (최대 10MB)</p>
                     </div>
                   </div>
                 )}
@@ -557,21 +598,18 @@ export function BrandInspection() {
               />
             </div>
 
-            <div className="flex min-h-0 flex-col rounded-xl border border-gray-200 bg-white p-4">
-              <div className="mb-2">
-                <div className="mb-1.5 flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-violet-500" />
-                  <h2 className="font-semibold text-gray-900">검수 참조 파일 업로드</h2>
-                </div>
-                <p className="text-xs leading-snug text-gray-500">
-                  아래 <span className="font-medium text-gray-700">참조 가이드라인</span> 옵션에 연동된 문서를{" "}
-                  <span className="font-medium text-gray-700">우선</span>으로 검수합니다. 여기에 올린 파일은 고정
+            <div className={`flex min-h-0 flex-col ${inspectionCard} !p-5`}>
+              <div className="mb-3">
+                <InspectionSectionTitle className="!text-[16px]">검수 참조 파일 업로드</InspectionSectionTitle>
+                <p className="mt-2 text-xs leading-relaxed text-[#6B6B6B]">
+                  아래 <span className="font-semibold text-[#1A1A1A]">참조 가이드라인</span> 옵션에 연동된 문서를{" "}
+                  <span className="font-semibold text-[#1A1A1A]">우선</span>으로 검수합니다. 여기에 올린 파일은 고정
                   자료를 바꾸지 않으며, 검수 실행 시{" "}
-                  <span className="font-medium text-violet-800">추가 보완 자료</span>로만 함께 반영됩니다.
+                  <span className="font-semibold text-[#C14D38]">추가 보완 자료</span>로만 함께 반영됩니다.
                 </p>
               </div>
 
-              <div className="flex min-h-[220px] flex-1 flex-col gap-2">
+              <div className="flex min-h-[220px] flex-1 flex-col gap-3">
                 <div
                   role="button"
                   tabIndex={0}
@@ -582,12 +620,12 @@ export function BrandInspection() {
                       guidelineInputRef.current?.click();
                     }
                   }}
-                  className="flex min-h-0 flex-1 basis-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-gray-300 bg-white py-3 text-center shadow-sm transition-all hover:border-violet-400 hover:bg-violet-50/50"
+                  className="flex min-h-0 flex-1 basis-0 cursor-pointer items-center justify-center overflow-hidden rounded-[20px] border-2 border-dashed border-[rgba(0,0,0,0.1)] bg-[#FAFAF8] py-3 text-center transition-all hover:border-[#FF7F66]/50 hover:bg-[#FFF7F5]"
                 >
                     {guidelineFile ? (
                       <div className="flex w-full max-w-full flex-col items-center justify-center gap-1.5 px-3 py-1">
-                        <FileText className="mx-auto h-7 w-7 shrink-0 text-violet-500" strokeWidth={1.75} />
-                        <p className="line-clamp-2 max-w-full break-all text-[11px] leading-snug text-gray-600">
+                        <FileText className="mx-auto h-7 w-7 shrink-0 text-[#FF7F66]" strokeWidth={1.75} />
+                        <p className="line-clamp-2 max-w-full break-all text-[11px] leading-snug text-[#4B4B4B]">
                           {guidelineFile.name}
                         </p>
                         <div className="mt-0.5 flex flex-row flex-wrap items-center justify-center gap-1.5">
@@ -595,7 +633,7 @@ export function BrandInspection() {
                             variant="outline"
                             size="sm"
                             type="button"
-                            className="h-[22px] min-h-0 shrink-0 px-2 py-0 text-[10px] leading-none"
+                            className="h-[22px] min-h-0 shrink-0 rounded-full border-[rgba(0,0,0,0.12)] px-3 py-0 text-[10px] leading-none"
                             onClick={(e) => {
                               e.stopPropagation();
                               guidelineInputRef.current?.click();
@@ -607,7 +645,7 @@ export function BrandInspection() {
                             variant="ghost"
                             size="sm"
                             type="button"
-                            className="h-[22px] min-h-0 shrink-0 px-2 py-0 text-[10px] leading-none text-gray-600"
+                            className="h-[22px] min-h-0 shrink-0 rounded-full px-2 py-0 text-[10px] leading-none text-gray-600"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleGuidelineUploadCancel();
@@ -619,19 +657,19 @@ export function BrandInspection() {
                       </div>
                     ) : (
                       <div className="flex w-full flex-col items-center justify-center gap-1.5 px-3 py-2">
-                        <div className="mx-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-100">
-                          <Upload className="h-4 w-4 text-violet-500" />
+                        <div className="mx-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#EBE9E1]">
+                          <Upload className="h-4 w-4 text-[#6B6B6B]" />
                         </div>
                         <div className="space-y-0.5">
-                          <p className="text-xs font-medium text-gray-900">추가 참조 (선택)</p>
-                          <p className="text-[11px] text-gray-500">PDF, PNG, JPEG · 검수 시 보완 맥락</p>
+                          <p className="text-xs font-semibold text-[#1A1A1A]">추가 참조 (선택)</p>
+                          <p className="text-[11px] text-[#6B6B6B]">PDF, PNG, JPEG · 검수 시 보완 맥락</p>
                         </div>
                       </div>
                     )}
                 </div>
 
-                <div className="flex min-h-0 flex-1 basis-0 flex-col justify-center gap-1.5 overflow-y-auto rounded-xl border border-violet-200 bg-violet-50/50 px-2.5 py-[3px] shadow-sm">
-                  <label className="text-xs font-medium text-violet-900" htmlFor="reference-guideline">
+                <div className="flex min-h-0 flex-1 basis-0 flex-col justify-center gap-2 overflow-y-auto rounded-[18px] border border-[rgba(0,0,0,0.06)] bg-[#EBE9E1]/60 px-3 py-2.5">
+                  <label className="text-xs font-bold text-[#1A1A1A]" htmlFor="reference-guideline">
                     참조 가이드라인
                   </label>
                   <div className="relative shrink-0">
@@ -643,7 +681,7 @@ export function BrandInspection() {
                         setGuidelineFile(null);
                         if (guidelineInputRef.current) guidelineInputRef.current.value = "";
                       }}
-                      className="w-full appearance-none rounded-lg border border-gray-200 bg-white py-1.5 pl-2.5 pr-9 text-sm focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20"
+                      className="w-full appearance-none rounded-xl border border-[rgba(0,0,0,0.08)] bg-white py-2 pl-3 pr-9 text-sm text-[#1A1A1A] shadow-sm focus:border-[#FF7F66] focus:outline-none focus:ring-2 focus:ring-[#FF7F66]/20"
                     >
                       {GUIDELINE_REFERENCE_OPTIONS.map((opt) => (
                         <option key={opt.id} value={opt.id}>
@@ -653,7 +691,7 @@ export function BrandInspection() {
                     </select>
                     <ChevronDown
                       aria-hidden
-                      className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-gray-500"
+                      className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-[#6B6B6B]"
                     />
                   </div>
                   {guidelineUploadError && (
@@ -670,31 +708,31 @@ export function BrandInspection() {
                 onChange={handleGuidelineUpload}
               />
 
-              <div className="mt-2 min-h-0 shrink-0 rounded-lg border border-violet-100 bg-violet-50/60 p-2.5 text-xs text-gray-700">
+              <div className="mt-3 min-h-0 shrink-0 rounded-[16px] border border-[rgba(0,0,0,0.06)] bg-white p-3 text-xs text-[#4B4B4B] shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-medium text-violet-900">서버 연동 상태</p>
+                  <p className="font-bold text-[#1A1A1A]">서버 연동 상태</p>
                   <div className="flex flex-wrap items-center gap-2">
                     {guidelineLoading ? (
-                      <span className="inline-flex items-center gap-1.5 text-gray-500">
+                      <span className="inline-flex items-center gap-1.5 text-[#6B6B6B]">
                         <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
                         확인 중
                       </span>
                     ) : (
                       <span
-                        className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                        className={
                           serverGuideline?.hasFile
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-gray-200 text-gray-600"
-                        }`}
+                            ? "inline-flex items-center rounded-full bg-[#FF7F66] px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm"
+                            : "rounded-full bg-[#E5E3DD] px-2.5 py-0.5 text-[11px] font-semibold text-[#6B6B6B]"
+                        }
                       >
-                        {serverGuideline?.hasFile ? "ON" : "OFF"}
+                        {serverGuideline?.hasFile ? "Active" : "Off"}
                       </span>
                     )}
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
-                      className="h-7 border-violet-300 text-[11px]"
+                      className="h-7 rounded-full border-[rgba(0,0,0,0.12)] text-[11px] font-semibold"
                       disabled={guidelineLoading}
                       onClick={() => setGuidelineDetailOpen(true)}
                     >
@@ -706,31 +744,30 @@ export function BrandInspection() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <FileText className="h-5 w-5 text-violet-500" />
-              <h2 className="font-semibold text-gray-900">검수 사항 직접 입력</h2>
-            </div>
+          <div className={`${inspectionCard} !p-6`}>
+            <InspectionSectionTitle className="!text-[16px]">검수 사항 직접 입력</InspectionSectionTitle>
             <textarea
               value={guidelineText}
               onChange={(e) => setGuidelineText(e.target.value)}
               placeholder={
-                "브랜드 가이드라인을 직접 입력하세요...\n\n예시:\n• 로고는 항상 15mm 이상 크기로 사용\n• 브랜드 컬러는 #F43182 (LG U+ Magenta)\n• 공식 폰트는 LG Smart UI 사용\n• 로고 주변 최소 10mm 여백 확보\n• 그리드 시스템: 12컬럼 레이아웃"
+                "브랜드 가이드라인을 직접 입력하세요...\n\n예시:\n• 로고는 항상 15mm 이상 크기로 사용\n• 브랜드 컬러는 #FF7F66 (액센트 코랄)\n• 공식 폰트는 LG Smart UI 사용\n• 로고 주변 최소 10mm 여백 확보\n• 그리드 시스템: 12컬럼 레이아웃"
               }
-              className="h-40 w-full resize-none overflow-y-auto rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20"
+              className="mt-4 h-40 w-full resize-none overflow-y-auto rounded-[16px] border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-3 text-sm text-[#1A1A1A] placeholder:text-[#9CA3AF] focus:border-[#FF7F66] focus:outline-none focus:ring-2 focus:ring-[#FF7F66]/20"
             />
           </div>
 
           {inspectionError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{inspectionError}</div>
+            <div className="rounded-[16px] border border-red-200/80 bg-red-50/90 px-4 py-3 text-sm text-red-800">
+              {inspectionError}
+            </div>
           )}
 
-          <div className="space-y-2">
-            <Button
+          <div className="space-y-3">
+            <button
               type="button"
               onClick={handlePrimaryCta}
               disabled={!designFile || isBusy}
-              className="h-14 w-full bg-[#F43182] text-base font-semibold text-white shadow-lg hover:bg-[#d41f6e] disabled:opacity-50"
+              className="brand-btn-primary h-14 w-full text-base font-semibold disabled:pointer-events-none disabled:opacity-45"
             >
               {isBusy ? (
                 <>
@@ -748,12 +785,12 @@ export function BrandInspection() {
                   브랜드 검수 실행 ✨
                 </>
               )}
-            </Button>
+            </button>
             {isBusy && (
               <Button
                 type="button"
                 variant="outline"
-                className="h-11 w-full border-gray-300 text-sm text-gray-800 hover:bg-gray-50"
+                className="h-11 w-full rounded-full border-[rgba(0,0,0,0.12)] text-sm font-medium text-[#1A1A1A] hover:bg-[#EBE9E1]"
                 onClick={handleStopAndResetFromProgress}
               >
                 <RotateCcw className="mr-2 h-4 w-4 shrink-0" />
@@ -762,37 +799,138 @@ export function BrandInspection() {
             )}
           </div>
 
-          {showResults && brandScore !== null && (
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-md">
-              <div className="flex flex-col gap-6 md:flex-row md:items-stretch md:gap-0">
-                <div className="flex w-full shrink-0 flex-col border-b border-gray-200 pb-6 md:w-72 md:max-w-[300px] md:border-b-0 md:border-r md:pb-0 md:pr-6">
-                  <h2 className="mb-3 text-center text-sm font-semibold text-gray-900 md:text-left">
-                    적정성 평가 <span className="text-[#F43182]">{brandScore}%</span>
-                  </h2>
-                  <div className="flex flex-1 items-center justify-center py-2">
-                    <div className="relative h-40 w-40 shrink-0">
-                      <svg className="h-full w-full -rotate-90 transform">
-                        <circle cx="80" cy="80" r="70" stroke="#E5E7EB" strokeWidth="12" fill="none" />
+          {showResults && brandScore !== null && (() => {
+            const { tierLabel, pass, delta } = inspectionResultBadges(brandScore, violations.length);
+            return (
+            <div className={`${inspectionCard} !p-0 overflow-hidden`}>
+              {/* Overview-style hero */}
+              <div className="border-b border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] px-6 py-6 sm:px-8">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6B6B6B]">Overview</p>
+                <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <h2 className="text-2xl font-bold tracking-tight text-[#1A1A1A] sm:text-[26px]">검수 결과</h2>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded-full bg-black px-3 py-1.5 text-xs font-semibold text-white shadow-[0_4px_12px_-4px_rgba(0,0,0,0.2)]">
+                      검수 완료
+                    </span>
+                    {pass === "pass" ? (
+                      <span className="inline-flex items-center rounded-full bg-[#76B947] px-2.5 py-1 text-[11px] font-bold text-white">
+                        통과
+                      </span>
+                    ) : pass === "warn" ? (
+                      <span className="inline-flex items-center rounded-full bg-[#FF7F66] px-2.5 py-1 text-[11px] font-bold text-white">
+                        조건부
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-red-500 px-2.5 py-1 text-[11px] font-bold text-white">
+                        재검토
+                      </span>
+                    )}
+                    <span className="inline-flex items-center rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#1A1A1A]">
+                      등급 · {tierLabel}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Metric sub-cards (dashboard reference) */}
+              <div className="grid grid-cols-1 gap-4 border-b border-[rgba(0,0,0,0.06)] bg-white px-6 py-6 sm:grid-cols-3 sm:px-8">
+                <div className="rounded-[18px] border border-[rgba(0,0,0,0.05)] bg-[#FAFAF8] p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[rgba(255,127,102,0.16)]">
+                      <BarChart3 className="h-5 w-5 text-[#C14D38]" strokeWidth={2} />
+                    </div>
+                    {delta >= 0 ? (
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-[#FF7F66] px-2 py-0.5 text-[11px] font-bold text-white">
+                        <TrendingUp className="h-3 w-3" />
+                        +{delta}pts
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-bold text-red-800">
+                        {delta}pts
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-3 text-xs font-medium text-[#6B6B6B]">디자인 점수</p>
+                  <p className="mt-0.5 text-3xl font-bold tabular-nums tracking-tight text-[#1A1A1A]">{brandScore}</p>
+                </div>
+                <div className="rounded-[18px] border border-[rgba(0,0,0,0.05)] bg-[#FAFAF8] p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[rgba(0,0,0,0.05)]">
+                      <XCircle className="h-5 w-5 text-[#DC2626]" />
+                    </div>
+                    {violations.length === 0 ? (
+                      <span className="inline-flex rounded-full bg-[#76B947] px-2 py-0.5 text-[10px] font-bold text-white">Clear</span>
+                    ) : (
+                      <span className="inline-flex rounded-full bg-[#FF7F66] px-2 py-0.5 text-[10px] font-bold text-white">Issue</span>
+                    )}
+                  </div>
+                  <p className="mt-3 text-xs font-medium text-[#6B6B6B]">위반 사항</p>
+                  <p className="mt-0.5 text-3xl font-bold tabular-nums text-[#1A1A1A]">{violations.length}</p>
+                </div>
+                <div className="rounded-[18px] border border-[rgba(0,0,0,0.05)] bg-[#FAFAF8] p-4 shadow-sm sm:col-span-1">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[rgba(255,127,102,0.12)]">
+                    <Sparkles className="h-5 w-5 text-[#E85A42]" />
+                  </div>
+                  <p className="mt-3 text-xs font-medium text-[#6B6B6B]">AI 요약</p>
+                  <p className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug text-[#1A1A1A]">
+                    {inspectionOverallSummary
+                      ? "종합 코멘트는 우측 패널에서 전체를 확인하세요."
+                      : "제공된 요약이 없습니다."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Rounded bar chart (two-tone coral) */}
+              <div className="border-b border-[rgba(0,0,0,0.06)] bg-white px-6 py-4 sm:px-8">
+                <div className="mb-1.5 flex items-center justify-between text-xs text-[#6B6B6B]">
+                  <span>적정성 지수 (0–100)</span>
+                  <span className="font-semibold text-[#1A1A1A]">{brandScore}%</span>
+                </div>
+                <div className="h-4 w-full overflow-hidden rounded-full bg-[rgba(255,127,102,0.12)]">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#FF9A7A] to-[#FF7F66] shadow-sm transition-all duration-700"
+                    style={{ width: `${Math.min(100, brandScore)}%` }}
+                  />
+                </div>
+                <div className="mt-1 flex justify-between text-[10px] text-[#9CA3AF]">
+                  <span>0</span>
+                  <span>50</span>
+                  <span>100</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-0 md:flex-row md:items-stretch">
+                <div className="flex w-full shrink-0 flex-col border-b border-[rgba(0,0,0,0.06)] bg-[#EBE9E1]/50 p-6 md:w-80 md:max-w-[320px] md:border-b-0 md:border-r">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2 md:justify-start">
+                    <h2 className="text-sm font-bold text-[#1A1A1A]">적정성 평가</h2>
+                    <span className="inline-flex items-center rounded-full bg-[#FF7F66] px-2.5 py-1 text-xs font-bold text-white shadow-sm">
+                      {brandScore}%
+                    </span>
+                  </div>
+                  <div className="flex flex-1 items-center justify-center py-3">
+                    <div className="relative h-44 w-44 shrink-0">
+                      <svg className="h-full w-full -rotate-90 transform" viewBox="0 0 160 160">
+                        <circle cx="80" cy="80" r="68" stroke="#E0DDD6" strokeWidth="14" fill="none" />
                         <circle
                           cx="80"
                           cy="80"
-                          r="70"
-                          stroke="#F43182"
-                          strokeWidth="12"
+                          r="68"
+                          stroke="#FF7F66"
+                          strokeWidth="14"
                           fill="none"
-                          strokeDasharray={`${2 * Math.PI * 70}`}
-                          strokeDashoffset={`${2 * Math.PI * 70 * (1 - brandScore / 100)}`}
+                          strokeDasharray={`${2 * Math.PI * 68}`}
+                          strokeDashoffset={`${2 * Math.PI * 68 * (1 - brandScore / 100)}`}
                           strokeLinecap="round"
                           className="transition-all duration-1000"
                         />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-4xl font-bold text-gray-900">{brandScore}</span>
-                        <span className="text-sm text-gray-500">/ 100</span>
+                        <span className="text-4xl font-bold tracking-tight text-[#1A1A1A]">{brandScore}</span>
+                        <span className="text-sm font-medium text-[#6B6B6B]">/ 100</span>
                       </div>
                     </div>
                   </div>
-                  <p className="mt-2 text-center text-sm text-gray-600 md:text-left">
+                  <p className="mt-1 text-center text-sm leading-relaxed text-[#4B4B4B] md:text-left">
                     {brandScore >= 80
                       ? "우수: 브랜드 가이드라인을 잘 준수하고 있습니다."
                       : brandScore >= 60
@@ -801,9 +939,9 @@ export function BrandInspection() {
                   </p>
                 </div>
 
-                <div className="flex min-w-0 flex-1 flex-col md:pl-6">
+                <div className="flex min-w-0 flex-1 flex-col p-6">
                   <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <h2 className="shrink-0 font-semibold text-gray-900">검수 내용</h2>
+                    <InspectionSectionTitle className="!text-[16px]">검수 상세</InspectionSectionTitle>
                     <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                       <label htmlFor="report-export-format" className="sr-only">
                         리포트 파일 형식
@@ -812,16 +950,15 @@ export function BrandInspection() {
                         id="report-export-format"
                         value={reportExportFormat}
                         onChange={(e) => setReportExportFormat(e.target.value as ExportFormat)}
-                        className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-800 focus:border-[#F43182] focus:ring-2 focus:ring-[#F43182]/20"
+                        className="h-10 rounded-full border border-[rgba(0,0,0,0.1)] bg-[#E8E6E0]/80 px-3 text-xs font-medium text-[#1A1A1A] focus:border-[#FF7F66] focus:outline-none focus:ring-2 focus:ring-[#FF7F66]/20"
                       >
                         <option value="png">PNG</option>
                         <option value="pdf">PDF</option>
                         <option value="jpeg">JPEG</option>
                       </select>
-                      <Button
-                        variant="outline"
-                        size="sm"
+                      <button
                         type="button"
+                        className="brand-btn-primary h-10 gap-2 px-5 text-sm font-semibold"
                         onClick={() => {
                           if (brandScore === null) return;
                           void downloadInspectionReport(
@@ -834,67 +971,84 @@ export function BrandInspection() {
                           );
                         }}
                       >
-                        <Download className="mr-2 h-4 w-4" />
+                        <Download className="h-4 w-4" />
                         리포트 다운로드
-                      </Button>
+                      </button>
                     </div>
                   </div>
 
                   {inspectionOverallSummary && (
-                    <div className="mb-4 rounded-lg border border-gray-100 bg-gray-50/80 px-3 py-2.5 text-xs leading-relaxed text-gray-800">
-                      <span className="mb-1 block font-medium text-gray-900">AI 종합 평가</span>
+                    <div className="mb-4 rounded-[16px] border border-[rgba(0,0,0,0.05)] bg-[#FAFAF8] p-4 text-sm leading-relaxed text-[#374151]">
+                      <div className="mb-2 flex items-center gap-2">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm">
+                          <Sparkles className="h-4 w-4 text-[#FF7F66]" />
+                        </div>
+                        <span className="text-xs font-bold uppercase tracking-wide text-[#6B6B6B]">AI 코멘트</span>
+                      </div>
                       {inspectionOverallSummary}
                     </div>
                   )}
 
-                  <div className="min-h-0 flex-1 space-y-4 overflow-y-auto md:max-h-[min(400px,50vh)]">
+                  <div className="min-h-0 flex-1 space-y-4 overflow-y-auto md:max-h-[min(420px,52vh)]">
                     <div>
-                      <div className="mb-2 flex items-center gap-2">
+                      <div className="mb-3 flex items-center gap-2">
                         <XCircle className="h-4 w-4 text-red-500" />
-                        <h3 className="text-sm font-medium text-gray-900">위반 사항</h3>
-                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-600">{violations.length}</span>
+                        <h3 className="text-sm font-bold text-[#1A1A1A]">피드백 · 위반</h3>
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                          {violations.length}
+                        </span>
                       </div>
-                      <div className="space-y-2">
-                        {violations.map((violation, index) => (
-                          <div key={index} className="flex gap-2 rounded-lg border border-red-100 bg-red-50 p-2.5">
-                            <div className="mt-0.5 shrink-0">
+                      <div className="space-y-3">
+                        {violations.length === 0 ? (
+                          <p className="rounded-[16px] border border-dashed border-[rgba(0,0,0,0.1)] bg-[#FAFAF8] px-4 py-6 text-center text-sm text-[#6B6B6B]">
+                            등록된 위반 사항이 없습니다.
+                          </p>
+                        ) : (
+                          violations.map((violation, index) => {
+                            const sev = severityLabel(violation.severity);
+                            return (
                               <div
-                                className={`h-2 w-2 rounded-full ${
-                                  violation.severity === "high"
-                                    ? "bg-red-500"
-                                    : violation.severity === "medium"
-                                      ? "bg-orange-500"
-                                      : "bg-yellow-500"
-                                }`}
-                              />
-                            </div>
-                            <div className="flex-1">
-                              <p className="mb-0.5 text-xs font-medium text-gray-700">{violation.category}</p>
-                              <p className="text-xs text-gray-900">{violation.issue}</p>
-                            </div>
-                          </div>
-                        ))}
+                                key={index}
+                                className="flex gap-3 rounded-[18px] border border-[rgba(0,0,0,0.06)] bg-white p-3.5 shadow-[0_2px_14px_-8px_rgba(0,0,0,0.1)]"
+                              >
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F3F1EC] text-[10px] font-bold text-[#FF7F66]">
+                                  AI
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-sm font-semibold text-[#1A1A1A]">{violation.category}</span>
+                                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${sev.pill}`}>{sev.text}</span>
+                                  </div>
+                                  <p className="mt-1.5 text-sm leading-relaxed text-[#4B4B4B]">{violation.issue}</p>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
                       </div>
                     </div>
 
                     {suggestions.length > 0 && (
                       <div>
                         <div className="mb-2 flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4 text-orange-500" />
-                          <h3 className="text-sm font-medium text-gray-900">개선 제안</h3>
-                          <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs text-orange-600">
+                          <AlertCircle className="h-4 w-4 text-[#FF7F66]" />
+                          <h3 className="text-sm font-bold text-[#1A1A1A]">개선 제안</h3>
+                          <span className="rounded-full bg-[rgba(255,127,102,0.15)] px-2 py-0.5 text-xs font-semibold text-[#C14D38]">
                             {suggestions.length}
                           </span>
                         </div>
                         <div className="space-y-2">
                           {suggestions.map((suggestion, index) => (
-                            <div key={index} className="flex gap-2 rounded-lg border border-orange-100 bg-orange-50 p-2.5">
+                            <div
+                              key={index}
+                              className="flex gap-3 rounded-[16px] border border-[rgba(255,127,102,0.2)] bg-[#FFF7F4] p-3"
+                            >
                               <div className="mt-0.5 shrink-0">
-                                <Sparkles className="h-3.5 w-3.5 text-orange-500" />
+                                <Sparkles className="h-4 w-4 text-[#FF7F66]" />
                               </div>
                               <div className="flex-1">
-                                <p className="mb-0.5 text-xs font-medium text-gray-700">{suggestion.category}</p>
-                                <p className="text-xs text-gray-900">{suggestion.recommendation}</p>
+                                <p className="mb-0.5 text-xs font-semibold text-[#1A1A1A]">{suggestion.category}</p>
+                                <p className="text-xs leading-relaxed text-[#4B4B4B]">{suggestion.recommendation}</p>
                               </div>
                             </div>
                           ))}
@@ -905,21 +1059,24 @@ export function BrandInspection() {
                     {passedCriteria.length > 0 && (
                       <div>
                         <div className="mb-2 flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                          <h3 className="text-sm font-medium text-gray-900">준수 항목</h3>
-                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-600">
-                            {passedCriteria.length}
+                          <CheckCircle2 className="h-4 w-4 text-[#76B947]" />
+                          <h3 className="text-sm font-bold text-[#1A1A1A]">준수 항목</h3>
+                          <span className="inline-flex items-center rounded-full bg-[#C8D9C4] px-2 py-0.5 text-xs font-bold text-[#2F4A38]">
+                            {passedCriteria.length} Active
                           </span>
                         </div>
                         <div className="space-y-2">
                           {passedCriteria.map((criteria, index) => (
-                            <div key={index} className="flex gap-2 rounded-lg border border-green-100 bg-green-50 p-2.5">
+                            <div
+                              key={index}
+                              className="flex gap-2 rounded-[16px] border border-[rgba(118,185,71,0.3)] bg-[#F4FAF0] p-2.5"
+                            >
                               <div className="mt-0.5 shrink-0">
-                                <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                                <CheckCircle2 className="h-3.5 w-3.5 text-[#76B947]" />
                               </div>
                               <div className="flex-1">
-                                <p className="mb-0.5 text-xs font-medium text-gray-700">{criteria.category}</p>
-                                <p className="text-xs text-gray-900">{criteria.description}</p>
+                                <p className="mb-0.5 text-xs font-semibold text-[#1A1A1A]">{criteria.category}</p>
+                                <p className="text-xs text-[#4B4B4B]">{criteria.description}</p>
                               </div>
                             </div>
                           ))}
@@ -930,14 +1087,15 @@ export function BrandInspection() {
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {showResults && designPreview && (
-            <div className="rounded-xl border border-gray-200 bg-white p-6">
-              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className={`${inspectionCard} !p-6`}>
+              <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="font-semibold text-gray-900">AI 수정본 (Gemini 이미지)</h2>
-                  <p className="text-xs text-gray-500">
+                  <InspectionSectionTitle className="!text-[16px]">AI 수정본 (Gemini)</InspectionSectionTitle>
+                  <p className="mt-1.5 text-xs text-[#6B6B6B]">
                     검수 1회에 대해 교정 이미지를 1번만 생성합니다. (PNG/JPEG 검수 대상만)
                   </p>
                 </div>
@@ -950,51 +1108,63 @@ export function BrandInspection() {
                     value={revisedExportFormat}
                     onChange={(e) => setRevisedExportFormat(e.target.value as ExportFormat)}
                     disabled={!revisedImageAsset}
-                    className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-800 focus:border-[#F43182] focus:ring-2 focus:ring-[#F43182]/20 disabled:opacity-50"
+                    className="rounded-full border border-[rgba(0,0,0,0.1)] bg-[#FAFAF8] px-3 py-1.5 text-xs font-medium focus:border-[#FF7F66] focus:outline-none focus:ring-2 focus:ring-[#FF7F66]/20 disabled:opacity-50"
                   >
                     <option value="png">PNG</option>
                     <option value="pdf">PDF</option>
                     <option value="jpeg">JPEG</option>
                   </select>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    type="button"
-                    disabled={!revisedImageAsset}
-                    onClick={() =>
-                      revisedImageAsset &&
-                      downloadRevisedImageInFormat(revisedImageAsset.dataUrl, revisedExportFormat)
-                    }
-                  >
-                    <Download className="mr-2 h-4 w-4" />
-                    수정본 다운로드
-                  </Button>
+                  {revisedImageAsset ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        downloadRevisedImageInFormat(revisedImageAsset.dataUrl, revisedExportFormat)
+                      }
+                      className="brand-btn-primary inline-flex h-10 items-center gap-2 px-5"
+                    >
+                      <Download className="h-4 w-4" />
+                      수정본 다운로드
+                    </button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      type="button"
+                      disabled
+                      className="h-10 rounded-full border-[rgba(0,0,0,0.12)] font-semibold"
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      수정본 다운로드
+                    </Button>
+                  )}
                 </div>
               </div>
               {revisionNote && !revisedImageAsset && (
-                <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <p className="mb-4 rounded-[14px] border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-sm text-amber-900">
                   {revisionNote}
                 </p>
               )}
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div>
-                  <p className="mb-3 text-sm font-medium text-gray-700">검수 대상 (원본)</p>
-                  <div className="overflow-hidden rounded-lg border border-gray-200">
+                  <p className="mb-3 text-sm font-bold text-[#1A1A1A]">검수 대상 (원본)</p>
+                  <div className="overflow-hidden rounded-[16px] border border-[rgba(0,0,0,0.06)] bg-[#FAFAF8]">
                     <img src={designPreview} alt="검수 대상 원본" className="w-full" />
                   </div>
                 </div>
                 <div>
-                  <p className="mb-3 text-sm font-medium text-gray-700">AI 수정본</p>
-                  <div className="relative overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                  <p className="mb-3 text-sm font-bold text-[#1A1A1A]">AI 수정본</p>
+                  <div className="relative overflow-hidden rounded-[16px] border border-[rgba(0,0,0,0.06)] bg-[#F3F1EC]">
                     {revisedImageAsset ? (
                       <>
                         <img src={revisedImageAsset.dataUrl} alt="AI 수정본" className="w-full" />
                         <div className="absolute right-2 top-2">
-                          <span className="rounded-full bg-[#F43182] px-2 py-1 text-xs text-white">AI 생성</span>
+                          <span className="inline-flex items-center rounded-full bg-black px-2.5 py-1 text-[11px] font-bold text-white shadow-md">
+                            AI 생성
+                          </span>
                         </div>
                       </>
                     ) : (
-                      <div className="flex min-h-[200px] items-center justify-center p-6 text-center text-sm text-gray-500">
+                      <div className="flex min-h-[200px] items-center justify-center p-6 text-center text-sm text-[#6B6B6B]">
                         {revisionNote ?? "수정 이미지를 생성하지 못했습니다. API 키·이미지 모델 설정을 확인하세요."}
                       </div>
                     )}
@@ -1018,7 +1188,7 @@ export function BrandInspection() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="guideline-detail-title"
-            className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+            className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-[22px] border border-[rgba(0,0,0,0.08)] bg-white shadow-2xl"
           >
             <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3">
               <h3 id="guideline-detail-title" className="text-sm font-semibold text-gray-900">
@@ -1065,7 +1235,7 @@ export function BrandInspection() {
                         variant="outline"
                         disabled={guidelineAnalyzing}
                         onClick={handleAnalyzeStoredGuideline}
-                        className="shrink-0 border-violet-300"
+                        className="shrink-0 rounded-full border border-[rgba(0,0,0,0.12)]"
                       >
                         {guidelineAnalyzing ? (
                           <>

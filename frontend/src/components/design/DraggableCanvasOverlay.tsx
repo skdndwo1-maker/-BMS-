@@ -232,7 +232,7 @@ export function DraggableCanvasOverlay({
         borderRadius: `${rPx}px`,
         overflow: "visible",
         zIndex,
-        outline: isSelected ? "2px solid #F43182" : "2px solid transparent",
+        outline: isSelected ? "2px solid #FF7F66" : "2px solid transparent",
         outlineOffset: "1px",
         boxSizing: "border-box",
         cursor: locked ? "default" : (panDragInsteadOfMove ? "grab" : "move"),
@@ -272,7 +272,7 @@ export function DraggableCanvasOverlay({
               position: "absolute",
               width: `${HANDLE}px`,
               height: `${HANDLE}px`,
-              background: "#F43182",
+              background: "#FF7F66",
               border: "1.5px solid #fff",
               borderRadius: "2px",
               ...h.style,
@@ -316,7 +316,7 @@ export function DraggableCanvasOverlay({
               type="button"
               aria-label="캔버스에서 제거"
               title="캔버스에서 제거"
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-white bg-[#1A1A1A] text-white shadow hover:bg-[#F43182]"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-white bg-[#1A1A1A] text-white shadow hover:bg-[#FF7F66]"
               onMouseDown={(e) => {
                 e.stopPropagation();
                 e.preventDefault();

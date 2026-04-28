@@ -133,7 +133,7 @@ export function BrandCompliancePanel({ content }: BrandCompliancePanelProps) {
           <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-not-allowed">
             <FileText className="w-4 h-4 text-gray-500" />
             <div className="flex-1">
-              <p className="text-sm text-gray-700 font-medium">LG_U+_Brand_Guidelines_2026.pdf</p>
+              <p className="text-sm text-gray-700 font-medium">Axis_Brand_Guidelines_2026.pdf</p>
               <p className="text-xs text-gray-500">관리자 지정 파일 (수정 불가)</p>
             </div>
           </div>
@@ -143,7 +143,7 @@ export function BrandCompliancePanel({ content }: BrandCompliancePanelProps) {
         <div className="pt-3 border-t border-gray-200">
           <Button
             variant="outline"
-            className="w-full justify-center gap-2 border-[#F43182] text-[#F43182] hover:bg-[#F43182]/10"
+            className="w-full justify-center gap-2 border-[#FF7F66] text-[#FF7F66] hover:bg-[#FF7F66]/10"
           >
             <Sparkles className="w-4 h-4" />
             AI 추가제안

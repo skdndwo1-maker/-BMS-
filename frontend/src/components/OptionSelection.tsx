@@ -22,8 +22,9 @@ import { postOptionsChat, type OptionsChatMessage } from "@/lib/optionsChatApi";
 import { apiUrl } from "@/lib/apiUrl";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { APP_DISPLAY_NAME } from "@/constants/appBranding";
+import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 
-/** Soft UI ref: warm cream bg, salmon coral, black CTAs, sage badges, large radius, soft lift shadows */
+/** Soft UI ref: warm cream bg, salmon coral, black CTAs, large radius, soft lift shadows */
 const PALETTE = {
   bg: "#F5F3F0",
   card: "#FFFFFF",
@@ -36,16 +37,19 @@ const PALETTE = {
   mutedSoft: "#9A9A9A",
   coral: "#FF7F66",
   coralSoft: "rgba(255, 127, 102, 0.14)",
+  coralInk: "#C14D38",
   onCoral: "#FFFFFF",
   black: "#000000",
   blackSoft: "#1A1A1A",
-  sage: "#C8D9C4",
-  sageInk: "#2F4A38",
   shadow:
     "0 4px 24px -6px rgba(0,0,0,0.08), 0 2px 10px -4px rgba(0,0,0,0.04)",
   shadowHover: "0 8px 32px -8px rgba(0,0,0,0.10), 0 4px 16px -6px rgba(0,0,0,0.06)",
   shadowLg: "0 12px 40px -12px rgba(0,0,0,0.10)",
 } as const;
+
+/** 4개 옵션 카드 기본 면: 흰색 위에 감각적으로만 느껴지는 극미한 코랄 그라데이션 */
+const OPTION_CARD_BG_IDLE =
+  "linear-gradient(152deg, #FFFFFF 0%, #FFFFFE 38%, rgba(255, 127, 102, 0.025) 72%, rgba(255, 127, 102, 0.042) 100%)";
 
 const pageFont: CSSProperties = {
   fontFamily: '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif',
@@ -117,7 +121,7 @@ const mainOptions = [
 const quickSuggestions = [
   "A2 이벤트 포스터 만들기",
   "배너가 브랜드 가이드에 맞는지 확인",
-  "LG U+ 공식 로고 파일 찾기",
+  "브랜드 공식 로고 파일 찾기",
   "이 슬로건 브랜드 적합성 검토",
 ];
 
@@ -284,35 +288,15 @@ export function OptionSelection() {
           <div
             style={{
               display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-start",
-              justifyContent: "center",
-              gap: "4px",
+              flexDirection: "row",
+              flexWrap: "wrap",
+              alignItems: "center",
+              minWidth: 0,
+              flex: "1 1 auto",
+              paddingRight: "12px",
             }}
           >
-            <span
-              style={{
-                fontFamily: '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif',
-                fontSize: "24px",
-                fontWeight: 700,
-                color: "#0F1115",
-                letterSpacing: "-0.03em",
-                lineHeight: 1.2,
-              }}
-            >
-              {APP_DISPLAY_NAME}
-            </span>
-            <span
-              style={{
-                fontFamily: '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif',
-                fontSize: "15px",
-                fontWeight: 400,
-                color: "#6B7280",
-                lineHeight: 1.35,
-              }}
-            >
-              Brand Contents Manager
-            </span>
+            <AxisBrandTitle subtitle="Brand Contents Manager" />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <button
@@ -400,16 +384,16 @@ export function OptionSelection() {
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "8px",
-                background: PALETTE.sage,
-                color: PALETTE.sageInk,
-                border: `1px solid rgba(47, 74, 56, 0.12)`,
+                background: PALETTE.coralSoft,
+                color: PALETTE.coralInk,
+                border: `1px solid rgba(255, 127, 102, 0.28)`,
                 borderRadius: "999px",
                 padding: "6px 14px",
                 marginBottom: "14px",
                 fontWeight: 600,
               }}
             >
-              <Sparkles style={{ width: "14px", height: "14px" }} />
+              <Sparkles style={{ width: "14px", height: "14px", color: PALETTE.coral, flexShrink: 0 }} />
               <span style={{ fontSize: "12px" }}>AI-powered brand management</span>
               <SectionDot size={6} style={{ boxShadow: "0 0 0 1px rgba(255, 127, 102, 0.25)" }} />
             </div>
@@ -472,17 +456,19 @@ export function OptionSelection() {
                 <button
                   key={option.id}
                   type="button"
+                  className="option-card-orbit"
                   onClick={() => handleOptionClick(option.route)}
                   onMouseEnter={() => setHoveredOptionId(option.id)}
                   onMouseLeave={() => setHoveredOptionId(null)}
                   style={{
                     textAlign: "left",
-                    background: isHovered ? PALETTE.coralSoft : PALETTE.card,
+                    background: isHovered ? PALETTE.coralSoft : OPTION_CARD_BG_IDLE,
                     border: isHovered ? `1px solid ${PALETTE.coral}` : `1px solid ${PALETTE.borderSubtle}`,
                     borderRadius: "24px",
                     padding: "22px 20px 20px",
                     cursor: "pointer",
-                    transition: "background 0.2s, border-color 0.2s, box-shadow 0.2s, transform 0.2s",
+                    transition:
+                      "background 0.25s ease, border-color 0.2s, box-shadow 0.2s, transform 0.2s",
                     display: "flex",
                     flexDirection: "column",
                     minHeight: "200px",
@@ -491,6 +477,7 @@ export function OptionSelection() {
                     transform: isHovered ? "translateY(-2px)" : "translateY(0)",
                   }}
                 >
+                  <span className="option-card-orbit__inner" style={{ textAlign: "left" }}>
                   <div
                     style={{
                       display: "flex",
@@ -528,10 +515,15 @@ export function OptionSelection() {
                         fontWeight: 600,
                         padding: "4px 10px",
                         borderRadius: "999px",
-                        background: PALETTE.sage,
-                        color: PALETTE.sageInk,
                         whiteSpace: "nowrap",
-                        letterSpacing: "0.01em",
+                        letterSpacing: "0.02em",
+                        border: isHovered
+                          ? "1px solid rgba(255, 127, 102, 0.55)"
+                          : "1px solid rgba(255, 127, 102, 0.3)",
+                        background: isHovered ? PALETTE.coral : PALETTE.coralSoft,
+                        color: isHovered ? "#FFFFFF" : PALETTE.coralInk,
+                        transition: "background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s",
+                        boxShadow: isHovered ? "0 2px 10px -2px rgba(255, 127, 102, 0.45)" : "none",
                       }}
                     >
                       {option.badge}
@@ -612,6 +604,7 @@ export function OptionSelection() {
                       }}
                     />
                   </div>
+                  </span>
                 </button>
               );
             })}

@@ -41,7 +41,7 @@ import {
   updateDesign,
   type DesignListItem,
 } from "@/lib/designsApi";
-import { APP_DISPLAY_NAME } from "@/constants/appBranding";
+import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 
 const ExportDialog = lazy(() => import("./ExportDialog").then((m) => ({ default: m.ExportDialog })));
 
@@ -683,7 +683,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
           {sw} × {sh} {unit} · {template.name}
         </span>
         <Separator orientation="vertical" className="h-3" />
-        <span className="text-[#F43182]">Brand Guideline</span>
+        <span className="text-[#FF7F66]">Brand Guideline</span>
       </>
     );
   };
@@ -702,7 +702,8 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
               </Button>
               <Separator orientation="vertical" className="h-6" />
               <div>
-                <h1 className="font-semibold text-gray-900 text-sm">{APP_DISPLAY_NAME} — {template.name}</h1>
+                <AxisBrandTitle subtitle="브랜드 그래픽 제작" compact />
+                <p className="mt-1 text-sm font-semibold text-gray-900">{template.name}</p>
                 <p className="text-xs text-gray-500">
                   {effectiveCanvasSize.width} × {effectiveCanvasSize.height} {effectiveCanvasSize.unit}
                 </p>
@@ -809,7 +810,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                             step={5}
                             value={content.titleSize ?? 100}
                             onChange={(e) => setContentWithHistory((prev) => ({ ...prev, titleSize: Number(e.target.value) }))}
-                            className="h-2 w-full cursor-pointer accent-[#F43182]"
+                            className="h-2 w-full cursor-pointer accent-[#FF7F66]"
                           />
                           <div className="text-[10px] text-gray-500 font-mono tabular-nums">{content.titleSize ?? 100}%</div>
                         </div>
@@ -823,7 +824,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                             step={5}
                             value={content.bodySize ?? 100}
                             onChange={(e) => setContentWithHistory((prev) => ({ ...prev, bodySize: Number(e.target.value) }))}
-                            className="h-2 w-full cursor-pointer accent-[#F43182]"
+                            className="h-2 w-full cursor-pointer accent-[#FF7F66]"
                           />
                           <div className="text-[10px] text-gray-500 font-mono tabular-nums">{content.bodySize ?? 100}%</div>
                         </div>
@@ -841,7 +842,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                                     onClick={() => setContentWithHistory((prev) => ({ ...(prev as any), titleWeight: w }))}
                                     className={`rounded-md border px-1.5 py-1 text-[10px] font-semibold ${
                                       active
-                                        ? "border-[#F43182] bg-[#F43182]/10 text-[#F43182]"
+                                        ? "border-[#FF7F66] bg-[#FF7F66]/10 text-[#FF7F66]"
                                         : "border-gray-200 bg-white text-gray-700"
                                     }`}
                                   >
@@ -864,7 +865,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                                     onClick={() => setContentWithHistory((prev) => ({ ...(prev as any), bodyWeight: w }))}
                                     className={`rounded-md border px-1.5 py-1 text-[10px] font-semibold ${
                                       active
-                                        ? "border-[#F43182] bg-[#F43182]/10 text-[#F43182]"
+                                        ? "border-[#FF7F66] bg-[#FF7F66]/10 text-[#FF7F66]"
                                         : "border-gray-200 bg-white text-gray-700"
                                     }`}
                                   >
@@ -997,7 +998,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                 <div className="border-t border-gray-200 bg-gradient-to-br from-purple-50 to-blue-50">
                   <div className="space-y-3 p-4">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#F43182] to-purple-600">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#FF7F66] to-purple-600">
                         <Sparkles className="h-4 w-4 text-white" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -1133,7 +1134,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                     <button
                       key={it.id}
                       type="button"
-                      className="group flex w-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm hover:border-[#F43182] hover:shadow-md transition"
+                      className="group flex w-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm hover:border-[#FF7F66] hover:shadow-md transition"
                       onClick={() => {
                         if (!sb) return;
                         void (async () => {
