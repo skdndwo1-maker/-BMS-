@@ -76,9 +76,10 @@ const NAMING_AUDIT_SUBS: Record<NamingAuditMajor, readonly string[]> = {
 };
 
 const categoryTabBase =
-  "inline-flex items-center justify-center rounded-full border px-3 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF7F66]/40";
-const categoryTabIdle = "border-gray-200 bg-white text-gray-700 hover:border-gray-300";
-const categoryTabActive = "border-[#FF7F66] bg-[#FF7F66]/10 text-[#FF7F66]";
+  "inline-flex items-center justify-center rounded-full border px-3 py-2 text-[13px] font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20";
+const categoryTabIdle = "border-[rgba(0,0,0,0.08)] bg-white text-[#6B6B6B] hover:border-[rgba(0,0,0,0.12)]";
+const categoryTabActive =
+  "border-black bg-black text-white shadow-[0_4px_14px_-4px_rgba(0,0,0,0.22)] hover:bg-black/90";
 const SECTION_ICON = "h-[26px] w-[26px] shrink-0";
 
 const ETC_TOOLTIP_TEXT = [
@@ -142,7 +143,7 @@ function buildAuditCategoryLineForEtc(): string {
 function StepBar({ currentStep }: { currentStep: AuditStep }) {
   const currentIdx = STEP_ORDER.indexOf(currentStep);
   return (
-    <div className="bg-white border-b border-[rgba(0,0,0,0.06)]">
+    <div className="border-b border-[rgba(0,0,0,0.06)] bg-[#FAFAF8]">
       <div className="max-w-[1280px] mx-auto px-[24px] py-[16px]">
         <div className="flex w-full items-center">
           {AUDIT_STEPS.map((step, index) => {
@@ -195,7 +196,7 @@ function NamingOverviewGrid({
       {NAMING_OVERVIEW_FIELDS.map((f) => {
         const v = value[f.key] ?? "";
         return (
-          <div key={f.key} className="rounded-[12px] border border-gray-200 bg-white p-3">
+          <div key={f.key} className="brand-naming-section p-3">
             <div className="mb-2">
               <span className="brand-pill--accent">{f.label}</span>
             </div>
@@ -241,16 +242,39 @@ function ScoreGauge({ score, r = 85, scoreSize = 48 }: { score: number; r?: numb
   const subSize = Math.round(scoreSize * 0.33);
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg className="w-full h-full -rotate-90">
-        <circle cx={r+16} cy={r+16} r={r} stroke="#E5E7EB" strokeWidth="16" fill="none" />
-        <circle cx={r+16} cy={r+16} r={r} stroke="#FF7F66" strokeWidth="16" fill="none"
-          strokeDasharray={circ} strokeDashoffset={circ * (1 - score / 100)}
-          strokeLinecap="round" className="transition-all duration-1000" />
+      <svg className="h-full w-full -rotate-90" viewBox={`0 0 ${r * 2 + 32} ${r * 2 + 32}`}>
+        <circle cx={r + 16} cy={r + 16} r={r} stroke="#E8E4DF" strokeWidth="16" fill="none" />
+        <circle
+          cx={r + 16}
+          cy={r + 16}
+          r={r}
+          stroke="#FF7F66"
+          strokeWidth="16"
+          fill="none"
+          strokeDasharray={circ}
+          strokeDashoffset={circ * (1 - score / 100)}
+          strokeLinecap="round"
+          className="transition-all duration-1000"
+        />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-bold text-gray-900 leading-none" style={{ fontSize: scoreSize }}>{score}</span>
-        <span className="text-gray-500" style={{ fontSize: subSize }}>/ 100</span>
+        <span className="leading-none font-bold text-black" style={{ fontSize: scoreSize }}>
+          {score}
+        </span>
+        <span className="text-gray-500" style={{ fontSize: subSize }}>
+          / 100
+        </span>
       </div>
+    </div>
+  );
+}
+
+/** 평가·결과 블록 제목 (레퍼런스: Overview ●) */
+function NamingResultSectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-1 flex items-center gap-2.5">
+      <span className="h-2 w-2 shrink-0 rounded-full bg-[#FF7F66]" aria-hidden />
+      <h2 className="text-[19px] font-bold leading-tight tracking-tight text-[#1a1a1a]">{children}</h2>
     </div>
   );
 }
@@ -286,6 +310,13 @@ function passFail(score: number): "PASS" | "FAIL" {
   return v >= 70 ? "PASS" : "FAIL";
 }
 
+/** PASS: 카키 배경 + 흰 글씨 / FAIL: 검붉은 글씨 (UI 공통) */
+const NAMING_PASS_BADGE_SM =
+  "inline-flex items-center justify-center rounded-md bg-[#7A6B4B] px-1.5 py-0.5 text-[9px] font-bold text-white shadow-sm sm:text-[10px]";
+const NAMING_FAIL_TEXT_SM = "text-[9px] font-bold text-[#7A1A1A] sm:text-[10px]";
+const NAMING_PASS_BADGE_MD = "inline-flex items-center rounded-md bg-[#7A6B4B] px-2 py-0.5 text-[11px] font-bold text-white shadow-sm sm:text-[12px]";
+const NAMING_FAIL_TEXT_MD = "text-[12px] font-bold text-[#7A1A1A]";
+
 function tierPackageToProposal(tp: TierPackageEvaluation): BrandNamingProposal {
   return {
     name: "(단계별 패키지 전체)",
@@ -307,7 +338,7 @@ function NamingEvalProgressBar({ percent }: { percent: number }) {
   const v = Number.isFinite(percent) ? Math.min(100, Math.max(0, Math.round(percent))) : 0;
   return (
     <div
-      className="naming-eval-progress w-full min-w-0 shrink-0 overflow-hidden rounded-full bg-[#EBEBEB]"
+      className="naming-eval-progress w-full min-w-0 shrink-0 overflow-hidden rounded-full bg-[#FF7F66]/12"
       style={{ height: NAMING_EVAL_PROGRESS_HEIGHT_PX }}
       role="progressbar"
       aria-valuenow={v}
@@ -315,7 +346,7 @@ function NamingEvalProgressBar({ percent }: { percent: number }) {
       aria-valuemax={100}
     >
       <div
-        className="h-full min-h-0 rounded-full bg-[#BEBEBE] transition-[width] duration-150 ease-out"
+        className="h-full min-h-0 rounded-full bg-[#FF7F66] transition-[width] duration-150 ease-out"
         style={{ width: `${v}%` }}
       />
     </div>
@@ -336,96 +367,101 @@ function ProposalDimensionBars({ proposal }: { proposal: BrandNamingProposal }) 
 
   return (
     <>
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-4">
-        <div className="flex shrink-0 flex-col items-center justify-center rounded-xl border border-gray-100 bg-gray-50/80 px-6 py-4 sm:w-[min(100%,112px)]">
-          <span className="text-[11px] font-medium text-gray-500">종합</span>
-          <span className="mt-1 text-[30px] font-bold tabular-nums leading-none text-[#E91E8C] sm:text-[34px]">{overall}</span>
-          <span className="mt-0.5 text-[10px] text-gray-400">/ 100</span>
-          <span className="mt-2 max-w-[8.5rem] text-center text-[9px] leading-snug text-gray-500">
-            창의30%·대중30%
-            <br />
-            직관20%·확장20%
-          </span>
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <div>
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Pass / Fail</p>
-            <div className="grid grid-cols-2 gap-3 [grid-template-columns:minmax(0,1fr)_minmax(0,1fr)]">
-              {GENERATE_EVAL_BOXES.slice(0, 2).map(({ dim, label, score }) => {
-                const raw = score(proposal);
-                const n = Number(raw);
-                const v = Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : 0;
-                const passfail = passFail(v);
-                return (
-                  <div
-                    key={dim}
-                    className="relative flex min-h-[88px] min-w-0 flex-col justify-center rounded-lg border border-gray-100 bg-gray-50/80 px-3 pb-2 pt-2"
-                  >
-                    <div className="mb-1 flex items-center justify-between gap-1">
-                      <span className="text-[11px] font-medium text-gray-600">{label}</span>
-                    </div>
-                    <NamingEvalProgressBar percent={passfail === "PASS" ? 100 : 0} />
-                    <div className="mt-1.5 flex w-full min-w-0 items-center justify-between gap-2">
-                      <span
-                        className={`text-[13px] font-bold tabular-nums leading-none ${
-                          passfail === "PASS" ? "text-emerald-600" : "text-red-600"
-                        }`}
-                      >
-                        {passfail}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 shrink-0 px-2 text-[13px] font-medium text-gray-500 hover:text-gray-800"
-                        onClick={() => setDetailOpen(dim)}
-                      >
-                        상세보기
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
+      <div className="mt-4 rounded-[22px] border border-[rgba(0,0,0,0.05)] bg-[#FAFAF8] p-4 sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch sm:gap-5">
+          <div className="flex shrink-0 flex-col items-center justify-center rounded-[20px] border border-[rgba(0,0,0,0.06)] bg-white px-5 py-5 text-center shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] sm:w-[min(100%,128px)]">
+            <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-[#FF7F66]/12">
+              <Sparkles className="h-5 w-5 text-[#FF7F66]" />
             </div>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">종합</span>
+            <span className="mt-0.5 text-[32px] font-bold leading-none tabular-nums text-black sm:text-[36px]">
+              {overall}
+            </span>
+            <span className="mt-0.5 text-[10px] text-gray-400">/ 100</span>
+            <span className="mt-2 max-w-[8.5rem] text-center text-[9px] leading-snug text-gray-500">
+              창의30%·대중30%
+              <br />
+              직관20%·확장20%
+            </span>
           </div>
-          <div>
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-              종합 가중 (창의 30% · 대중 30% · 직관 20% · 확장 20%) — 계층·적법은 미반영
-            </p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 [grid-template-columns:minmax(0,1fr)_minmax(0,1fr)] sm:[grid-template-columns:minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-              {GENERATE_EVAL_BOXES.slice(2, 6).map(({ dim, label, score, overallWeightPct }) => {
-                const raw = score(proposal);
-                const n = Number(raw);
-                const v = Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : 0;
-                return (
-                  <div
-                    key={dim}
-                    className="relative flex min-h-[88px] min-w-0 flex-col justify-center rounded-lg border border-gray-100 bg-gray-50/80 px-3 pb-2 pt-2"
-                  >
-                    <div className="mb-1 flex items-center justify-between gap-1">
-                      <span className="text-[11px] font-medium text-gray-600">
-                        {label}
-                        {overallWeightPct != null ? (
-                          <span className="ml-1 text-[9px] font-normal text-gray-400">({overallWeightPct}%)</span>
-                        ) : null}
-                      </span>
-                      <span className="text-[12px] font-bold tabular-nums text-[#E91E8C]">{v}</span>
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
+            <div>
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Pass / Fail</p>
+              <div className="grid grid-cols-2 gap-3 [grid-template-columns:minmax(0,1fr)_minmax(0,1fr)]">
+                {GENERATE_EVAL_BOXES.slice(0, 2).map(({ dim, label, score }) => {
+                  const raw = score(proposal);
+                  const n = Number(raw);
+                  const v = Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : 0;
+                  const passfail = passFail(v);
+                  return (
+                    <div
+                      key={dim}
+                      className="relative flex min-h-[88px] min-w-0 flex-col justify-center rounded-[18px] border border-[rgba(0,0,0,0.06)] bg-white px-3 pb-2 pt-2.5 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]"
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-1">
+                        <span className="text-[11px] font-medium text-gray-700">{label}</span>
+                      </div>
+                      <NamingEvalProgressBar percent={passfail === "PASS" ? 100 : 0} />
+                      <div className="mt-1.5 flex w-full min-w-0 items-center justify-between gap-2">
+                        <span
+                          className={passfail === "PASS" ? NAMING_PASS_BADGE_MD : NAMING_FAIL_TEXT_MD}
+                        >
+                          {passfail}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 shrink-0 rounded-full px-2.5 text-[12px] font-medium text-gray-500 hover:bg-black/[0.04] hover:text-gray-900"
+                          onClick={() => setDetailOpen(dim)}
+                        >
+                          상세보기
+                        </Button>
+                      </div>
                     </div>
-                    <NamingEvalProgressBar percent={v} />
-                    <div className="mt-1.5 flex w-full min-w-0 items-center justify-end gap-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 shrink-0 px-2 text-[13px] font-medium text-gray-500 hover:text-gray-800"
-                        onClick={() => setDetailOpen(dim)}
-                      >
-                        상세보기
-                      </Button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                종합 가중 (창의 30% · 대중 30% · 직관 20% · 확장 20%) — 계층·적법은 미반영
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 [grid-template-columns:minmax(0,1fr)_minmax(0,1fr)] sm:[grid-template-columns:minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                {GENERATE_EVAL_BOXES.slice(2, 6).map(({ dim, label, score, overallWeightPct }) => {
+                  const raw = score(proposal);
+                  const n = Number(raw);
+                  const v = Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : 0;
+                  return (
+                    <div
+                      key={dim}
+                      className="relative flex min-h-[88px] min-w-0 flex-col justify-center rounded-[18px] border border-[rgba(0,0,0,0.06)] bg-white px-3 pb-2 pt-2.5 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]"
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-1">
+                        <span className="text-[11px] font-medium text-gray-700">
+                          {label}
+                          {overallWeightPct != null ? (
+                            <span className="ml-1 text-[9px] font-normal text-gray-400">({overallWeightPct}%)</span>
+                          ) : null}
+                        </span>
+                        <span className="text-[12px] font-bold tabular-nums text-[#FF7F66]">{v}</span>
+                      </div>
+                      <NamingEvalProgressBar percent={v} />
+                      <div className="mt-1.5 flex w-full min-w-0 items-center justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 shrink-0 rounded-full px-2.5 text-[12px] font-medium text-gray-500 hover:bg-black/[0.04] hover:text-gray-900"
+                          onClick={() => setDetailOpen(dim)}
+                        >
+                          상세보기
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -442,22 +478,22 @@ function ProposalDimensionBars({ proposal }: { proposal: BrandNamingProposal }) 
           <div
             role="dialog"
             aria-modal="true"
-            className="relative z-10 flex max-h-[min(80vh,560px)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+            className="relative z-10 flex max-h-[min(80vh,560px)] w-full max-w-lg flex-col overflow-hidden rounded-[22px] border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_8px_40px_-8px_rgba(0,0,0,0.15),0_4px_16px_-6px_rgba(0,0,0,0.08)]"
           >
-            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-[rgba(0,0,0,0.05)] bg-[#FAFAF8] px-5 py-3.5">
               <h3 className="text-sm font-semibold text-gray-900">
                 {GENERATE_EVAL_BOXES.find((b) => b.dim === detailOpen)?.label ?? "상세"} — 채점 근거
               </h3>
               <button
                 type="button"
-                className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                className="rounded-full p-1.5 text-gray-500 transition-colors hover:bg-white hover:text-gray-900"
                 aria-label="닫기"
                 onClick={() => setDetailOpen(null)}
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 text-[13px] leading-relaxed text-gray-800 whitespace-pre-wrap">
+            <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap p-5 text-[13px] leading-relaxed text-gray-700">
               {dl[detailOpen]?.trim() ? dl[detailOpen] : "상세 근거가 비어 있습니다."}
             </div>
           </div>
@@ -762,7 +798,7 @@ export function BrandNaming() {
         <div className="flex flex-col gap-[24px]">
 
           {/* 카테고리 선택 (요청 내용 입력 위) — 생성·검수 동일 */}
-          <div className="rounded-[12px] border border-gray-200 bg-white px-[32px] pb-2 pt-[21px]">
+          <div className="brand-naming-section px-[32px] pb-2 pt-[21px]">
               <div className="mb-[16px] flex min-w-0 items-center gap-[8px]">
                 <Layers className={`${SECTION_ICON} text-[#FF7F66]`} />
                 <h2 className={SECTION_TITLE}>카테고리 선택</h2>
@@ -830,7 +866,7 @@ export function BrandNaming() {
             </div>
 
           {/* Row 1: 요청 내용 — 상·하 패딩 32px 대비 약 1/3 축소(≈21px), 좌우 32px 유지 */}
-          <div className="rounded-[12px] border border-gray-200 bg-white px-[32px] pb-[21px] pt-[21px]">
+          <div className="brand-naming-section px-[32px] pb-[21px] pt-[21px]">
             <div className="mb-[16px] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-[8px]">
                 <Sparkles className={`${SECTION_ICON} text-[#FF7F66]`} />
@@ -840,8 +876,12 @@ export function BrandNaming() {
                 <Button
                   type="button"
                   size="sm"
-                  variant={namingMode === "generate" ? "default" : "outline"}
-                  className={namingMode === "generate" ? "bg-[#FF7F66] hover:bg-[#E55A3E]" : ""}
+                  variant="outline"
+                  className={
+                    namingMode === "generate"
+                      ? "h-8 rounded-full border-transparent bg-black px-4 text-white shadow-[0_4px_12px_-4px_rgba(0,0,0,0.25)] hover:bg-black/90"
+                      : "h-8 rounded-full border-[rgba(0,0,0,0.1)] bg-white text-[#6B6B6B]"
+                  }
                   onClick={() => switchNamingMode("generate")}
                 >
                   생성
@@ -849,8 +889,12 @@ export function BrandNaming() {
                 <Button
                   type="button"
                   size="sm"
-                  variant={namingMode === "audit" ? "default" : "outline"}
-                  className={namingMode === "audit" ? "bg-[#FF7F66] hover:bg-[#E55A3E]" : ""}
+                  variant="outline"
+                  className={
+                    namingMode === "audit"
+                      ? "h-8 rounded-full border-transparent bg-black px-4 text-white shadow-[0_4px_12px_-4px_rgba(0,0,0,0.25)] hover:bg-black/90"
+                      : "h-8 rounded-full border-[rgba(0,0,0,0.1)] bg-white text-[#6B6B6B]"
+                  }
                   onClick={() => switchNamingMode("audit")}
                 >
                   검수
@@ -866,8 +910,12 @@ export function BrandNaming() {
                     <Button
                       type="button"
                       size="sm"
-                      variant={generateStyle === "general" ? "default" : "outline"}
-                      className={`h-7 px-2.5 text-[11px] ${generateStyle === "general" ? "bg-[#FF7F66] hover:bg-[#E55A3E]" : ""}`}
+                      variant="outline"
+                      className={
+                        generateStyle === "general"
+                          ? "h-7 rounded-full border-transparent bg-black px-2.5 text-[11px] text-white hover:bg-black/90"
+                          : "h-7 rounded-full border-[rgba(0,0,0,0.1)] px-2.5 text-[11px]"
+                      }
                       onClick={() => setGenerateStyle("general")}
                     >
                       일반 생성
@@ -875,8 +923,12 @@ export function BrandNaming() {
                     <Button
                       type="button"
                       size="sm"
-                      variant={generateStyle === "tiered" ? "default" : "outline"}
-                      className={`h-7 px-2.5 text-[11px] ${generateStyle === "tiered" ? "bg-[#FF7F66] hover:bg-[#E55A3E]" : ""}`}
+                      variant="outline"
+                      className={
+                        generateStyle === "tiered"
+                          ? "h-7 rounded-full border-transparent bg-black px-2.5 text-[11px] text-white hover:bg-black/90"
+                          : "h-7 rounded-full border-[rgba(0,0,0,0.1)] px-2.5 text-[11px]"
+                      }
                       onClick={() => setGenerateStyle("tiered")}
                     >
                       단계별 생성
@@ -884,7 +936,7 @@ export function BrandNaming() {
                   </div>
                 </div>
                 {generateStyle === "tiered" ? (
-                  <div className="rounded-[10px] border border-pink-100 bg-gradient-to-br from-pink-50/90 to-white px-3 py-3">
+                  <div className="rounded-2xl border border-[rgba(0,0,0,0.06)] bg-[#F5F3F0] px-3 py-3">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <label htmlFor="naming-tier-step-count" className="text-[11px] font-medium text-gray-600">
                         단계 수 (1~6)
@@ -966,16 +1018,20 @@ export function BrandNaming() {
           )}
 
           {/* Row 2: 참고 자료 */}
-          <div className="rounded-[12px] border border-gray-200 bg-white p-[24px]">
-            <div className="mb-[16px] flex items-center gap-[8px]">
-              <FileText className={`${SECTION_ICON} text-blue-500`} />
+          <div className="brand-naming-section p-[24px]">
+            <div className="mb-5 flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FF7F66]/12">
+                <FileText className="h-5 w-5 text-[#FF7F66]" />
+              </div>
               <h2 className={SECTION_TITLE}>참고 자료</h2>
             </div>
 
-            <div className="grid grid-cols-1 gap-[18px] lg:grid-cols-2 lg:items-stretch lg:gap-[24px]">
+            <div className="grid grid-cols-1 gap-5 rounded-[20px] border border-[rgba(0,0,0,0.05)] bg-[#FAFAF8] p-4 sm:p-5 lg:grid-cols-2 lg:items-stretch lg:gap-6">
               {/* 왼쪽: 파일 업로드 (우측 컬럼 높이에 맞춤) */}
               <div className="flex min-h-0 min-w-0 flex-col lg:h-full">
-                <h3 className="mb-[10px] shrink-0 text-[13px] font-semibold text-gray-800">사업 및 서비스 개요 자료</h3>
+                <h3 className="mb-3 shrink-0 text-[12px] font-semibold uppercase tracking-wide text-gray-500">
+                  사업 및 서비스 개요 자료
+                </h3>
                 <div className="flex min-h-0 flex-1 flex-col">
                   <div
                     role="button"
@@ -987,18 +1043,22 @@ export function BrandNaming() {
                         referenceInputRef.current?.click();
                       }
                     }}
-                    className="flex min-h-[120px] flex-1 cursor-pointer flex-col items-center justify-center rounded-[12px] border-2 border-dashed border-gray-300 px-2 py-2 text-center transition-all hover:border-blue-400 hover:bg-blue-50/50 lg:min-h-0"
+                    className="brand-naming-ref-dropzone flex min-h-[128px] flex-1 cursor-pointer flex-col items-center justify-center px-3 py-3 text-center lg:min-h-0"
                   >
                     {referenceFile ? (
-                      <div className="flex w-full max-w-full flex-col items-center justify-center gap-1.5 px-1 py-1">
-                        <FileText className="h-8 w-8 shrink-0 text-blue-500" />
-                        <p className="line-clamp-2 w-full text-center text-[11px] font-medium text-gray-700">{referenceFile.name}</p>
-                        <div className="flex flex-wrap items-center justify-center gap-1.5">
+                      <div className="flex w-full max-w-full flex-col items-center justify-center gap-2 px-1 py-1">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#FF7F66]/12">
+                          <FileText className="h-6 w-6 text-[#FF7F66]" />
+                        </div>
+                        <p className="line-clamp-2 w-full text-center text-[12px] font-medium text-gray-800">
+                          {referenceFile.name}
+                        </p>
+                        <div className="flex flex-wrap items-center justify-center gap-2">
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="h-7 px-2.5 text-[11px]"
+                            className="h-8 rounded-full border border-gray-200 bg-white px-3 text-[11px] font-medium text-gray-800 shadow-sm hover:border-[#FF7F66]/35 hover:bg-white"
                             onClick={(e) => {
                               e.stopPropagation();
                               referenceInputRef.current?.click();
@@ -1010,7 +1070,7 @@ export function BrandNaming() {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="h-7 px-2.5 text-[11px] text-gray-600"
+                            className="h-8 rounded-full px-3 text-[11px] font-medium text-gray-500 hover:bg-black/5 hover:text-gray-800"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleReferenceFileCancel();
@@ -1021,12 +1081,12 @@ export function BrandNaming() {
                         </div>
                       </div>
                     ) : (
-                      <div className="flex max-w-[220px] flex-col items-center justify-center gap-0.5 px-1">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100">
-                          <Upload className="h-[18px] w-[18px] text-blue-500" />
+                      <div className="flex max-w-[240px] flex-col items-center justify-center gap-1.5 px-1">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FF7F66]/12">
+                          <Upload className="h-5 w-5 text-[#FF7F66]" />
                         </div>
-                        <p className="text-[11px] font-semibold leading-tight text-gray-900">파일 직접 업로드</p>
-                        <p className="text-[9px] leading-snug text-gray-500">탭하여 선택 · PDF·PNG·JPEG</p>
+                        <p className="text-[12px] font-semibold leading-tight text-gray-900">파일 직접 업로드</p>
+                        <p className="text-[10px] leading-snug text-gray-500">탭하여 선택 · PDF·PNG·JPEG</p>
                       </div>
                     )}
                   </div>
@@ -1042,14 +1102,16 @@ export function BrandNaming() {
 
               {/* 오른쪽: 저장된 참고 문서 선택 */}
               <div className="flex min-h-0 min-w-0 flex-col lg:h-full">
-                <h3 className="mb-[10px] shrink-0 text-[13px] font-semibold text-gray-800">저장된 참고 문서에서 선택</h3>
+                <h3 className="mb-3 shrink-0 text-[12px] font-semibold uppercase tracking-wide text-gray-500">
+                  저장된 참고 문서에서 선택
+                </h3>
                 <div className="flex min-h-0 flex-1 flex-col">
                   <div className="relative shrink-0">
                     <select
                       id="naming-reference-guideline"
                       value={selectedGuidelineLibrary}
                       onChange={(e) => setSelectedGuidelineLibrary(e.target.value)}
-                      className="w-full cursor-pointer appearance-none rounded-lg border border-gray-200 bg-white py-2 pl-3 pr-9 text-sm text-gray-800"
+                      className="brand-naming-ref-select"
                     >
                       <option value="">참고 문서 선택…</option>
                       {GUIDELINE_REFERENCE_OPTIONS.map((opt) => (
@@ -1060,45 +1122,45 @@ export function BrandNaming() {
                     </select>
                     <ChevronDown
                       aria-hidden
-                      className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-gray-500"
+                      className="pointer-events-none absolute top-1/2 right-3.5 h-4 w-4 -translate-y-1/2 text-gray-500"
                     />
                   </div>
                   {guidelineUploadError && (
                     <p className="mt-2 line-clamp-2 shrink-0 text-[11px] text-red-600">{guidelineUploadError}</p>
                   )}
                   <div className="min-h-0 flex-1" aria-hidden />
-                  <div className="mt-3 min-h-0 shrink-0 rounded-lg border border-violet-100 bg-violet-50/60 p-2.5 text-xs text-gray-700">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-medium text-violet-900">서버 연동 상태</p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {guidelineLoading ? (
-                        <span className="inline-flex items-center gap-1.5 text-gray-500">
-                          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                          확인 중
-                        </span>
-                      ) : (
-                        <span
-                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                            serverGuideline?.hasFile
-                              ? "bg-[#FF7F66] font-bold text-white shadow-sm"
-                              : "bg-gray-200 text-gray-600"
-                          }`}
+                  <div className="mt-3 min-h-0 shrink-0 rounded-2xl border border-[rgba(0,0,0,0.06)] bg-white p-3 text-xs text-gray-700 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-semibold text-gray-900">서버 연동 상태</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {guidelineLoading ? (
+                          <span className="inline-flex items-center gap-1.5 text-gray-500">
+                            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                            확인 중
+                          </span>
+                        ) : (
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                              serverGuideline?.hasFile
+                                ? "bg-[#c8d9c4] font-bold text-[#2f4a38]"
+                                : "bg-gray-200 text-gray-600"
+                            }`}
+                          >
+                            {serverGuideline?.hasFile ? "연결됨" : "미연결"}
+                          </span>
+                        )}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 rounded-full border border-gray-200 bg-white text-[11px] font-medium text-gray-800 shadow-sm hover:border-black/20"
+                          disabled={guidelineLoading}
+                          onClick={() => setGuidelineDetailOpen(true)}
                         >
-                          {serverGuideline?.hasFile ? "ON" : "OFF"}
-                        </span>
-                      )}
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-7 border-violet-300 text-[11px]"
-                        disabled={guidelineLoading}
-                        onClick={() => setGuidelineDetailOpen(true)}
-                      >
-                        상세 보기
-                      </Button>
+                          상세 보기
+                        </Button>
+                      </div>
                     </div>
-                  </div>
                   </div>
                 </div>
               </div>
@@ -1109,7 +1171,7 @@ export function BrandNaming() {
             type="button"
             onClick={handleVerify}
             disabled={!namingCanSubmit || isRunning}
-            className="h-14 w-full bg-[#FF7F66] text-base font-semibold text-white shadow-lg hover:bg-[#E55A3E] disabled:opacity-50"
+            className="brand-btn-primary h-14 w-full text-base font-semibold disabled:pointer-events-none disabled:opacity-50"
           >
             {isRunning ? (
               <>
@@ -1141,35 +1203,35 @@ export function BrandNaming() {
             <>
               {namingMode === "generate" && (
                 <>
-                <div className="rounded-[12px] border-2 border-[#FF7F66]/35 bg-gradient-to-br from-pink-50/90 via-white to-violet-50/50 p-[28px] shadow-sm">
-                  <div className="mb-[10px] flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex items-start gap-[12px]">
-                      <div className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-xl bg-[#FF7F66] text-white shadow-md">
+                <div className="brand-naming-section p-7 sm:p-8">
+                  <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex items-start gap-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FF7F66] text-white shadow-[0_4px_14px_-4px_rgba(255,127,102,0.5)]">
                         <Sparkles className="h-6 w-6" />
                       </div>
-                      <div>
-                        <h2 className="text-[22px] font-bold text-gray-900">
+                      <div className="min-w-0">
+                        <NamingResultSectionTitle>
                           {namingResult.generateMeta?.style === "tiered"
                             ? `AI 네이밍 제안 (${namingResult.generateMeta.tierStepCount ?? namingResult.namingProposals?.length ?? 0}단계 × 대안 4패키지)`
                             : "AI 네이밍 제안 (4안)"}
-                        </h2>
-                        <p className="mt-[6px] text-[13px] leading-snug text-gray-600">
+                        </NamingResultSectionTitle>
+                        <p className="mt-2 text-[13px] leading-relaxed text-gray-500">
                           {namingResult.generateMeta?.style === "tiered"
                             ? "한 번의 생성마다 서로 다른 세계관·스토리라인을 가진 패키지 대안이 4개 제시됩니다. 각 패키지는 요청한 모든 단계 네이밍을 포함하며, 단계 간 이름은 같은 스토리라인에서 파생되도록 설계된 것이 기본입니다. 평가 표시 순서는 계층·적법·창의·대중·직관·확장이며, 종합 점수는 창의 30%·대중 30%·직관 20%·확장 20% 가중합입니다(계층·적법은 Pass/Fail만)."
                             : "표시 순서: 계층·적법·창의·대중·직관·확장. 종합 점수는 창의×0.3 + 대중×0.3 + 직관×0.2 + 확장×0.2 입니다. 브랜드 계층·적법은 종합에 넣지 않으며 70점 미만 시 Fail·NO-GO입니다."}
                         </p>
                       </div>
                     </div>
-                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:pt-0.5">
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:pt-1">
                       <label htmlFor="naming-generate-report-format" className="sr-only">
                         생성 리포트 파일 형식
                       </label>
-                      <div className="relative shrink-0">
+                      <div className="relative shrink-0 min-w-[100px]">
                         <select
                           id="naming-generate-report-format"
                           value={namingExportFormat}
                           onChange={(e) => setNamingExportFormat(e.target.value as ExportFormat)}
-                          className="cursor-pointer appearance-none rounded-lg border border-gray-200 bg-white py-1.5 pl-2 pr-8 text-xs text-gray-800"
+                          className="brand-naming-ref-select !py-2 !pl-3 !pr-8 !text-xs"
                         >
                           <option value="pdf">PDF</option>
                           <option value="png">PNG</option>
@@ -1177,10 +1239,16 @@ export function BrandNaming() {
                         </select>
                         <ChevronDown
                           aria-hidden
-                          className="pointer-events-none absolute top-1/2 right-2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500"
+                          className="pointer-events-none absolute top-1/2 right-2.5 h-3.5 w-3.5 -translate-y-1/2 text-gray-500"
                         />
                       </div>
-                      <Button type="button" variant="outline" size="sm" className="border-gray-300" onClick={handleNamingReportDownload}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 rounded-full border border-gray-200 bg-white px-3 text-xs font-medium text-gray-800 shadow-sm hover:border-black/20"
+                        onClick={handleNamingReportDownload}
+                      >
                         <Download className="mr-2 h-4 w-4 shrink-0" />
                         생성 리포트 다운로드
                       </Button>
@@ -1189,28 +1257,28 @@ export function BrandNaming() {
                   {namingResult.generateMeta?.style === "tiered" &&
                   namingResult.tierNamingAlternatives &&
                   namingResult.tierNamingAlternatives.length > 0 ? (
-                    <ul className="flex flex-col gap-4">
+                    <ul className="flex flex-col gap-5">
                       {namingResult.tierNamingAlternatives.map((alt, i) => (
                         <li
                           key={`tier-alt-${i}`}
-                          className="rounded-[12px] border border-pink-200/90 bg-white p-5 shadow-sm"
+                          className="rounded-[24px] border border-[rgba(0,0,0,0.06)] bg-white p-6 shadow-[0_4px_24px_-8px_rgba(0,0,0,0.08),0_2px_8px_-4px_rgba(0,0,0,0.04)]"
                         >
-                          <div className="mb-2">
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#FF7F66]">
+                          <div className="mb-3">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF7F66]">
                               대안 패키지 {i + 1} / 4
                             </span>
-                            <h3 className="mt-1 text-[15px] font-bold text-gray-900">세계관·스토리라인</h3>
-                            <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed text-gray-700">
+                            <h3 className="mt-1.5 text-[16px] font-bold text-gray-900">세계관·스토리라인</h3>
+                            <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-gray-600">
                               {alt.storyline}
                             </p>
                           </div>
                           <div className="mb-4">
-                            <h4 className="mb-2 text-[13px] font-semibold text-gray-800">단계별 네이밍</h4>
+                            <h4 className="mb-2.5 text-[12px] font-semibold tracking-wide text-gray-500">단계별 네이밍</h4>
                             <ul className="flex flex-col gap-2">
                               {alt.tierSteps.map((row, j) => (
                                 <li
                                   key={`${i}-${j}-${row.name}`}
-                                  className="rounded-lg border border-gray-100 bg-gray-50/80 px-3 py-2 text-[13px]"
+                                  className="rounded-[14px] border border-[rgba(0,0,0,0.05)] bg-[#FAFAF8] px-3.5 py-2.5 text-[13px]"
                                 >
                                   <span className="font-semibold text-[#FF7F66]">
                                     {row.tierLabel || namingResult.generateMeta?.tierLabels?.[j] || `단계 ${j + 1}`}
@@ -1227,10 +1295,10 @@ export function BrandNaming() {
                             </ul>
                           </div>
                           <div>
-                            <h4 className="mb-1 text-[13px] font-semibold text-gray-800">
+                            <h4 className="mb-1.5 text-[12px] font-semibold text-gray-800">
                               패키지 통합 평가 (창의성·스토리 연계)
                             </h4>
-                            <p className="mb-2 text-[12px] leading-snug text-gray-500">
+                            <p className="mb-2 text-[11px] leading-snug text-gray-500">
                               창의성 상세에는 위 스토리라인과 각 단계 이름의 연결이 서술됩니다.
                             </p>
                             <ProposalDimensionBars proposal={tierPackageToProposal(alt.tierPackageEvaluation)} />
@@ -1239,7 +1307,7 @@ export function BrandNaming() {
                       ))}
                     </ul>
                   ) : namingResult.generateMeta?.style === "tiered" && namingResult.tierPackageEvaluation ? (
-                    <div className="mb-4 rounded-[12px] border-2 border-[#FF7F66]/45 bg-white p-5 shadow-sm">
+                    <div className="mb-4 rounded-[24px] border border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] p-6">
                       <h3 className="mb-1 text-[15px] font-bold text-gray-900">패키지 통합 평가 (레거시 단일 패키지)</h3>
                       <p className="mb-3 text-[12px] leading-snug text-gray-500">
                         {namingResult.generateMeta.tierStepCount ?? namingResult.namingProposals?.length ?? 0}단계 네이밍을 하나의 요금제 라인업으로 본 4대 항목 평가입니다.
@@ -1253,7 +1321,7 @@ export function BrandNaming() {
                     namingResult.tierNamingAlternatives &&
                     namingResult.tierNamingAlternatives.length > 0
                   ) ? (
-                    <ul className="flex flex-col gap-3">
+                    <ul className="flex flex-col gap-4">
                       {(namingResult.namingProposals ?? []).map((raw, i) => {
                         const p = normalizeNamingProposal(raw);
                         const tierLb =
@@ -1264,33 +1332,33 @@ export function BrandNaming() {
                         return (
                         <li
                           key={`${i}-${p.name}`}
-                          className="rounded-[12px] border border-pink-200/90 bg-white p-5 shadow-sm"
+                          className="rounded-[24px] border border-[rgba(0,0,0,0.06)] bg-white p-6 shadow-[0_4px_24px_-8px_rgba(0,0,0,0.08),0_2px_8px_-4px_rgba(0,0,0,0.04)]"
                         >
                           <div className="mb-2 flex flex-wrap items-baseline gap-2">
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[#FF7F66]">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#FF7F66]">
                               {tierLb ? `${tierLb} · ` : ""}대안 {i + 1}
                             </span>
                             <h3 className="text-[18px] font-bold text-gray-900">{p.name}</h3>
                           </div>
-                          <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-gray-700">{p.rationale}</p>
+                          <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-gray-600">{p.rationale}</p>
                           {showPerCardBars ? <ProposalDimensionBars proposal={p} /> : null}
                         </li>
                         );
                       })}
                     </ul>
                   ) : namingResult.suggestedNames.length > 0 ? (
-                    <ul className="flex flex-col gap-4">
+                    <ul className="flex flex-col gap-3">
                       {namingResult.suggestedNames.map((name, i) => (
                         <li
                           key={`${i}-${name}`}
-                          className="rounded-[10px] border border-pink-200/80 bg-white px-4 py-3 text-[15px] font-semibold text-gray-900"
+                          className="rounded-[20px] border border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] px-5 py-3.5 text-[15px] font-semibold text-gray-900"
                         >
                           대안 {i + 1}: {name}
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3 text-[13px] text-amber-900">
+                    <p className="rounded-[18px] border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-3.5 text-[13px] text-gray-800">
                       제안 후보가 비어 있습니다. 요청을 구체화하거나 참고 문서를 선택한 뒤 다시 시도해 보세요.
                     </p>
                   )}
@@ -1300,7 +1368,7 @@ export function BrandNaming() {
                     type="button"
                     variant="outline"
                     disabled={!namingCanSubmit || isRunning}
-                    className="h-14 w-full border-[#FF7F66]/40 text-[15px] font-semibold text-[#FF7F66] hover:bg-[#FF7F66]/10"
+                    className="h-14 w-full border border-[rgba(0,0,0,0.12)] text-[15px] font-semibold text-[#1A1A1A] hover:bg-black/[0.04]"
                     onClick={handleVerify}
                   >
                     {isRunning ? (
@@ -1317,7 +1385,7 @@ export function BrandNaming() {
                   </Button>
                   <Button
                     type="button"
-                    className="h-14 w-full bg-[#FF7F66] text-base font-semibold text-white shadow-lg hover:bg-[#E55A3E]"
+                    className="brand-btn-primary h-14 w-full text-base font-semibold"
                     onClick={handleAuditResetToInput}
                   >
                     <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/90 bg-white/15">
@@ -1348,11 +1416,11 @@ export function BrandNaming() {
                   scalability: "",
                 };
                 return (
-              <div className="overflow-x-visible bg-gradient-to-br from-white to-gray-50 rounded-[12px] border-2 border-gray-200 p-[24px] sm:p-[32px]">
-                <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h2 className="text-[20px] font-bold text-gray-900 mb-[4px]">종합 적합성 점수</h2>
-                    <p className="text-[13px] text-gray-500">
+              <div className="brand-naming-section overflow-x-visible p-6 sm:p-8">
+                <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <NamingResultSectionTitle>종합 적합성 점수</NamingResultSectionTitle>
+                    <p className="mt-2 text-[13px] leading-relaxed text-gray-500">
                       항목 순서: 계층 → 적법 → 창의 → 대중 → 직관 → 확장. 종합 점수는 창의성 30%·대중성 30%·직관성 20%·확장성 20% 가중합이며, 브랜드 계층 정렬·적법성은 Pass/Fail만(종합 미포함, 70점 미만 NO-GO)입니다.
                     </p>
                   </div>
@@ -1360,12 +1428,12 @@ export function BrandNaming() {
                     <label htmlFor="naming-audit-report-format" className="sr-only">
                       검수 리포트 파일 형식
                     </label>
-                    <div className="relative shrink-0">
+                    <div className="relative min-w-[100px] shrink-0">
                       <select
                         id="naming-audit-report-format"
                         value={namingExportFormat}
                         onChange={(e) => setNamingExportFormat(e.target.value as ExportFormat)}
-                        className="cursor-pointer appearance-none rounded-lg border border-gray-200 bg-white py-1.5 pl-2 pr-8 text-xs text-gray-800"
+                        className="brand-naming-ref-select !py-2 !pl-3 !pr-8 !text-xs"
                       >
                         <option value="pdf">PDF</option>
                         <option value="png">PNG</option>
@@ -1373,17 +1441,24 @@ export function BrandNaming() {
                       </select>
                       <ChevronDown
                         aria-hidden
-                        className="pointer-events-none absolute top-1/2 right-2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500"
+                        className="pointer-events-none absolute top-1/2 right-2.5 h-3.5 w-3.5 -translate-y-1/2 text-gray-500"
                       />
                     </div>
-                    <Button type="button" variant="outline" size="sm" className="border-gray-300" onClick={handleNamingReportDownload}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 rounded-full border border-gray-200 bg-white px-3 text-xs font-medium text-gray-800 shadow-sm hover:border-black/20"
+                      onClick={handleNamingReportDownload}
+                    >
                       <Download className="mr-2 h-4 w-4 shrink-0" />
                       검수 리포트 다운로드
                     </Button>
                   </div>
                 </div>
 
-                <div className="grid w-full min-w-0 grid-cols-1 gap-4 overflow-x-visible lg:min-h-[320px] lg:grid-cols-[auto_minmax(0,1fr)] lg:grid-rows-[auto_auto] lg:items-stretch lg:gap-x-5 lg:gap-y-3">
+                <div className="mb-5 rounded-[24px] border border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] p-4 sm:p-5">
+                <div className="grid w-full min-w-0 grid-cols-1 gap-4 overflow-x-visible lg:min-h-[300px] lg:grid-cols-[auto_minmax(0,1fr)] lg:grid-rows-[auto_auto] lg:items-stretch lg:gap-x-5 lg:gap-y-3">
                   <div
                     className="flex h-full min-h-0 w-full min-w-0 items-center justify-center"
                     style={{
@@ -1393,28 +1468,35 @@ export function BrandNaming() {
                     <ScoreGauge score={overallScore} r={NAMING_AUDIT_GAUGE_R} scoreSize={60} />
                   </div>
                   <div
-                    className={`flex min-h-0 min-w-0 w-full max-w-full flex-col justify-between rounded-xl border-2 p-5 lg:max-w-none lg:w-[150%] lg:-ml-[50%] ${
-                      finalVerdict === "go" ? "border-green-200 bg-green-50/80" : "border-red-200 bg-red-50/80"
+                    className={`flex min-h-0 min-w-0 w-full max-w-full flex-col justify-between rounded-[22px] border bg-white p-5 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.08)] lg:max-w-none lg:w-[150%] lg:-ml-[50%] ${
+                      finalVerdict === "go"
+                        ? "border-[rgba(0,0,0,0.06)] border-l-[4px] border-l-[#5a7a5c]"
+                        : "border-[rgba(0,0,0,0.06)] border-l-[4px] border-l-[#FF7F66]"
                     }`}
                   >
                     <div className="min-h-0 flex-1 overflow-y-auto">
-                      <h3
-                        className={`text-[18px] font-bold ${finalVerdict === "go" ? "text-green-900" : "text-red-900"}`}
-                      >
-                        {finalVerdict === "go" ? "사용 권장 (GO)" : "재검토 필요 (NO-GO)"}
-                      </h3>
-                      <p
-                        className={`mt-2 text-[13px] leading-relaxed ${finalVerdict === "go" ? "text-green-800" : "text-red-800"}`}
-                      >
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <span
+                          className={
+                            finalVerdict === "go" ? "brand-pill--success !text-[11px] !font-bold" : "brand-pill--danger !text-[11px] !font-bold"
+                          }
+                        >
+                          {finalVerdict === "go" ? "GO" : "NO-GO"}
+                        </span>
+                        <h3 className="text-[18px] font-bold text-gray-900">
+                          {finalVerdict === "go" ? "사용 권장" : "재검토 필요"}
+                        </h3>
+                      </div>
+                      <p className="text-[13px] leading-relaxed text-gray-600">
                         {namingResult.finalSummary}
                       </p>
                     </div>
-                    <div className="mt-3 flex shrink-0 flex-wrap justify-end gap-2 border-t border-black/5 pt-3">
+                    <div className="mt-3 flex shrink-0 flex-wrap justify-end gap-2 border-t border-[rgba(0,0,0,0.06)] pt-3">
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        className={finalVerdict === "go" ? "border-green-600 text-green-800" : "border-red-600 text-red-800"}
+                        className="h-8 rounded-full border border-gray-200 bg-white text-[12px] font-medium text-gray-800 shadow-sm hover:border-black/20"
                         onClick={() => setAuditLogicModalOpen(true)}
                       >
                         <FileCheck className="mr-2 h-4 w-4" />
@@ -1427,7 +1509,7 @@ export function BrandNaming() {
                     style={{ transform: `translateX(-${NAMING_AUDIT_GAUGE_SHIFT_LEFT_PX}px)` }}
                   >
                     <div
-                      className="grid w-full max-w-full shrink-0 grid-cols-3 gap-x-[3px] gap-y-1.5 sm:grid-cols-6 items-center overflow-visible bg-transparent px-[2.2px] py-[6.6px] text-center"
+                      className="grid w-full max-w-full shrink-0 grid-cols-3 items-center gap-x-1 gap-y-1.5 overflow-visible rounded-[18px] border border-[rgba(0,0,0,0.05)] bg-white px-1 py-2 text-center shadow-sm sm:grid-cols-6 sm:gap-x-0.5"
                       style={{ width: NAMING_AUDIT_GAUGE_DIAMETER_PX, maxWidth: "100%" }}
                     >
                       {(
@@ -1450,13 +1532,7 @@ export function BrandNaming() {
                             {row.label}
                           </span>
                           {pf ? (
-                            <span
-                              className={
-                                pf === "PASS" ? "brand-pill--success !text-[10px] !px-1.5 !py-0" : "brand-pill--danger !text-[10px] !px-1.5 !py-0"
-                              }
-                            >
-                              {pf}
-                            </span>
+                            <span className={pf === "PASS" ? NAMING_PASS_BADGE_SM : NAMING_FAIL_TEXT_SM}>{pf}</span>
                           ) : (
                             <span className="brand-pill--score-up !px-1.5 !text-[12.1px] !font-semibold sm:!text-[13.2px]">
                               {row.val}
@@ -1467,22 +1543,24 @@ export function BrandNaming() {
                       })}
                     </div>
                   </div>
-                  <div className="flex h-full min-h-0 min-w-0 w-full max-w-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:max-w-none lg:w-[150%] lg:-ml-[50%]">
-                    <p className="mb-1 shrink-0 text-[12px] font-semibold tracking-wide text-gray-600">AI 추가 제안 네이밍</p>
+                  <div className="flex h-full min-h-0 min-w-0 w-full max-w-full flex-col overflow-hidden rounded-[20px] border border-[rgba(0,0,0,0.06)] bg-white p-4 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] lg:max-w-none lg:w-[150%] lg:-ml-[50%]">
+                    <p className="mb-0.5 shrink-0 text-[12px] font-semibold text-gray-900">AI 추가 제안 네이밍</p>
                     <p className="mb-2 shrink-0 text-[11px] leading-snug text-gray-500">
                       Gemini가 검수 맥락(가이드·작명 의도)을 반영해, 검수 대상과 다른 대안 이름만 제안합니다.
                     </p>
-                    <div className="min-h-0 flex-1 overflow-y-auto text-[13px] leading-relaxed text-gray-700">
+                    <div className="min-h-0 flex-1 overflow-y-auto text-[13px] leading-relaxed text-gray-600">
                       {(namingResult.additionalNamingSuggestions?.length ?? 0) > 0 ? (
-                        <ul className="list-disc space-y-1.5 pl-4">
+                        <ul className="divide-y divide-[rgba(0,0,0,0.05)]">
                           {(namingResult.additionalNamingSuggestions ?? []).map((name, idx) => (
-                            <li key={`${idx}-${name}`}>{name}</li>
+                            <li key={`${idx}-${name}`} className="py-2 first:pt-0 last:pb-0">
+                              {name}
+                            </li>
                           ))}
                         </ul>
                       ) : (namingResult.namingGeminiConfigured ?? geminiConfigured) === false ? (
-                        <p className="text-[13px] leading-relaxed text-amber-800">
-                          서버에 <code className="rounded bg-amber-100 px-1 text-[12px]">GEMINI_API_KEY</code>가 없어 Gemini 연동이 꺼져 있습니다. 프로젝트 루트{" "}
-                          <code className="rounded bg-amber-100 px-1 text-[12px]">.env</code>에 키를 넣고 서버를 재시작하면 이 영역에 AI 추가 제안이 채워집니다.
+                        <p className="text-[13px] leading-relaxed text-gray-700">
+                          서버에 <code className="rounded-md bg-[#F0EFEC] px-1.5 py-0.5 text-[12px] text-gray-800">GEMINI_API_KEY</code>가 없어 Gemini 연동이 꺼져 있습니다. 프로젝트 루트{" "}
+                          <code className="rounded-md bg-[#F0EFEC] px-1.5 py-0.5 text-[12px]">.env</code>에 키를 넣고 서버를 재시작하면 이 영역에 AI 추가 제안이 채워집니다.
                         </p>
                       ) : (
                         <p className="text-[13px] text-gray-500">
@@ -1492,10 +1570,14 @@ export function BrandNaming() {
                     </div>
                   </div>
                 </div>
+                </div>
 
-                <div className="mt-8 flex flex-col gap-6">
+                <div className="mt-8 flex flex-col gap-8">
                   <div>
-                    <p className="mb-3 text-[12px] font-semibold text-gray-500">Pass / Fail 항목</p>
+                    <p className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#FF7F66]" />
+                      Pass / Fail 항목
+                    </p>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   {[
                     {
@@ -1504,13 +1586,13 @@ export function BrandNaming() {
                       weightInOverall: null,
                       score: dim.hierarchy,
                       icon: BadgeCheck,
-                      iconCls: "text-green-600",
+                      iconWrap: "bg-[#c8d9c4]/35 text-[#2f4a38]",
                       body: (
                         <>
-                          <p className="mb-2 text-[14px] leading-relaxed text-gray-700">{namingResult.hierarchy.message}</p>
-                          <p className="text-[14px] leading-relaxed text-gray-700">{namingResult.hierarchy.details}</p>
+                          <p className="mb-2 text-[14px] leading-relaxed text-gray-600">{namingResult.hierarchy.message}</p>
+                          <p className="text-[14px] leading-relaxed text-gray-600">{namingResult.hierarchy.details}</p>
                           {dl.hierarchy ? (
-                            <p className="mt-2 whitespace-pre-wrap border-t border-gray-100 pt-2 text-[14px] leading-relaxed text-gray-700">
+                            <p className="mt-2 whitespace-pre-wrap border-t border-[rgba(0,0,0,0.06)] pt-2 text-[14px] leading-relaxed text-gray-600">
                               {dl.hierarchy}
                             </p>
                           ) : null}
@@ -1523,17 +1605,17 @@ export function BrandNaming() {
                       weightInOverall: null,
                       score: dim.legality,
                       icon: Scale,
-                      iconCls: "text-orange-600",
+                      iconWrap: "bg-[#FF7F66]/12 text-[#FF7F66]",
                       body: (
                         <>
-                          <p className="mb-2 text-[14px] leading-relaxed text-gray-700">{namingResult.copyright.verdict}</p>
+                          <p className="mb-2 text-[14px] leading-relaxed text-gray-600">{namingResult.copyright.verdict}</p>
                           {namingResult.copyright.risks.slice(0, 4).map((risk, i) => (
-                            <div key={i} className="mb-1 text-[14px] leading-relaxed text-gray-700">
+                            <div key={i} className="mb-1 text-[14px] leading-relaxed text-gray-600">
                               · {risk.type}: {risk.description}
                             </div>
                           ))}
                           {dl.legality ? (
-                            <p className="mt-2 whitespace-pre-wrap border-t border-gray-100 pt-2 text-[14px] leading-relaxed text-gray-700">
+                            <p className="mt-2 whitespace-pre-wrap border-t border-[rgba(0,0,0,0.06)] pt-2 text-[14px] leading-relaxed text-gray-600">
                               {dl.legality}
                             </p>
                           ) : null}
@@ -1549,12 +1631,16 @@ export function BrandNaming() {
                     return (
                     <div
                       key={box.id}
-                      className="flex h-[320px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                      className="flex h-[320px] flex-col rounded-[22px] border border-[rgba(0,0,0,0.06)] bg-white p-5 shadow-[0_4px_24px_-8px_rgba(0,0,0,0.06)]"
                     >
-                      <div className="mb-2 flex items-start justify-between gap-2 border-b border-gray-100 pb-3">
-                        <div className="flex min-w-0 items-start gap-2">
-                          <BoxIcon className={`mt-0.5 h-[22px] w-[22px] shrink-0 ${box.iconCls}`} />
-                          <h4 className="line-clamp-3 text-[18px] font-semibold leading-tight text-gray-900">{box.title}</h4>
+                      <div className="mb-2 flex items-start justify-between gap-2 border-b border-[rgba(0,0,0,0.05)] pb-3">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <div
+                            className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${box.iconWrap}`}
+                          >
+                            <BoxIcon className="h-5 w-5" />
+                          </div>
+                          <h4 className="line-clamp-3 text-[17px] font-semibold leading-tight text-gray-900">{box.title}</h4>
                         </div>
                         <div className="shrink-0 text-right">
                           <span className="block pt-1 text-[10px] font-medium leading-snug text-gray-400">
@@ -1568,9 +1654,7 @@ export function BrandNaming() {
                       >
                         {auditPassFail ? (
                           <span
-                            className={`text-[13px] font-bold tabular-nums leading-none ${
-                              auditPassFail === "PASS" ? "text-emerald-600" : "text-red-600"
-                            }`}
+                            className={auditPassFail === "PASS" ? NAMING_PASS_BADGE_MD : NAMING_FAIL_TEXT_MD}
                           >
                             {auditPassFail}
                           </span>
@@ -1579,7 +1663,7 @@ export function BrandNaming() {
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="h-8 shrink-0 text-[13px] text-gray-600"
+                          className="h-8 shrink-0 rounded-full px-3 text-[12px] font-medium text-gray-500 hover:bg-black/[0.04] hover:text-gray-900"
                           onClick={() => setAuditZoomDimension(box.id)}
                         >
                           상세보기
@@ -1591,7 +1675,8 @@ export function BrandNaming() {
                     </div>
                   </div>
                   <div>
-                    <p className="mb-3 text-[12px] font-semibold text-gray-500">
+                    <p className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#FF7F66]" />
                       종합 가중 항목 (창의 30% · 대중 30% · 직관 20% · 확장 20%)
                     </p>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1602,17 +1687,17 @@ export function BrandNaming() {
                       weightLabel: "30%",
                       score: dim.originality,
                       icon: Sparkles,
-                      iconCls: "text-[#FF7F66]",
+                      iconWrap: "bg-[#FF7F66]/12 text-[#FF7F66]",
                       body: (
                         <>
-                          <p className="mb-2 text-[14px] leading-relaxed text-gray-700">{namingResult.trademark.recommendation}</p>
+                          <p className="mb-2 text-[14px] leading-relaxed text-gray-600">{namingResult.trademark.recommendation}</p>
                           {namingResult.trademark.conflicts.slice(0, 4).map((c, i) => (
-                            <div key={i} className="mb-1 text-[14px] leading-relaxed text-gray-700">
+                            <div key={i} className="mb-1 text-[14px] leading-relaxed text-gray-600">
                               · {c.name} ({c.similarity}%)
                             </div>
                           ))}
                           {dl.originality ? (
-                            <p className="mt-2 whitespace-pre-wrap border-t border-gray-100 pt-2 text-[14px] leading-relaxed text-gray-700">
+                            <p className="mt-2 whitespace-pre-wrap border-t border-[rgba(0,0,0,0.06)] pt-2 text-[14px] leading-relaxed text-gray-600">
                               {dl.originality}
                             </p>
                           ) : null}
@@ -1625,9 +1710,9 @@ export function BrandNaming() {
                       weightLabel: "30%",
                       score: dim.publicAppeal,
                       icon: Users,
-                      iconCls: "text-sky-600",
+                      iconWrap: "bg-[#F0EFEC] text-gray-700",
                       body: (
-                        <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-gray-700">
+                        <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-gray-600">
                           {dl.publicAppeal?.trim()
                             ? dl.publicAppeal
                             : "대중성(사회·문화적 수용) 근거가 아직 없습니다. 다시 검수하거나 잠시 후 재시도해 주세요."}
@@ -1640,9 +1725,9 @@ export function BrandNaming() {
                       weightLabel: "20%",
                       score: dim.pronunciation,
                       icon: Mic,
-                      iconCls: "text-violet-600",
+                      iconWrap: "bg-[#FF7F66]/12 text-[#FF7F66]",
                       body: (
-                        <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-gray-700">
+                        <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-gray-600">
                           {dl.pronunciationLanguage?.trim()
                             ? dl.pronunciationLanguage
                             : "직관성 항목이 아직 없습니다. 다시 검수하거나 잠시 후 재시도해 주세요."}
@@ -1655,9 +1740,9 @@ export function BrandNaming() {
                       weightLabel: "20%",
                       score: dim.scalability,
                       icon: Layers,
-                      iconCls: "text-amber-600",
+                      iconWrap: "bg-[#F0EFEC] text-gray-700",
                       body: (
-                        <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-gray-700">
+                        <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-gray-600">
                           {dl.scalability?.trim()
                             ? dl.scalability
                             : "확장성(브랜드 생태계) 근거가 아직 없습니다. 다시 검수하거나 잠시 후 재시도해 주세요."}
@@ -1669,16 +1754,20 @@ export function BrandNaming() {
                     return (
                     <div
                       key={box.id}
-                      className="flex h-[320px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                      className="flex h-[320px] flex-col rounded-[22px] border border-[rgba(0,0,0,0.06)] bg-white p-5 shadow-[0_4px_24px_-8px_rgba(0,0,0,0.06)]"
                     >
-                      <div className="mb-2 flex items-start justify-between gap-2 border-b border-gray-100 pb-3">
-                        <div className="flex min-w-0 items-start gap-2">
-                          <BoxIcon className={`mt-0.5 h-[22px] w-[22px] shrink-0 ${box.iconCls}`} />
-                          <h4 className="line-clamp-3 text-[18px] font-semibold leading-tight text-gray-900">{box.title}</h4>
+                      <div className="mb-2 flex items-start justify-between gap-2 border-b border-[rgba(0,0,0,0.05)] pb-3">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <div
+                            className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${box.iconWrap}`}
+                          >
+                            <BoxIcon className="h-5 w-5" />
+                          </div>
+                          <h4 className="line-clamp-3 text-[17px] font-semibold leading-tight text-gray-900">{box.title}</h4>
                         </div>
                         <div className="shrink-0 text-right">
-                          <span className="block text-[11px] text-gray-400">종합 {box.weightLabel}</span>
-                          <span className="brand-pill--score-up !border-0 !px-2.5 !py-1 !text-[19px] !font-bold tabular-nums leading-none">
+                          <span className="block text-[10px] text-gray-400">종합 {box.weightLabel}</span>
+                          <span className="brand-pill--score-up !mt-0.5 !inline-flex !border-0 !px-2.5 !py-1 !text-[19px] !font-bold tabular-nums leading-none">
                             {box.score}
                           </span>
                         </div>
@@ -1689,7 +1778,7 @@ export function BrandNaming() {
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="h-8 shrink-0 text-[13px] text-gray-600"
+                          className="h-8 shrink-0 rounded-full px-3 text-[12px] font-medium text-gray-500 hover:bg-black/[0.04] hover:text-gray-900"
                           onClick={() => setAuditZoomDimension(box.id)}
                         >
                           상세보기
@@ -1704,10 +1793,10 @@ export function BrandNaming() {
 
                 <Button
                   type="button"
-                  className="mt-8 h-14 w-full bg-[#FF7F66] text-base font-semibold text-white shadow-lg hover:bg-[#E55A3E]"
+                  className="brand-btn-primary mt-8 h-14 w-full text-base font-semibold"
                   onClick={handleAuditResetToInput}
                 >
-                  <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/90 bg-white/15">
+                  <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/30 bg-white/10">
                     <ArrowUp className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
                   </span>
                   처음으로
@@ -1779,7 +1868,7 @@ export function BrandNaming() {
                         variant="outline"
                         disabled={guidelineAnalyzing}
                         onClick={handleAnalyzeStoredGuideline}
-                        className="shrink-0 border-violet-300"
+                        className="shrink-0 border-gray-200 text-gray-800"
                       >
                         {guidelineAnalyzing ? (
                           <>
@@ -1835,20 +1924,20 @@ export function BrandNaming() {
           <div
             role="dialog"
             aria-modal="true"
-            className="relative z-10 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+            className="relative z-10 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_8px_40px_-8px_rgba(0,0,0,0.15)]"
           >
-            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] px-5 py-3.5">
               <h3 className="text-base font-semibold text-gray-900">상세 논리 (6개 평가 기준)</h3>
               <button
                 type="button"
-                className="rounded p-1 text-gray-500 hover:bg-gray-100"
+                className="rounded-full p-1.5 text-gray-500 hover:bg-white hover:text-gray-900"
                 aria-label="닫기"
                 onClick={() => setAuditLogicModalOpen(false)}
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 text-[13px] leading-relaxed text-gray-800">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 text-[13px] leading-relaxed text-gray-700">
               {(() => {
                 const dl = namingResult.detailLogic ?? {
                   hierarchy: "",
@@ -1883,7 +1972,7 @@ export function BrandNaming() {
                           href="https://www.law.go.kr/"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-blue-600 hover:underline"
+                          className="flex items-center gap-2 text-gray-800 underline decoration-[rgba(0,0,0,0.2)] underline-offset-2 transition-colors hover:text-[#FF7F66] hover:decoration-[#FF7F66]/50"
                         >
                           <Globe className="h-3.5 w-3.5 shrink-0" />
                           국가법령정보센터 (law.go.kr)
@@ -1892,7 +1981,7 @@ export function BrandNaming() {
                           href="https://open.law.go.kr/"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-blue-600 hover:underline"
+                          className="flex items-center gap-2 text-gray-800 underline decoration-[rgba(0,0,0,0.2)] underline-offset-2 transition-colors hover:text-[#FF7F66] hover:decoration-[#FF7F66]/50"
                         >
                           <Globe className="h-3.5 w-3.5 shrink-0" />
                           법령정보 오픈API (open.law.go.kr)
@@ -1918,9 +2007,9 @@ export function BrandNaming() {
           <div
             role="dialog"
             aria-modal="true"
-            className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+            className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-[22px] border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_8px_40px_-8px_rgba(0,0,0,0.15)]"
           >
-            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] px-4 py-3.5">
               <h3 className="text-sm font-semibold text-gray-900">
                 {auditZoomDimension === "hierarchy" && "브랜드 계층 정렬 — 확대"}
                 {auditZoomDimension === "originality" && "창의성 — 확대"}
@@ -1931,14 +2020,14 @@ export function BrandNaming() {
               </h3>
               <button
                 type="button"
-                className="rounded p-1 text-gray-500 hover:bg-gray-100"
+                className="rounded-full p-1.5 text-gray-500 hover:bg-white hover:text-gray-900"
                 aria-label="닫기"
                 onClick={() => setAuditZoomDimension(null)}
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 text-[14px] leading-relaxed text-gray-800">
+            <div className="min-h-0 flex-1 overflow-y-auto p-5 text-[14px] leading-relaxed text-gray-700">
               <p className="whitespace-pre-wrap">
                 {(() => {
                   const k: keyof NonNullable<typeof namingResult.detailLogic> =
@@ -1948,13 +2037,13 @@ export function BrandNaming() {
                 })()}
               </p>
               {auditZoomDimension === "legality" && (
-              <div className="mt-4 border-t border-gray-100 pt-3 text-[13px]">
+              <div className="mt-4 border-t border-[rgba(0,0,0,0.06)] pt-3 text-[13px]">
                 <p className="mb-2 font-semibold text-gray-800">관련 공식 링크</p>
                 <a
                   href="https://www.law.go.kr/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mr-3 text-blue-600 hover:underline"
+                  className="mr-3 text-gray-800 underline decoration-[rgba(0,0,0,0.2)] underline-offset-2 transition-colors hover:text-[#FF7F66]"
                 >
                   국가법령정보센터 →
                 </a>
@@ -1962,7 +2051,7 @@ export function BrandNaming() {
                   href="https://open.law.go.kr/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
+                  className="text-gray-800 underline decoration-[rgba(0,0,0,0.2)] underline-offset-2 transition-colors hover:text-[#FF7F66]"
                 >
                   open.law.go.kr →
                 </a>

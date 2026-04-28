@@ -47,10 +47,6 @@ const PALETTE = {
   shadowLg: "0 12px 40px -12px rgba(0,0,0,0.10)",
 } as const;
 
-/** 4개 옵션 카드 기본 면: 흰색 위에 감각적으로만 느껴지는 극미한 코랄 그라데이션 */
-const OPTION_CARD_BG_IDLE =
-  "linear-gradient(152deg, #FFFFFF 0%, #FFFFFE 38%, rgba(255, 127, 102, 0.025) 72%, rgba(255, 127, 102, 0.042) 100%)";
-
 const pageFont: CSSProperties = {
   fontFamily: '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif',
 };
@@ -456,13 +452,12 @@ export function OptionSelection() {
                 <button
                   key={option.id}
                   type="button"
-                  className="option-card-orbit"
                   onClick={() => handleOptionClick(option.route)}
                   onMouseEnter={() => setHoveredOptionId(option.id)}
                   onMouseLeave={() => setHoveredOptionId(null)}
                   style={{
                     textAlign: "left",
-                    background: isHovered ? PALETTE.coralSoft : OPTION_CARD_BG_IDLE,
+                    background: PALETTE.card,
                     border: isHovered ? `1px solid ${PALETTE.coral}` : `1px solid ${PALETTE.borderSubtle}`,
                     borderRadius: "24px",
                     padding: "22px 20px 20px",
@@ -477,7 +472,19 @@ export function OptionSelection() {
                     transform: isHovered ? "translateY(-2px)" : "translateY(0)",
                   }}
                 >
-                  <span className="option-card-orbit__inner" style={{ textAlign: "left" }}>
+                  <span
+                    style={{
+                      textAlign: "left",
+                      position: "relative",
+                      zIndex: 1,
+                      display: "flex",
+                      flexDirection: "column",
+                      width: "100%",
+                      flex: "1 1 auto",
+                      minHeight: 0,
+                      minWidth: 0,
+                    }}
+                  >
                   <div
                     style={{
                       display: "flex",
