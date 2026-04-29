@@ -1322,13 +1322,6 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         ) : null}
 
         <AssetSection/>
-
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-start gap-2">
-            <Sparkles className="w-4 h-4 text-blue-600 mt-0.5 shrink-0"/>
-            <div className="text-xs text-blue-900"><p className="font-medium mb-1">포스터 제작 가이드</p><ul className="space-y-1 text-blue-800"><li>• 카테고리 선택 시 샘플 텍스트가 자동 입력됩니다</li><li>• 에셋 업로드 후 캔버스에서 자유롭게 배치하세요</li><li>• 인쇄 시 300 DPI · CMYK 변환을 확인하세요</li></ul></div>
-          </div>
-        </div>
       </div>
     );
   }
