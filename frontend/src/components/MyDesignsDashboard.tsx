@@ -151,11 +151,16 @@ export function MyDesignsDashboard() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((it) => (
               <div key={it.id} className="brand-surface overflow-hidden rounded-[20px]">
-                <div className="aspect-[4/3] w-full bg-gray-50">
+                {/* 썸네일: 비율 고정 + overflow로 프레임 밖으로 넘치지 않음. 래스터는 object-contain, 캔버스 프리뷰는 zoom으로 축소 */}
+                <div className="flex aspect-[4/3] w-full min-h-0 items-center justify-center overflow-hidden bg-gray-100">
                   {it.thumbnail_url ? (
-                    <img src={it.thumbnail_url} alt={it.name} className="h-full w-full object-cover" />
+                    <img
+                      src={it.thumbnail_url}
+                      alt={it.name}
+                      className="block max-h-full min-h-0 w-full max-w-full object-contain object-center"
+                    />
                   ) : it.canvas_data ? (
-                    <div className="h-full w-full pointer-events-none select-none">
+                    <div className="flex h-full w-full min-h-0 min-w-0 items-center justify-center overflow-hidden pointer-events-none select-none [&>div]:!p-3">
                       <DesignCanvas
                         content={it.canvas_data as DesignContent}
                         templateId={it.template_id}
@@ -165,7 +170,7 @@ export function MyDesignsDashboard() {
                           unit: "px",
                           name: "Default",
                         }}
-                        zoom={0.88}
+                        zoom={0.52}
                         onContentChange={() => {}}
                         onContentDraftChange={() => {}}
                         onBeginCanvasTextEdit={() => {}}

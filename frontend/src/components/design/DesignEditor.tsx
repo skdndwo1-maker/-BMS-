@@ -1183,9 +1183,13 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                         })();
                       }}
                     >
-                      <div className="aspect-[4/3] w-full bg-gray-50">
+                      <div className="flex aspect-[4/3] w-full min-h-0 items-center justify-center overflow-hidden bg-gray-100">
                         {it.thumbnail_url ? (
-                          <img src={it.thumbnail_url} alt={it.name} className="h-full w-full object-cover" />
+                          <img
+                            src={it.thumbnail_url}
+                            alt={it.name}
+                            className="block max-h-full min-h-0 w-full max-w-full object-contain object-center"
+                          />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">NO THUMB</div>
                         )}
