@@ -1465,45 +1465,57 @@ export function BrandNaming() {
                 <div className="mb-5 rounded-[24px] border border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] p-4 sm:p-5">
                   <div className="grid w-full min-w-0 grid-cols-1 gap-5 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-stretch">
                     {/* 좌측: 게이지 + 6칸 미니 표 */}
-                    <div className="flex w-full min-w-0 flex-col items-center gap-3 lg:w-auto">
+                    <div className="flex w-full min-w-0 flex-col items-center gap-4 lg:w-auto">
                       <ScoreGauge score={overallScore} r={NAMING_AUDIT_GAUGE_R} scoreSize={60} />
-                      <div
-                        className="grid w-full max-w-full grid-cols-3 items-center gap-x-1 gap-y-1.5 overflow-visible rounded-[18px] border border-[rgba(0,0,0,0.05)] bg-white px-2 py-2 text-center shadow-sm sm:grid-cols-6 sm:gap-x-0.5"
-                        style={{ width: NAMING_AUDIT_GAUGE_DIAMETER_PX, maxWidth: "100%" }}
-                      >
-                        {(
-                          [
-                            { label: "계층", val: dim.hierarchy, pf: true },
-                            { label: "적법", val: dim.legality, pf: true },
-                            { label: "창의", val: dim.originality, pf: false },
-                            { label: "대중", val: dim.publicAppeal, pf: false },
-                            { label: "직관", val: dim.pronunciation, pf: false },
-                            { label: "확장", val: dim.scalability, pf: false },
-                          ] as const
-                        ).map((row) => {
-                          const pf = row.pf ? passFail(Number(row.val)) : null;
-                          return (
-                            <div
-                              key={row.label}
-                              className="flex min-w-0 flex-col items-center justify-center gap-0.5 leading-none sm:flex-row sm:gap-1.5"
-                            >
-                              <span
-                                className={`${
-                                  row.pf ? "brand-pill--hierarchy-legality" : "brand-pill--accent"
-                                } !px-2 !py-0.5 !text-[9px] sm:!text-[10px] max-w-full truncate`}
+                      {/* 6항목 미니 카드 — 한 줄(six 컬럼)로 쥐어넣지 않음(겹침 방지): 항상 3×2 */}
+                      <div className="w-full max-w-[min(280px,100%)] shrink-0">
+                        <p className="mb-2 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                          항목별
+                        </p>
+                        <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
+                          {(
+                            [
+                              { label: "계층", val: dim.hierarchy, pf: true },
+                              { label: "적법", val: dim.legality, pf: true },
+                              { label: "창의", val: dim.originality, pf: false },
+                              { label: "대중", val: dim.publicAppeal, pf: false },
+                              { label: "직관", val: dim.pronunciation, pf: false },
+                              { label: "확장", val: dim.scalability, pf: false },
+                            ] as const
+                          ).map((row) => {
+                            const pf = row.pf ? passFail(Number(row.val)) : null;
+                            return (
+                              <div
+                                key={row.label}
+                                className="flex min-h-[4.75rem] min-w-0 flex-col items-center justify-between gap-1 rounded-xl border border-[rgba(0,0,0,0.06)] bg-white px-1.5 py-2 text-center shadow-sm"
                               >
-                                {row.label}
-                              </span>
-                              {pf ? (
-                                <span className={pf === "PASS" ? NAMING_PASS_BADGE_SM : NAMING_FAIL_TEXT_SM}>{pf}</span>
-                              ) : (
-                                <span className="brand-pill--score-up !px-1.5 !text-[12.1px] !font-semibold sm:!text-[13.2px]">
-                                  {row.val}
+                                <span
+                                  className={`max-w-full truncate ${
+                                    row.pf ? "brand-pill--hierarchy-legality" : "brand-pill--accent"
+                                  } !px-1.5 !py-0.5 !text-[9px]`}
+                                  title={row.label}
+                                >
+                                  {row.label}
                                 </span>
-                              )}
-                            </div>
-                          );
-                        })}
+                                {pf ? (
+                                  <span
+                                    className={
+                                      pf === "PASS"
+                                        ? NAMING_PASS_BADGE_SM + " shrink-0"
+                                        : NAMING_FAIL_TEXT_SM + " shrink-0 py-0.5"
+                                    }
+                                  >
+                                    {pf}
+                                  </span>
+                                ) : (
+                                  <span className="font-mono text-[13px] font-semibold tabular-nums leading-none text-[#c14d38]">
+                                    {row.val}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
 

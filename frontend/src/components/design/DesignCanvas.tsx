@@ -26,6 +26,11 @@ import {
   DEFAULT_POSTER_SUBTITLE_OFFSET_Y,
 } from "@/design/posterDefaults";
 import { DESIGN_CANVAS_BASE_VIEW_SCALE } from "@/design/canvasViewConstants";
+import {
+  computePlacardTextStackNormRects,
+  getPlacardSplitBackdropBoxPx,
+  type PlacardContentBoxPx,
+} from "@/design/placardCanvasLayout";
 import { VI_COLORS, VI_FONT_STACK, getViGridStepPx } from "@/design/viCanvasConstants";
 import {
   renderPlainWithBoldRanges,
@@ -609,60 +614,27 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   };
 
   // 현수막(placard)에서는 메인/본문/유의사항 위치를 고정값으로 강제하고, 드래그/리사이즈를 막는다.
+  // 라운드 박스가 캔버스에 있으면 그 rect 기준, 없으면 우측 분할 고정 박스 기준으로 가로중앙·블록 세로중앙 정렬.
   useLayoutEffect(() => {
     if (!onContentChange) return;
     if (!isPlacard) return;
 
-    const shortSide = Math.min(displayW, displayH);
-    const X = shortSide / 12;
-    const leftW = displayW * 0.235;
-    const bgInsetT = X * 1.0;
-    const bgInsetB = X * 1.2;
-    const bgInsetL = X * 0.26;
-    const bgInsetR = X * 1.2;
-    const bgLeftPx = leftW + bgInsetL;
-    const bgTopPx = bgInsetT;
-    const bgWPx = Math.max(10, displayW - bgLeftPx - bgInsetR);
-    const bgHPx = Math.max(10, displayH - bgTopPx - bgInsetB);
+    const c = contentRef.current;
+    let boxPx: PlacardContentBoxPx;
+    const r = c.panelBgRect;
+    if (c.panelBgOnCanvas && r && r.width > 0 && r.height > 0) {
+      boxPx = {
+        left: r.x * displayW,
+        top: r.y * displayH,
+        width: r.width * displayW,
+        height: r.height * displayH,
+      };
+    } else {
+      boxPx = getPlacardSplitBackdropBoxPx(displayW, displayH);
+    }
 
-    const padPx = X * 0.55;
-    const gapPx = X * 0.57;
-
-    const rectX = (bgLeftPx + padPx) / displayW;
-    const rectW = Math.max(0.05, (bgWPx - padPx * 2) / displayW);
-
-    const titleHPx = Math.max(X * 2.4, bgHPx * 0.22);
-    const bodyHPx = Math.max(X * 1.6, bgHPx * 0.16);
-    const footerHPx = Math.max(X * 1.3, bgHPx * 0.12);
-    const totalHPx = titleHPx + gapPx + bodyHPx + gapPx + footerHPx;
-    const startYPx = bgTopPx + Math.max(0, (bgHPx - totalHPx) / 2);
-
-    const titleRectFixed = {
-      x: rectX,
-      y: startYPx / displayH,
-      width: rectW,
-      height: Math.min(0.6, titleHPx / displayH),
-    };
-    const bodyRectFixed = {
-      x: rectX,
-      y: (startYPx + titleHPx + gapPx) / displayH,
-      width: rectW,
-      height: Math.min(0.6, bodyHPx / displayH),
-    };
-    const footerRectFixed = {
-      x: rectX,
-      y: (startYPx + titleHPx + gapPx + bodyHPx + gapPx) / displayH,
-      width: rectW,
-      height: Math.min(0.6, footerHPx / displayH),
-    };
-
-    // 유의사항 위치: 현재 텍스트 높이의 0.85x 만큼 하단으로 이동
-    const footerDeltaY = footerRectFixed.height * 0.85;
-    const maxFooterY = (bgTopPx + bgHPx - padPx - footerHPx) / displayH;
-    footerRectFixed.y = Math.max(
-      0,
-      Math.min(maxFooterY, footerRectFixed.y + footerDeltaY)
-    );
+    const { titleRect: titleRectFixed, bodyRect: bodyRectFixed, footerRect: footerRectFixed } =
+      computePlacardTextStackNormRects(displayW, displayH, boxPx);
 
     const eq = (
       a?: { x: number; y: number; width: number; height: number },
@@ -675,7 +647,6 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       Math.abs(a.width - b.width) < 1e-4 &&
       Math.abs(a.height - b.height) < 1e-4;
 
-    const c = contentRef.current;
     if (
       eq(c.posterTitleRect, titleRectFixed) &&
       eq(c.posterBodyRect, bodyRectFixed) &&
@@ -697,7 +668,17 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       posterFooterRect: footerRectFixed,
       posterFooterRectLocked: true,
     });
-  }, [displayW, displayH, isPlacard, onContentChange]);
+  }, [
+    displayW,
+    displayH,
+    isPlacard,
+    onContentChange,
+    content.panelBgOnCanvas,
+    content.panelBgRect?.x,
+    content.panelBgRect?.y,
+    content.panelBgRect?.width,
+    content.panelBgRect?.height,
+  ]);
 
   // 텍스트가 생겼는데 rect가 없을 때만: 템플릿 비율 기반으로 초기 rect 자동 계산
   useLayoutEffect(() => {
