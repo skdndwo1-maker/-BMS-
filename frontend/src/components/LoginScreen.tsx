@@ -102,6 +102,25 @@ export function LoginScreen() {
         ...font,
       }}
     >
+      {/* 전체 화면 좌상단: AXIS + 부제 (compact 대비 약 10% 확대) */}
+      <div
+        style={{
+          position: "fixed",
+          top: "max(24px, env(safe-area-inset-top, 0px))",
+          left: "max(24px, env(safe-area-inset-left, 0px))",
+          zIndex: 2,
+          transform: "scale(1.1)",
+          transformOrigin: "left top",
+          pointerEvents: "none",
+        }}
+      >
+        <AxisBrandTitle
+          subtitle="Brand Contents Manager"
+          compact
+          className="!flex-col !flex-nowrap !items-start !justify-start gap-1 self-start text-left indent-0 [column-gap:0] [&>span:first-child]:justify-start [&>span:last-child]:w-full [&>span:last-child]:text-left [&>span:last-child]:mt-px [&>span:last-child]:leading-snug [&>span:last-child]:font-normal [&>span:last-child]:text-[#9CA3AF]"
+        />
+      </div>
+
       <div
         style={{
           position: "relative",
@@ -114,42 +133,22 @@ export function LoginScreen() {
         }}
       >
       <div style={{ width: "100%" }}>
-        <header style={{ width: "100%", marginBottom: 28 }}>
-          {/* AXIS + 부제: 박스 좌상단 작게 치우침 */}
-          <div
+        <header style={{ width: "100%", marginBottom: 28, textAlign: "center" }}>
+          <h1
             style={{
-              marginBottom: 20,
-              display: "inline-block",
-              transform: "scale(0.93)",
-              transformOrigin: "left top",
-              maxWidth: "100%",
+              fontSize: 32,
+              fontWeight: 700,
+              color: PALETTE.ink,
+              margin: "0 0 8px",
+              letterSpacing: "-0.03em",
+              lineHeight: 1.15,
             }}
           >
-            <AxisBrandTitle
-              subtitle="Brand Contents Manager"
-              compact
-              className="!flex-col !flex-nowrap !items-start !justify-start gap-1 self-start text-left indent-0 [column-gap:0] [&>span:first-child]:justify-start [&>span:last-child]:w-full [&>span:last-child]:text-left [&>span:last-child]:mt-px [&>span:last-child]:text-[11px] [&>span:last-child]:font-normal [&>span:last-child]:text-[#9CA3AF] [&>span:last-child]:leading-snug"
-            />
-          </div>
-
-          {/* 메인 카피: 기존대로 중앙 */}
-          <div style={{ textAlign: "center" }}>
-            <h1
-              style={{
-                fontSize: 32,
-                fontWeight: 700,
-                color: PALETTE.ink,
-                margin: "0 0 8px",
-                letterSpacing: "-0.03em",
-                lineHeight: 1.15,
-              }}
-            >
-              Log in
-            </h1>
-            <p style={{ fontSize: 15, color: PALETTE.muted, margin: 0, fontWeight: 400 }}>
-              Enter your details to continue
-            </p>
-          </div>
+            Log in
+          </h1>
+          <p style={{ fontSize: 15, color: PALETTE.muted, margin: 0, fontWeight: 400 }}>
+            Enter your details to continue
+          </p>
         </header>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
