@@ -1421,19 +1421,19 @@ export function BrandNaming() {
                   scalability: "",
                 };
                 return (
-              <div className="brand-naming-section overflow-x-visible p-6 sm:p-8">
-                <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="brand-naming-section p-6 sm:p-8">
+
+                {/* ── 헤더: 제목 + 설명 + 다운로드 ── */}
+                <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <NamingResultSectionTitle>종합 적합성 점수</NamingResultSectionTitle>
-                    <p className="mt-2 text-[13px] leading-relaxed text-gray-500">
+                    <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-gray-500">
                       항목 순서: 계층 → 적법 → 창의 → 대중 → 직관 → 확장. 종합 점수는 창의성 30%·대중성 30%·직관성 20%·확장성 20% 가중합이며, 브랜드 계층 정렬·적법성은 Pass/Fail만(종합 미포함, 70점 미만 NO-GO)입니다.
                     </p>
                   </div>
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                    <label htmlFor="naming-audit-report-format" className="sr-only">
-                      검수 리포트 파일 형식
-                    </label>
-                    <div className="relative min-w-[100px] shrink-0">
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:pt-1">
+                    <label htmlFor="naming-audit-report-format" className="sr-only">검수 리포트 파일 형식</label>
+                    <div className="relative min-w-[90px] shrink-0">
                       <select
                         id="naming-audit-report-format"
                         value={namingExportFormat}
@@ -1444,10 +1444,7 @@ export function BrandNaming() {
                         <option value="png">PNG</option>
                         <option value="jpeg">JPEG</option>
                       </select>
-                      <ChevronDown
-                        aria-hidden
-                        className="pointer-events-none absolute top-1/2 right-2.5 h-3.5 w-3.5 -translate-y-1/2 text-gray-500"
-                      />
+                      <ChevronDown aria-hidden className="pointer-events-none absolute top-1/2 right-2.5 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
                     </div>
                     <Button
                       type="button"
@@ -1462,17 +1459,16 @@ export function BrandNaming() {
                   </div>
                 </div>
 
-                <div className="mb-5 rounded-[24px] border border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] p-4 sm:p-5">
-                  <div className="grid w-full min-w-0 grid-cols-1 gap-5 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-stretch">
-                    {/* 좌측: 게이지 + 6칸 미니 표 */}
-                    <div className="flex w-full min-w-0 flex-col items-center gap-4 lg:w-auto">
+                {/* ── 상단 요약 패널: 게이지+미니표 | GO/NO-GO+AI제안 ── */}
+                <div className="mb-7 rounded-2xl border border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] p-5 sm:p-6">
+                  <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+
+                    {/* 좌: 게이지 + 3×2 미니 카드 */}
+                    <div className="flex shrink-0 flex-col items-center gap-4 lg:w-[260px]">
                       <ScoreGauge score={overallScore} r={NAMING_AUDIT_GAUGE_R} scoreSize={60} />
-                      {/* 6항목 미니 카드 — 한 줄(six 컬럼)로 쥐어넣지 않음(겹침 방지): 항상 3×2 */}
-                      <div className="w-full max-w-[min(280px,100%)] shrink-0">
-                        <p className="mb-2 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                          항목별
-                        </p>
-                        <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
+                      <div className="w-full">
+                        <p className="mb-2 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-400">항목별</p>
+                        <div className="grid grid-cols-3 gap-2">
                           {(
                             [
                               { label: "계층", val: dim.hierarchy, pf: true },
@@ -1487,28 +1483,20 @@ export function BrandNaming() {
                             return (
                               <div
                                 key={row.label}
-                                className="flex min-h-[4.75rem] min-w-0 flex-col items-center justify-between gap-1 rounded-xl border border-[rgba(0,0,0,0.06)] bg-white px-1.5 py-2 text-center shadow-sm"
+                                className="flex min-h-[72px] flex-col items-center justify-between gap-1 rounded-xl border border-[rgba(0,0,0,0.06)] bg-white px-1.5 py-2.5 text-center shadow-sm"
                               >
                                 <span
-                                  className={`max-w-full truncate ${
-                                    row.pf ? "brand-pill--hierarchy-legality" : "brand-pill--accent"
-                                  } !px-1.5 !py-0.5 !text-[9px]`}
+                                  className={`max-w-full truncate text-[9px] font-semibold ${row.pf ? "text-[#2f5550]" : "text-[#c14d38]"}`}
                                   title={row.label}
                                 >
                                   {row.label}
                                 </span>
                                 {pf ? (
-                                  <span
-                                    className={
-                                      pf === "PASS"
-                                        ? NAMING_PASS_BADGE_SM + " shrink-0"
-                                        : NAMING_FAIL_TEXT_SM + " shrink-0 py-0.5"
-                                    }
-                                  >
+                                  <span className={pf === "PASS" ? NAMING_PASS_BADGE_SM : NAMING_FAIL_TEXT_SM}>
                                     {pf}
                                   </span>
                                 ) : (
-                                  <span className="font-mono text-[13px] font-semibold tabular-nums leading-none text-[#c14d38]">
+                                  <span className="font-mono text-[14px] font-bold tabular-nums leading-none text-[#c14d38]">
                                     {row.val}
                                   </span>
                                 )}
@@ -1519,33 +1507,32 @@ export function BrandNaming() {
                       </div>
                     </div>
 
-                    {/* 우측: GO/NO-GO 요약 + AI 추가 제안 */}
-                    <div className="flex min-w-0 flex-col gap-4">
+                    {/* 우: GO/NO-GO 카드 + AI 추가 제안 */}
+                    <div className="flex min-w-0 flex-1 flex-col gap-4">
+                      {/* GO/NO-GO 판정 카드 */}
                       <div
-                        className={`flex min-h-0 min-w-0 flex-col justify-between rounded-[22px] border bg-white p-5 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.08)] ${
+                        className={`rounded-2xl border bg-white p-5 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.08)] ${
                           finalVerdict === "go"
-                            ? "border-[rgba(0,0,0,0.06)] border-l-[4px] border-l-[#5a7a5c]"
-                            : "border-[rgba(0,0,0,0.06)] border-l-[4px] border-l-[#FF7F66]"
+                            ? "border-[rgba(0,0,0,0.06)] border-l-4 border-l-[#5a7a5c]"
+                            : "border-[rgba(0,0,0,0.06)] border-l-4 border-l-[#FF7F66]"
                         }`}
                       >
-                        <div className="min-h-0">
-                          <div className="mb-2 flex flex-wrap items-center gap-2">
-                            <span
-                              className={
-                                finalVerdict === "go"
-                                  ? "brand-pill--success !text-[11px] !font-bold"
-                                  : "brand-pill--danger !text-[11px] !font-bold"
-                              }
-                            >
-                              {finalVerdict === "go" ? "GO" : "NO-GO"}
-                            </span>
-                            <h3 className="text-[18px] font-bold text-gray-900">
-                              {finalVerdict === "go" ? "사용 권장" : "재검토 필요"}
-                            </h3>
-                          </div>
-                          <p className="text-[13px] leading-relaxed text-gray-600">{namingResult.finalSummary}</p>
+                        <div className="mb-3 flex flex-wrap items-center gap-2.5">
+                          <span
+                            className={
+                              finalVerdict === "go"
+                                ? "brand-pill--success !text-[11px] !font-bold"
+                                : "brand-pill--danger !text-[11px] !font-bold"
+                            }
+                          >
+                            {finalVerdict === "go" ? "GO" : "NO-GO"}
+                          </span>
+                          <h3 className="text-[17px] font-bold leading-tight text-gray-900">
+                            {finalVerdict === "go" ? "사용 권장" : "재검토 필요"}
+                          </h3>
                         </div>
-                        <div className="mt-3 flex shrink-0 flex-wrap justify-end gap-2 border-t border-[rgba(0,0,0,0.06)] pt-3">
+                        <p className="text-[13px] leading-relaxed text-gray-600">{namingResult.finalSummary}</p>
+                        <div className="mt-4 flex justify-end border-t border-[rgba(0,0,0,0.06)] pt-3">
                           <Button
                             type="button"
                             variant="outline"
@@ -1553,34 +1540,34 @@ export function BrandNaming() {
                             className="h-8 rounded-full border border-gray-200 bg-white text-[12px] font-medium text-gray-800 shadow-sm hover:border-black/20"
                             onClick={() => setAuditLogicModalOpen(true)}
                           >
-                            <FileCheck className="mr-2 h-4 w-4" />
+                            <FileCheck className="mr-2 h-3.5 w-3.5" />
                             상세 논리 보기
                           </Button>
                         </div>
                       </div>
 
-                      <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[20px] border border-[rgba(0,0,0,0.06)] bg-white p-4 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)]">
-                        <p className="mb-0.5 shrink-0 text-[12px] font-semibold text-gray-900">AI 추가 제안 네이밍</p>
-                        <p className="mb-2 shrink-0 text-[11px] leading-snug text-gray-500">
+                      {/* AI 추가 제안 카드 */}
+                      <div className="rounded-2xl border border-[rgba(0,0,0,0.06)] bg-white p-4">
+                        <p className="text-[12px] font-semibold text-gray-900">AI 추가 제안 네이밍</p>
+                        <p className="mt-0.5 mb-3 text-[11px] leading-snug text-gray-500">
                           Gemini가 검수 맥락(가이드·작명 의도)을 반영해, 검수 대상과 다른 대안 이름만 제안합니다.
                         </p>
-                        <div className="min-h-0 max-h-[180px] flex-1 overflow-y-auto text-[13px] leading-relaxed text-gray-600">
+                        <div className="max-h-[160px] overflow-y-auto text-[13px] leading-relaxed text-gray-600">
                           {(namingResult.additionalNamingSuggestions?.length ?? 0) > 0 ? (
                             <ul className="divide-y divide-[rgba(0,0,0,0.05)]">
                               {(namingResult.additionalNamingSuggestions ?? []).map((name, idx) => (
-                                <li key={`${idx}-${name}`} className="py-2 first:pt-0 last:pb-0">
+                                <li key={`${idx}-${name}`} className="py-1.5 first:pt-0 last:pb-0">
                                   {name}
                                 </li>
                               ))}
                             </ul>
                           ) : (namingResult.namingGeminiConfigured ?? geminiConfigured) === false ? (
-                            <p className="text-[13px] leading-relaxed text-gray-700">
-                              서버에 <code className="rounded-md bg-[#F0EFEC] px-1.5 py-0.5 text-[12px] text-gray-800">GEMINI_API_KEY</code>가 없어 Gemini 연동이 꺼져 있습니다. 프로젝트 루트{" "}
-                              <code className="rounded-md bg-[#F0EFEC] px-1.5 py-0.5 text-[12px]">.env</code>에 키를 넣고 서버를 재시작하면 이 영역에 AI 추가 제안이 채워집니다.
+                            <p className="text-[12px] leading-relaxed text-gray-700">
+                              서버에 <code className="rounded bg-[#F0EFEC] px-1.5 py-0.5 text-[11px] text-gray-800">GEMINI_API_KEY</code>가 없어 Gemini 연동이 꺼져 있습니다. <code className="rounded bg-[#F0EFEC] px-1.5 py-0.5 text-[11px]">.env</code>에 키를 넣고 서버를 재시작해 주세요.
                             </p>
                           ) : (
-                            <p className="text-[13px] text-gray-500">
-                              Gemini가 추가 제안을 비웠습니다. 검수명·작명 의도를 구체화한 뒤 검수를 다시 실행해 보세요.
+                            <p className="text-[12px] text-gray-500">
+                              Gemini가 추가 제안을 비웠습니다. 검수명·작명 의도를 구체화한 뒤 재검수해 보세요.
                             </p>
                           )}
                         </div>
@@ -1589,225 +1576,227 @@ export function BrandNaming() {
                   </div>
                 </div>
 
-                <div className="mt-8 flex flex-col gap-8">
+                {/* ── 항목별 상세 평가 ── */}
+                <div className="flex flex-col gap-6">
+
+                  {/* Pass / Fail 항목 (계층 · 적법) */}
                   <div>
-                    <p className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#92b8b1]" />
-                      Pass / Fail 항목
-                    </p>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {[
-                    {
-                      id: "hierarchy" as const,
-                      title: "브랜드 계층 정렬",
-                      weightInOverall: null,
-                      score: dim.hierarchy,
-                      icon: BadgeCheck,
-                      iconWrap: "bg-[#92b8b1]/18 text-[#2f5550]",
-                      body: (
-                        <>
-                          <p className="mb-2 text-[14px] leading-relaxed text-gray-600">{namingResult.hierarchy.message}</p>
-                          <p className="text-[14px] leading-relaxed text-gray-600">{namingResult.hierarchy.details}</p>
-                          {dl.hierarchy ? (
-                            <p className="mt-2 whitespace-pre-wrap border-t border-[rgba(0,0,0,0.06)] pt-2 text-[14px] leading-relaxed text-gray-600">
-                              {dl.hierarchy}
-                            </p>
-                          ) : null}
-                        </>
-                      ),
-                    },
-                    {
-                      id: "legality" as const,
-                      title: "적법성",
-                      weightInOverall: null,
-                      score: dim.legality,
-                      icon: Scale,
-                      iconWrap: "bg-[#92b8b1]/18 text-[#2f5550]",
-                      body: (
-                        <>
-                          <p className="mb-2 text-[14px] leading-relaxed text-gray-600">{namingResult.copyright.verdict}</p>
-                          {namingResult.copyright.risks.slice(0, 4).map((risk, i) => (
-                            <div key={i} className="mb-1 text-[14px] leading-relaxed text-gray-600">
-                              · {risk.type}: {risk.description}
-                            </div>
-                          ))}
-                          {dl.legality ? (
-                            <p className="mt-2 whitespace-pre-wrap border-t border-[rgba(0,0,0,0.06)] pt-2 text-[14px] leading-relaxed text-gray-600">
-                              {dl.legality}
-                            </p>
-                          ) : null}
-                        </>
-                      ),
-                    },
-                  ].map((box) => {
-                    const BoxIcon = box.icon;
-                    const auditPassFail =
-                      box.id === "hierarchy" || box.id === "legality"
-                        ? passFail(typeof box.score === "number" ? box.score : Number(box.score))
-                        : null;
-                    return (
-                    <div
-                      key={box.id}
-                      className="flex h-[320px] flex-col rounded-[22px] border border-[rgba(0,0,0,0.06)] bg-white p-5 shadow-[0_4px_24px_-8px_rgba(0,0,0,0.06)]"
-                    >
-                      <div className="mb-2 flex items-start justify-between gap-2 border-b border-[rgba(0,0,0,0.05)] pb-3">
-                        <div className="flex min-w-0 items-start gap-3">
-                          <div
-                            className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${box.iconWrap}`}
-                          >
-                            <BoxIcon className="h-5 w-5" />
-                          </div>
-                          <h4 className="line-clamp-3 text-[17px] font-semibold leading-tight text-gray-900">{box.title}</h4>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <span className="block pt-1 text-[10px] font-medium leading-snug text-gray-400">
-                            NO-GO 70↓ · 종합 미반영
-                          </span>
-                        </div>
-                      </div>
-                      <div className="min-h-0 flex-1 overflow-y-auto pr-1 leading-relaxed">{box.body}</div>
-                      <div
-                        className={`mt-2 flex w-full shrink-0 items-center gap-2 ${auditPassFail ? "justify-between" : "justify-end"}`}
-                      >
-                        {auditPassFail ? (
-                          <span
-                            className={auditPassFail === "PASS" ? NAMING_PASS_BADGE_MD : NAMING_FAIL_TEXT_MD}
-                          >
-                            {auditPassFail}
-                          </span>
-                        ) : null}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 shrink-0 rounded-full px-3 text-[12px] font-medium text-gray-500 hover:bg-black/[0.04] hover:text-gray-900"
-                          onClick={() => setAuditZoomDimension(box.id)}
-                        >
-                          상세보기
-                        </Button>
-                      </div>
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#92b8b1]" />
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Pass / Fail 항목</p>
+                      <span className="text-[10px] text-gray-400">— NO-GO 70점 미만 · 종합 미반영</span>
                     </div>
-                    );
-                  })}
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      {(
+                        [
+                          {
+                            id: "hierarchy" as const,
+                            title: "브랜드 계층 정렬",
+                            score: dim.hierarchy,
+                            icon: BadgeCheck,
+                            iconWrap: "bg-[rgba(146,184,177,0.18)] text-[#2f5550]",
+                            body: (
+                              <>
+                                <p className="mb-1.5 text-[13px] leading-relaxed text-gray-600">{namingResult.hierarchy.message}</p>
+                                <p className="text-[13px] leading-relaxed text-gray-600">{namingResult.hierarchy.details}</p>
+                                {dl.hierarchy ? (
+                                  <p className="mt-2 whitespace-pre-wrap border-t border-[rgba(0,0,0,0.06)] pt-2 text-[12px] leading-relaxed text-gray-500">
+                                    {dl.hierarchy}
+                                  </p>
+                                ) : null}
+                              </>
+                            ),
+                          },
+                          {
+                            id: "legality" as const,
+                            title: "적법성",
+                            score: dim.legality,
+                            icon: Scale,
+                            iconWrap: "bg-[rgba(146,184,177,0.18)] text-[#2f5550]",
+                            body: (
+                              <>
+                                <p className="mb-1.5 text-[13px] leading-relaxed text-gray-600">{namingResult.copyright.verdict}</p>
+                                {namingResult.copyright.risks.slice(0, 4).map((risk, i) => (
+                                  <p key={i} className="mb-1 text-[13px] leading-relaxed text-gray-600">
+                                    · {risk.type}: {risk.description}
+                                  </p>
+                                ))}
+                                {dl.legality ? (
+                                  <p className="mt-2 whitespace-pre-wrap border-t border-[rgba(0,0,0,0.06)] pt-2 text-[12px] leading-relaxed text-gray-500">
+                                    {dl.legality}
+                                  </p>
+                                ) : null}
+                              </>
+                            ),
+                          },
+                        ] as const
+                      ).map((box) => {
+                        const BoxIcon = box.icon;
+                        const pf = passFail(typeof box.score === "number" ? box.score : Number(box.score));
+                        return (
+                          <div
+                            key={box.id}
+                            className="flex flex-col rounded-2xl border border-[rgba(0,0,0,0.06)] bg-white shadow-[0_2px_16px_-6px_rgba(0,0,0,0.07)]"
+                          >
+                            {/* 카드 헤더 */}
+                            <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.05)] px-5 py-4">
+                              <div className="flex min-w-0 items-center gap-3">
+                                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${box.iconWrap}`}>
+                                  <BoxIcon className="h-4.5 w-4.5" />
+                                </div>
+                                <h4 className="truncate text-[15px] font-semibold text-gray-900">{box.title}</h4>
+                              </div>
+                              <span className={`shrink-0 ${pf === "PASS" ? NAMING_PASS_BADGE_MD : NAMING_FAIL_TEXT_MD}`}>
+                                {pf}
+                              </span>
+                            </div>
+                            {/* 카드 본문 */}
+                            <div className="max-h-[200px] min-h-[80px] overflow-y-auto px-5 py-4">
+                              {box.body}
+                            </div>
+                            {/* 카드 푸터 */}
+                            <div className="flex justify-end border-t border-[rgba(0,0,0,0.05)] px-4 py-3">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 rounded-full px-3 text-[12px] font-medium text-gray-500 hover:bg-black/[0.04] hover:text-gray-900"
+                                onClick={() => setAuditZoomDimension(box.id)}
+                              >
+                                상세보기
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
+
+                  {/* 종합 가중 항목 (창의 · 대중 · 직관 · 확장) */}
                   <div>
-                    <p className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#FF7F66]" />
-                      종합 가중 항목 (창의 30% · 대중 30% · 직관 20% · 확장 20%)
-                    </p>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {[
-                    {
-                      id: "originality" as const,
-                      title: "창의성",
-                      weightLabel: "30%",
-                      score: dim.originality,
-                      icon: Sparkles,
-                      iconWrap: "bg-[#FF7F66]/12 text-[#FF7F66]",
-                      body: (
-                        <>
-                          <p className="mb-2 text-[14px] leading-relaxed text-gray-600">{namingResult.trademark.recommendation}</p>
-                          {namingResult.trademark.conflicts.slice(0, 4).map((c, i) => (
-                            <div key={i} className="mb-1 text-[14px] leading-relaxed text-gray-600">
-                              · {c.name} ({c.similarity}%)
-                            </div>
-                          ))}
-                          {dl.originality ? (
-                            <p className="mt-2 whitespace-pre-wrap border-t border-[rgba(0,0,0,0.06)] pt-2 text-[14px] leading-relaxed text-gray-600">
-                              {dl.originality}
-                            </p>
-                          ) : null}
-                        </>
-                      ),
-                    },
-                    {
-                      id: "publicAppeal" as const,
-                      title: "대중성",
-                      weightLabel: "30%",
-                      score: dim.publicAppeal,
-                      icon: Users,
-                      iconWrap: "bg-[#F0EFEC] text-gray-700",
-                      body: (
-                        <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-gray-600">
-                          {dl.publicAppeal?.trim()
-                            ? dl.publicAppeal
-                            : "대중성(사회·문화적 수용) 근거가 아직 없습니다. 다시 검수하거나 잠시 후 재시도해 주세요."}
-                        </p>
-                      ),
-                    },
-                    {
-                      id: "pronunciation" as const,
-                      title: "직관성",
-                      weightLabel: "20%",
-                      score: dim.pronunciation,
-                      icon: Mic,
-                      iconWrap: "bg-[#FF7F66]/12 text-[#FF7F66]",
-                      body: (
-                        <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-gray-600">
-                          {dl.pronunciationLanguage?.trim()
-                            ? dl.pronunciationLanguage
-                            : "직관성 항목이 아직 없습니다. 다시 검수하거나 잠시 후 재시도해 주세요."}
-                        </p>
-                      ),
-                    },
-                    {
-                      id: "scalability" as const,
-                      title: "확장성",
-                      weightLabel: "20%",
-                      score: dim.scalability,
-                      icon: Layers,
-                      iconWrap: "bg-[#F0EFEC] text-gray-700",
-                      body: (
-                        <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-gray-600">
-                          {dl.scalability?.trim()
-                            ? dl.scalability
-                            : "확장성(브랜드 생태계) 근거가 아직 없습니다. 다시 검수하거나 잠시 후 재시도해 주세요."}
-                        </p>
-                      ),
-                    },
-                  ].map((box) => {
-                    const BoxIcon = box.icon;
-                    return (
-                    <div
-                      key={box.id}
-                      className="flex h-[320px] flex-col rounded-[22px] border border-[rgba(0,0,0,0.06)] bg-white p-5 shadow-[0_4px_24px_-8px_rgba(0,0,0,0.06)]"
-                    >
-                      <div className="mb-2 flex items-start justify-between gap-2 border-b border-[rgba(0,0,0,0.05)] pb-3">
-                        <div className="flex min-w-0 items-start gap-3">
-                          <div
-                            className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${box.iconWrap}`}
-                          >
-                            <BoxIcon className="h-5 w-5" />
-                          </div>
-                          <h4 className="line-clamp-3 text-[17px] font-semibold leading-tight text-gray-900">{box.title}</h4>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <span className="block text-[10px] text-gray-400">종합 {box.weightLabel}</span>
-                          <span className="brand-pill--score-up !mt-0.5 !inline-flex !border-0 !px-2.5 !py-1 !text-[19px] !font-bold tabular-nums leading-none">
-                            {box.score}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="min-h-0 flex-1 overflow-y-auto pr-1 leading-relaxed">{box.body}</div>
-                      <div className="mt-2 flex w-full shrink-0 items-center justify-end gap-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 shrink-0 rounded-full px-3 text-[12px] font-medium text-gray-500 hover:bg-black/[0.04] hover:text-gray-900"
-                          onClick={() => setAuditZoomDimension(box.id)}
-                        >
-                          상세보기
-                        </Button>
-                      </div>
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#FF7F66]" />
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">종합 가중 항목</p>
+                      <span className="text-[10px] text-gray-400">— 창의 30% · 대중 30% · 직관 20% · 확장 20%</span>
                     </div>
-                    );
-                  })}
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      {(
+                        [
+                          {
+                            id: "originality" as const,
+                            title: "창의성",
+                            weightLabel: "30%",
+                            score: dim.originality,
+                            icon: Sparkles,
+                            iconWrap: "bg-[rgba(255,127,102,0.12)] text-[#FF7F66]",
+                            body: (
+                              <>
+                                <p className="mb-1.5 text-[13px] leading-relaxed text-gray-600">{namingResult.trademark.recommendation}</p>
+                                {namingResult.trademark.conflicts.slice(0, 4).map((c, i) => (
+                                  <p key={i} className="mb-1 text-[13px] leading-relaxed text-gray-600">
+                                    · {c.name} ({c.similarity}%)
+                                  </p>
+                                ))}
+                                {dl.originality ? (
+                                  <p className="mt-2 whitespace-pre-wrap border-t border-[rgba(0,0,0,0.06)] pt-2 text-[12px] leading-relaxed text-gray-500">
+                                    {dl.originality}
+                                  </p>
+                                ) : null}
+                              </>
+                            ),
+                          },
+                          {
+                            id: "publicAppeal" as const,
+                            title: "대중성",
+                            weightLabel: "30%",
+                            score: dim.publicAppeal,
+                            icon: Users,
+                            iconWrap: "bg-[#F0EFEC] text-gray-600",
+                            body: (
+                              <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-gray-600">
+                                {dl.publicAppeal?.trim()
+                                  ? dl.publicAppeal
+                                  : "대중성(사회·문화적 수용) 근거가 아직 없습니다. 다시 검수하거나 잠시 후 재시도해 주세요."}
+                              </p>
+                            ),
+                          },
+                          {
+                            id: "pronunciation" as const,
+                            title: "직관성",
+                            weightLabel: "20%",
+                            score: dim.pronunciation,
+                            icon: Mic,
+                            iconWrap: "bg-[rgba(255,127,102,0.12)] text-[#FF7F66]",
+                            body: (
+                              <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-gray-600">
+                                {dl.pronunciationLanguage?.trim()
+                                  ? dl.pronunciationLanguage
+                                  : "직관성 항목이 아직 없습니다. 다시 검수하거나 잠시 후 재시도해 주세요."}
+                              </p>
+                            ),
+                          },
+                          {
+                            id: "scalability" as const,
+                            title: "확장성",
+                            weightLabel: "20%",
+                            score: dim.scalability,
+                            icon: Layers,
+                            iconWrap: "bg-[#F0EFEC] text-gray-600",
+                            body: (
+                              <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-gray-600">
+                                {dl.scalability?.trim()
+                                  ? dl.scalability
+                                  : "확장성(브랜드 생태계) 근거가 아직 없습니다. 다시 검수하거나 잠시 후 재시도해 주세요."}
+                              </p>
+                            ),
+                          },
+                        ] as const
+                      ).map((box) => {
+                        const BoxIcon = box.icon;
+                        return (
+                          <div
+                            key={box.id}
+                            className="flex flex-col rounded-2xl border border-[rgba(0,0,0,0.06)] bg-white shadow-[0_2px_16px_-6px_rgba(0,0,0,0.07)]"
+                          >
+                            {/* 카드 헤더 */}
+                            <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.05)] px-5 py-4">
+                              <div className="flex min-w-0 items-center gap-3">
+                                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${box.iconWrap}`}>
+                                  <BoxIcon className="h-4 w-4" />
+                                </div>
+                                <h4 className="truncate text-[15px] font-semibold text-gray-900">{box.title}</h4>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <span className="block text-[10px] text-gray-400">종합 {box.weightLabel}</span>
+                                <span className="font-mono text-[22px] font-bold tabular-nums leading-tight text-[#c14d38]">
+                                  {box.score}
+                                </span>
+                              </div>
+                            </div>
+                            {/* 카드 본문 */}
+                            <div className="max-h-[200px] min-h-[80px] overflow-y-auto px-5 py-4">
+                              {box.body}
+                            </div>
+                            {/* 카드 푸터 */}
+                            <div className="flex justify-end border-t border-[rgba(0,0,0,0.05)] px-4 py-3">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 rounded-full px-3 text-[12px] font-medium text-gray-500 hover:bg-black/[0.04] hover:text-gray-900"
+                                onClick={() => setAuditZoomDimension(box.id)}
+                              >
+                                상세보기
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
 
+                {/* ── 처음으로 버튼 ── */}
                 <Button
                   type="button"
                   className="brand-btn-primary mt-8 h-14 w-full text-base font-semibold"
