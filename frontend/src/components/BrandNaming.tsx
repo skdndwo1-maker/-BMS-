@@ -216,7 +216,6 @@ function NamingOverviewGrid({
 
 /** 검수 결과 상단 점수 서클 (r·scoreSize 기준 동기 확대) */
 const NAMING_AUDIT_GAUGE_R = 84;
-const NAMING_AUDIT_GAUGE_DIAMETER_PX = (NAMING_AUDIT_GAUGE_R + 16) * 2;
 
 /** 단계별 생성: 기본 단계 라벨(요금제·가격대 라인업) */
 const DEFAULT_TIER_LABELS = ["최고가", "고가", "중가", "저가", "최저가", "라이트"];
