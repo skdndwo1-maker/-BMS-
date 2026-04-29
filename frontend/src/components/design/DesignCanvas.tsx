@@ -678,6 +678,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     content.panelBgRect?.y,
     content.panelBgRect?.width,
     content.panelBgRect?.height,
+    // 저장된 디자인 불러오기 시 잘못된 위치를 보정하기 위해 현재 rect x 감시
+    content.posterTitleRect?.x,
   ]);
 
   // 텍스트가 생겼는데 rect가 없을 때만: 템플릿 비율 기반으로 초기 rect 자동 계산
