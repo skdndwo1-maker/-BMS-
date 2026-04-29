@@ -217,12 +217,6 @@ function NamingOverviewGrid({
 /** 검수 결과 상단 점수 서클 (r·scoreSize 기준 동기 확대) */
 const NAMING_AUDIT_GAUGE_R = 84;
 const NAMING_AUDIT_GAUGE_DIAMETER_PX = (NAMING_AUDIT_GAUGE_R + 16) * 2;
-/** 지름의 3/4만큼 좌측 이동 */
-const NAMING_AUDIT_GAUGE_SHIFT_LEFT_PX = Math.round((NAMING_AUDIT_GAUGE_DIAMETER_PX * 3) / 4);
-/** 지름의 1/6만큼 아래로(기존 -1cm 보정에 가산) */
-const NAMING_AUDIT_GAUGE_SHIFT_DOWN_PX = Math.round(NAMING_AUDIT_GAUGE_DIAMETER_PX / 6);
-/** 지름의 1/8만큼 추가로 아래로(크기 유지·위치만 조정) */
-const NAMING_AUDIT_GAUGE_SHIFT_DOWN_EIGHTH_PX = Math.round(NAMING_AUDIT_GAUGE_DIAMETER_PX / 8);
 
 /** 단계별 생성: 기본 단계 라벨(요금제·가격대 라인업) */
 const DEFAULT_TIER_LABELS = ["최고가", "고가", "중가", "저가", "최저가", "라이트"];
@@ -1469,122 +1463,118 @@ export function BrandNaming() {
                 </div>
 
                 <div className="mb-5 rounded-[24px] border border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] p-4 sm:p-5">
-                <div className="grid w-full min-w-0 grid-cols-1 gap-4 overflow-x-visible lg:min-h-[300px] lg:grid-cols-[auto_minmax(0,1fr)] lg:grid-rows-[auto_auto] lg:items-stretch lg:gap-x-5 lg:gap-y-3">
-                  <div
-                    className="flex h-full min-h-0 w-full min-w-0 items-center justify-center"
-                    style={{
-                      transform: `translate(-${NAMING_AUDIT_GAUGE_SHIFT_LEFT_PX}px, calc(-1cm + ${NAMING_AUDIT_GAUGE_SHIFT_DOWN_PX + NAMING_AUDIT_GAUGE_SHIFT_DOWN_EIGHTH_PX}px))`,
-                    }}
-                  >
-                    <ScoreGauge score={overallScore} r={NAMING_AUDIT_GAUGE_R} scoreSize={60} />
-                  </div>
-                  <div
-                    className={`flex min-h-0 min-w-0 w-full max-w-full flex-col justify-between rounded-[22px] border bg-white p-5 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.08)] lg:max-w-none lg:w-[150%] lg:-ml-[50%] ${
-                      finalVerdict === "go"
-                        ? "border-[rgba(0,0,0,0.06)] border-l-[4px] border-l-[#5a7a5c]"
-                        : "border-[rgba(0,0,0,0.06)] border-l-[4px] border-l-[#FF7F66]"
-                    }`}
-                  >
-                    <div className="min-h-0 flex-1 overflow-y-auto">
-                      <div className="mb-2 flex flex-wrap items-center gap-2">
-                        <span
-                          className={
-                            finalVerdict === "go" ? "brand-pill--success !text-[11px] !font-bold" : "brand-pill--danger !text-[11px] !font-bold"
-                          }
-                        >
-                          {finalVerdict === "go" ? "GO" : "NO-GO"}
-                        </span>
-                        <h3 className="text-[18px] font-bold text-gray-900">
-                          {finalVerdict === "go" ? "사용 권장" : "재검토 필요"}
-                        </h3>
-                      </div>
-                      <p className="text-[13px] leading-relaxed text-gray-600">
-                        {namingResult.finalSummary}
-                      </p>
-                    </div>
-                    <div className="mt-3 flex shrink-0 flex-wrap justify-end gap-2 border-t border-[rgba(0,0,0,0.06)] pt-3">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 rounded-full border border-gray-200 bg-white text-[12px] font-medium text-gray-800 shadow-sm hover:border-black/20"
-                        onClick={() => setAuditLogicModalOpen(true)}
+                  <div className="grid w-full min-w-0 grid-cols-1 gap-5 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-stretch">
+                    {/* 좌측: 게이지 + 6칸 미니 표 */}
+                    <div className="flex w-full min-w-0 flex-col items-center gap-3 lg:w-auto">
+                      <ScoreGauge score={overallScore} r={NAMING_AUDIT_GAUGE_R} scoreSize={60} />
+                      <div
+                        className="grid w-full max-w-full grid-cols-3 items-center gap-x-1 gap-y-1.5 overflow-visible rounded-[18px] border border-[rgba(0,0,0,0.05)] bg-white px-2 py-2 text-center shadow-sm sm:grid-cols-6 sm:gap-x-0.5"
+                        style={{ width: NAMING_AUDIT_GAUGE_DIAMETER_PX, maxWidth: "100%" }}
                       >
-                        <FileCheck className="mr-2 h-4 w-4" />
-                        상세 논리 보기
-                      </Button>
+                        {(
+                          [
+                            { label: "계층", val: dim.hierarchy, pf: true },
+                            { label: "적법", val: dim.legality, pf: true },
+                            { label: "창의", val: dim.originality, pf: false },
+                            { label: "대중", val: dim.publicAppeal, pf: false },
+                            { label: "직관", val: dim.pronunciation, pf: false },
+                            { label: "확장", val: dim.scalability, pf: false },
+                          ] as const
+                        ).map((row) => {
+                          const pf = row.pf ? passFail(Number(row.val)) : null;
+                          return (
+                            <div
+                              key={row.label}
+                              className="flex min-w-0 flex-col items-center justify-center gap-0.5 leading-none sm:flex-row sm:gap-1.5"
+                            >
+                              <span
+                                className={`${
+                                  row.pf ? "brand-pill--hierarchy-legality" : "brand-pill--accent"
+                                } !px-2 !py-0.5 !text-[9px] sm:!text-[10px] max-w-full truncate`}
+                              >
+                                {row.label}
+                              </span>
+                              {pf ? (
+                                <span className={pf === "PASS" ? NAMING_PASS_BADGE_SM : NAMING_FAIL_TEXT_SM}>{pf}</span>
+                              ) : (
+                                <span className="brand-pill--score-up !px-1.5 !text-[12.1px] !font-semibold sm:!text-[13.2px]">
+                                  {row.val}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                  <div
-                    className="flex min-h-0 w-full min-w-0 items-center justify-center"
-                    style={{ transform: `translateX(-${NAMING_AUDIT_GAUGE_SHIFT_LEFT_PX}px)` }}
-                  >
-                    <div
-                      className="grid w-full max-w-full shrink-0 grid-cols-3 items-center gap-x-1 gap-y-1.5 overflow-visible rounded-[18px] border border-[rgba(0,0,0,0.05)] bg-white px-1 py-2 text-center shadow-sm sm:grid-cols-6 sm:gap-x-0.5"
-                      style={{ width: NAMING_AUDIT_GAUGE_DIAMETER_PX, maxWidth: "100%" }}
-                    >
-                      {(
-                        [
-                          { label: "계층", val: dim.hierarchy, pf: true },
-                          { label: "적법", val: dim.legality, pf: true },
-                          { label: "창의", val: dim.originality, pf: false },
-                          { label: "대중", val: dim.publicAppeal, pf: false },
-                          { label: "직관", val: dim.pronunciation, pf: false },
-                          { label: "확장", val: dim.scalability, pf: false },
-                        ] as const
-                      ).map((row) => {
-                        const pf = row.pf ? passFail(Number(row.val)) : null;
-                        return (
-                        <div
-                          key={row.label}
-                          className="flex min-w-0 flex-col items-center justify-center gap-0.5 leading-none sm:flex-row sm:gap-1.5"
-                        >
-                          <span
-                            className={`${
-                              row.pf ? "brand-pill--hierarchy-legality" : "brand-pill--accent"
-                            } !px-2 !py-0.5 !text-[9px] sm:!text-[10px] max-w-full truncate`}
-                          >
-                            {row.label}
-                          </span>
-                          {pf ? (
-                            <span className={pf === "PASS" ? NAMING_PASS_BADGE_SM : NAMING_FAIL_TEXT_SM}>{pf}</span>
-                          ) : (
-                            <span className="brand-pill--score-up !px-1.5 !text-[12.1px] !font-semibold sm:!text-[13.2px]">
-                              {row.val}
+
+                    {/* 우측: GO/NO-GO 요약 + AI 추가 제안 */}
+                    <div className="flex min-w-0 flex-col gap-4">
+                      <div
+                        className={`flex min-h-0 min-w-0 flex-col justify-between rounded-[22px] border bg-white p-5 shadow-[0_2px_16px_-6px_rgba(0,0,0,0.08)] ${
+                          finalVerdict === "go"
+                            ? "border-[rgba(0,0,0,0.06)] border-l-[4px] border-l-[#5a7a5c]"
+                            : "border-[rgba(0,0,0,0.06)] border-l-[4px] border-l-[#FF7F66]"
+                        }`}
+                      >
+                        <div className="min-h-0">
+                          <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <span
+                              className={
+                                finalVerdict === "go"
+                                  ? "brand-pill--success !text-[11px] !font-bold"
+                                  : "brand-pill--danger !text-[11px] !font-bold"
+                              }
+                            >
+                              {finalVerdict === "go" ? "GO" : "NO-GO"}
                             </span>
+                            <h3 className="text-[18px] font-bold text-gray-900">
+                              {finalVerdict === "go" ? "사용 권장" : "재검토 필요"}
+                            </h3>
+                          </div>
+                          <p className="text-[13px] leading-relaxed text-gray-600">{namingResult.finalSummary}</p>
+                        </div>
+                        <div className="mt-3 flex shrink-0 flex-wrap justify-end gap-2 border-t border-[rgba(0,0,0,0.06)] pt-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 rounded-full border border-gray-200 bg-white text-[12px] font-medium text-gray-800 shadow-sm hover:border-black/20"
+                            onClick={() => setAuditLogicModalOpen(true)}
+                          >
+                            <FileCheck className="mr-2 h-4 w-4" />
+                            상세 논리 보기
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[20px] border border-[rgba(0,0,0,0.06)] bg-white p-4 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)]">
+                        <p className="mb-0.5 shrink-0 text-[12px] font-semibold text-gray-900">AI 추가 제안 네이밍</p>
+                        <p className="mb-2 shrink-0 text-[11px] leading-snug text-gray-500">
+                          Gemini가 검수 맥락(가이드·작명 의도)을 반영해, 검수 대상과 다른 대안 이름만 제안합니다.
+                        </p>
+                        <div className="min-h-0 max-h-[180px] flex-1 overflow-y-auto text-[13px] leading-relaxed text-gray-600">
+                          {(namingResult.additionalNamingSuggestions?.length ?? 0) > 0 ? (
+                            <ul className="divide-y divide-[rgba(0,0,0,0.05)]">
+                              {(namingResult.additionalNamingSuggestions ?? []).map((name, idx) => (
+                                <li key={`${idx}-${name}`} className="py-2 first:pt-0 last:pb-0">
+                                  {name}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (namingResult.namingGeminiConfigured ?? geminiConfigured) === false ? (
+                            <p className="text-[13px] leading-relaxed text-gray-700">
+                              서버에 <code className="rounded-md bg-[#F0EFEC] px-1.5 py-0.5 text-[12px] text-gray-800">GEMINI_API_KEY</code>가 없어 Gemini 연동이 꺼져 있습니다. 프로젝트 루트{" "}
+                              <code className="rounded-md bg-[#F0EFEC] px-1.5 py-0.5 text-[12px]">.env</code>에 키를 넣고 서버를 재시작하면 이 영역에 AI 추가 제안이 채워집니다.
+                            </p>
+                          ) : (
+                            <p className="text-[13px] text-gray-500">
+                              Gemini가 추가 제안을 비웠습니다. 검수명·작명 의도를 구체화한 뒤 검수를 다시 실행해 보세요.
+                            </p>
                           )}
                         </div>
-                        );
-                      })}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex h-full min-h-0 min-w-0 w-full max-w-full flex-col overflow-hidden rounded-[20px] border border-[rgba(0,0,0,0.06)] bg-white p-4 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] lg:max-w-none lg:w-[150%] lg:-ml-[50%]">
-                    <p className="mb-0.5 shrink-0 text-[12px] font-semibold text-gray-900">AI 추가 제안 네이밍</p>
-                    <p className="mb-2 shrink-0 text-[11px] leading-snug text-gray-500">
-                      Gemini가 검수 맥락(가이드·작명 의도)을 반영해, 검수 대상과 다른 대안 이름만 제안합니다.
-                    </p>
-                    <div className="min-h-0 flex-1 overflow-y-auto text-[13px] leading-relaxed text-gray-600">
-                      {(namingResult.additionalNamingSuggestions?.length ?? 0) > 0 ? (
-                        <ul className="divide-y divide-[rgba(0,0,0,0.05)]">
-                          {(namingResult.additionalNamingSuggestions ?? []).map((name, idx) => (
-                            <li key={`${idx}-${name}`} className="py-2 first:pt-0 last:pb-0">
-                              {name}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (namingResult.namingGeminiConfigured ?? geminiConfigured) === false ? (
-                        <p className="text-[13px] leading-relaxed text-gray-700">
-                          서버에 <code className="rounded-md bg-[#F0EFEC] px-1.5 py-0.5 text-[12px] text-gray-800">GEMINI_API_KEY</code>가 없어 Gemini 연동이 꺼져 있습니다. 프로젝트 루트{" "}
-                          <code className="rounded-md bg-[#F0EFEC] px-1.5 py-0.5 text-[12px]">.env</code>에 키를 넣고 서버를 재시작하면 이 영역에 AI 추가 제안이 채워집니다.
-                        </p>
-                      ) : (
-                        <p className="text-[13px] text-gray-500">
-                          Gemini가 추가 제안을 비웠습니다. 검수명·작명 의도를 구체화한 뒤 검수를 다시 실행해 보세요.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
                 </div>
 
                 <div className="mt-8 flex flex-col gap-8">
