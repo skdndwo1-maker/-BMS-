@@ -1,6 +1,6 @@
 import { APP_DISPLAY_NAME } from "@/constants/appBranding";
 
-const wordmark = '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif';
+const wordmark = "var(--font-family-base)";
 
 type AxisBrandTitleProps = {
   /** Option / TemplateGallery와 동일: AXIS(대문자·자간) + 부제 (예: Brand Contents Manager, 브랜드 그래픽 제작) */
@@ -14,9 +14,10 @@ type AxisBrandTitleProps = {
  * 이미지 로고 없이, 옵션·그래픽 제작 페이지와 동일한 AXIS 텍스트 표기.
  */
 export function AxisBrandTitle({ subtitle, className = "", compact = false }: AxisBrandTitleProps) {
-  /** 기존 tracking-[0.14em]/[0.12em] 간격 중 A-X, X-I만 반으로 줄임 (I-S는 종전 간격 유지). */
-  const gapFull = compact ? "0.12em" : "0.14em";
-  const gapHalf = compact ? "0.06em" : "0.07em";
+  /* A–X: gapTight; X–I: gapMid; I–S: gapTight × 1.5 */
+  const gapMid = compact ? "0.06em" : "0.07em";
+  const gapTight = compact ? "0.03em" : "0.035em";
+  const gapIs = compact ? "0.045em" : "0.0525em";
   const lm = APP_DISPLAY_NAME.toUpperCase();
   const letters = lm.split("");
   const axisTightWordmark = lm === "AXIS" && letters.length === 4;
@@ -41,7 +42,7 @@ export function AxisBrandTitle({ subtitle, className = "", compact = false }: Ax
             <span
               key={`${ch}-${i}`}
               style={{
-                marginLeft: i === 0 ? 0 : i <= 2 ? gapHalf : gapFull,
+                marginLeft: i === 0 ? 0 : i === 1 ? gapTight : i === 2 ? gapMid : gapIs,
               }}
             >
               {ch}

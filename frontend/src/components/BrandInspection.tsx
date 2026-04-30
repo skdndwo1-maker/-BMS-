@@ -340,7 +340,7 @@ export function BrandInspection() {
   const currentStepIndex = getStepIndex(currentStep);
 
   return (
-    <div className="min-h-screen bg-[#F8F7F4] font-[family-name:var(--font-inter,Inter),system-ui,sans-serif]">
+    <div className="min-h-screen bg-[#F8F7F4] font-sans">
       <header className="sticky top-0 z-10 border-b border-[rgba(0,0,0,0.06)] bg-white/95 shadow-[0_4px_24px_-6px_rgba(0,0,0,0.06)] backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">

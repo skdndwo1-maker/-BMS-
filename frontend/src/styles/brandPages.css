@@ -1,10 +1,10 @@
 /* 브랜드 서브페이지 — Option / TemplateGallery / Login 톤 정렬
- * ( Inter는 fonts.css 전역) */
+ * (Inter·Pretendard·Noto는 fonts.css + main 번들) */
 
 .brand-app-shell {
   min-height: 100vh;
   background: #f5f3f0;
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-family-base);
 }
 
 .brand-surface {

@@ -34,7 +34,7 @@ const PAL = {
 } as const;
 
 const pageFont: CSSProperties = {
-  fontFamily: '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif',
+  fontFamily: "var(--font-family-base)",
 };
 
 const categoryIconMap: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {

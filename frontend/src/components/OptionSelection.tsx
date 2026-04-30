@@ -48,7 +48,7 @@ const PALETTE = {
 } as const;
 
 const pageFont: CSSProperties = {
-  fontFamily: '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif',
+  fontFamily: "var(--font-family-base)",
 };
 
 /** Coral bullet — ref ~6–8px circle */

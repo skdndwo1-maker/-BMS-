@@ -18,7 +18,7 @@ const PALETTE = {
 } as const;
 
 const font: React.CSSProperties = {
-  fontFamily: '"Inter", system-ui, -apple-system, sans-serif',
+  fontFamily: "var(--font-family-base)",
 };
 
 export function LoginScreen() {
