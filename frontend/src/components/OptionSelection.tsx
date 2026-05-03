@@ -23,6 +23,7 @@ import { apiUrl } from "@/lib/apiUrl";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { APP_DISPLAY_NAME } from "@/constants/appBranding";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
+import { GlobalBrandNav } from "@/components/GlobalBrandNav";
 
 /** Soft UI ref: warm cream bg, salmon coral, black CTAs, large radius, soft lift shadows */
 const PALETTE = {
@@ -290,6 +291,7 @@ export function OptionSelection() {
               minWidth: 0,
               flex: "1 1 auto",
               paddingRight: "12px",
+              justifyContent: "flex-start",
             }}
           >
             <AxisBrandTitle subtitle="Brand Contents Manager" />
@@ -358,6 +360,7 @@ export function OptionSelection() {
             </button>
           </div>
         </div>
+        <GlobalBrandNav className="bg-[#FAFAFA]" innerClassName="max-w-[1080px] px-6" />
       </header>
 
       <main

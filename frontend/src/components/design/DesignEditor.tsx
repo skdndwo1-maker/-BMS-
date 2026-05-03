@@ -42,8 +42,12 @@ import {
   type DesignListItem,
 } from "@/lib/designsApi";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
+import { GlobalBrandNav } from "@/components/GlobalBrandNav";
+import { registerGlobalNavPersist } from "@/lib/globalNavPersistence";
 
 const ExportDialog = lazy(() => import("./ExportDialog").then((m) => ({ default: m.ExportDialog })));
+
+const DESIGN_EDITOR_NAV_DRAFT_KEY = "brandAxis:designEditorNavDraft";
 
 /** RCS 카드·우측 목업(높이 동기화) 기준 표시 — 10% 축소 시 0.9 */
 const RCS_WORKSPACE_DISPLAY_SCALE = 0.9;
@@ -101,7 +105,8 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
    * 이미 캔버스에 있는 동일 데이터를 서버에서 또 받아와 "불러오기 완료" 토스트가 뜨는 것을 막는다.
    */
   const lastLoadedIdRef = useRef<string | null>(null);
-
+  const serverUpdatedAtRef = useRef<string | null>(null);
+  const attemptedNoUrlDraftRef = useRef(false);
 
   function formatDefaultDesignName(): string {
     const base = template?.name?.trim() || (actualTemplateId ?? "디자인");
@@ -274,6 +279,16 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   const [showExportDialog,     setShowExportDialog]     = useState(false);
   const [showPreview,          setShowPreview]           = useState(false);
   const [zoom,                 setZoom]                  = useState(getInitialZoom());
+  const contentSnapRef = useRef(content);
+  contentSnapRef.current = content;
+  const designIdSnapRef = useRef(designId);
+  designIdSnapRef.current = designId;
+  const designNameSnapRef = useRef(designName);
+  designNameSnapRef.current = designName;
+  const zoomSnapRef = useRef(zoom);
+  zoomSnapRef.current = zoom;
+  const searchParamsStrRef = useRef(searchParams.toString());
+  searchParamsStrRef.current = searchParams.toString();
   /** VI 12분할 정렬 그리드 (캔버스 위 오버레이) */
   const [showViGrid, setShowViGrid] = useState(true);
   const prevShowViGridRef = useRef<boolean>(true);
@@ -331,10 +346,38 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
           return;
         }
         if (cancelled) return;
+        serverUpdatedAtRef.current = row.updated_at;
         lastLoadedIdRef.current = row.id;
         setDesignId(row.id);
         setDesignName(row.name || "");
         setContentWithHistory(() => row.canvas_data as DesignContent);
+        try {
+          const rawDraft = sessionStorage.getItem(DESIGN_EDITOR_NAV_DRAFT_KEY);
+          if (rawDraft) {
+            const d = JSON.parse(rawDraft) as {
+              v?: number;
+              templateId?: string;
+              designId?: string | null;
+              designName?: string;
+              content?: DesignContent;
+              zoom?: number;
+              savedAt?: string;
+            };
+            if (
+              d.v === 1 &&
+              d.templateId === actualTemplateId &&
+              d.designId === row.id &&
+              d.savedAt &&
+              Date.parse(d.savedAt) > Date.parse(row.updated_at)
+            ) {
+              if (d.designName != null && d.designName !== "") setDesignName(d.designName);
+              setContentWithHistory(() => d.content as DesignContent);
+              if (typeof d.zoom === "number" && Number.isFinite(d.zoom)) setZoom(d.zoom);
+            }
+          }
+        } catch {
+          /* ignore */
+        }
         toast.success("불러오기 완료");
       } catch (e) {
         console.error(e);
@@ -355,6 +398,74 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sb, actualTemplateId, searchParams]);
+
+  useEffect(() => {
+    if (!actualTemplateId) return;
+    return registerGlobalNavPersist(() => {
+      try {
+        const sp = new URLSearchParams(searchParamsStrRef.current);
+        sessionStorage.setItem(
+          DESIGN_EDITOR_NAV_DRAFT_KEY,
+          JSON.stringify({
+            v: 1,
+            savedAt: new Date().toISOString(),
+            templateId: actualTemplateId,
+            designId: designIdSnapRef.current,
+            designName: designNameSnapRef.current,
+            content: contentSnapRef.current,
+            zoom: zoomSnapRef.current,
+            urlDesignId: sp.get("designId")?.trim() || null,
+            serverUpdatedAt: serverUpdatedAtRef.current,
+          }),
+        );
+      } catch (e) {
+        console.warn("[designEditorNavDraft]", e);
+      }
+    });
+  }, [actualTemplateId]);
+
+  useEffect(() => {
+    attemptedNoUrlDraftRef.current = false;
+  }, [actualTemplateId]);
+
+  useEffect(() => {
+    if (!template) return;
+    if (bootBusy) return;
+    const urlId = searchParams.get("designId")?.trim();
+    if (urlId) return;
+    if (attemptedNoUrlDraftRef.current) return;
+    attemptedNoUrlDraftRef.current = true;
+    try {
+      const raw = sessionStorage.getItem(DESIGN_EDITOR_NAV_DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw) as {
+        v?: number;
+        templateId?: string;
+        designId?: string | null;
+        designName?: string;
+        content?: DesignContent;
+        zoom?: number;
+      };
+      if (d.v !== 1 || d.templateId !== actualTemplateId) return;
+      if (d.designId) {
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            next.set("designId", d.designId!);
+            return next;
+          },
+          { replace: true },
+        );
+        return;
+      }
+      setDesignId(null);
+      setDesignName(d.designName ?? "");
+      if (typeof d.zoom === "number" && Number.isFinite(d.zoom)) setZoom(d.zoom);
+      setContentWithHistory(() => d.content as DesignContent);
+    } catch {
+      /* ignore */
+    }
+  }, [template, bootBusy, actualTemplateId, searchParams, setSearchParams, setContentWithHistory]);
 
   /**
    * 자동 history 도입 이후에는 별도 호출이 불필요. (호환을 위해 noop으로 유지)
@@ -458,6 +569,12 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
       lastLoadedIdRef.current = row.id;
       setDesignId(row.id);
       setDesignName(row.name || name);
+      serverUpdatedAtRef.current = row.updated_at;
+      try {
+        sessionStorage.removeItem(DESIGN_EDITOR_NAV_DRAFT_KEY);
+      } catch {
+        /* ignore */
+      }
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -488,6 +605,12 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
         thumbnailUrl,
       });
       setDesignName(row.name || name);
+      serverUpdatedAtRef.current = row.updated_at;
+      try {
+        sessionStorage.removeItem(DESIGN_EDITOR_NAV_DRAFT_KEY);
+      } catch {
+        /* ignore */
+      }
       toast.success("덮어쓰기 완료");
     } finally {
       setSaveBusy(false);
@@ -695,15 +818,18 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
         {/* ── Header ──────────────────────────────────────────────── */}
         <header className="flex-shrink-0 bg-white border-b border-gray-200">
           <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+            <div className="flex min-w-0 flex-1 items-center gap-4">
+              <div className="min-w-0 shrink">
+                <AxisBrandTitle subtitle="브랜드 그래픽 제작" compact />
+              </div>
+              <Separator orientation="vertical" className="h-6 shrink-0" />
+              <Button variant="ghost" size="sm" className="shrink-0" onClick={() => navigate(-1)}>
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 뒤로가기
               </Button>
-              <Separator orientation="vertical" className="h-6" />
-              <div>
-                <AxisBrandTitle subtitle="브랜드 그래픽 제작" compact />
-                <p className="mt-1 text-sm font-semibold text-gray-900">{template.name}</p>
+              <Separator orientation="vertical" className="h-6 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900">{template.name}</p>
                 <p className="text-xs text-gray-500">
                   {effectiveCanvasSize.width} × {effectiveCanvasSize.height} {effectiveCanvasSize.unit}
                 </p>
@@ -764,6 +890,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
               </Button>
             </div>
           </div>
+          <GlobalBrandNav className="border-t border-b-0 bg-white" innerClassName="w-full px-4 sm:px-6" />
         </header>
 
         {/* ── Main Editor ─────────────────────────────────────────── */}

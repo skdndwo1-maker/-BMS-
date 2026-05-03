@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Download,
   FileImage,
@@ -8,7 +7,6 @@ import {
   Image as ImageIcon,
   Type,
   Search,
-  ArrowLeft,
   Eye,
   FolderOpen,
   Star,
@@ -24,6 +22,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
+import { GlobalBrandNav } from "@/components/GlobalBrandNav";
+import { registerGlobalNavPersist } from "@/lib/globalNavPersistence";
 import {
   deleteLibraryAsset,
   extractExtensionLabel,
@@ -72,6 +72,8 @@ const categories: Array<{
   { id: "guide", label: "가이드라인", icon: FolderOpen },
 ];
 
+const LIBRARY_NAV_DRAFT_KEY = "brandAxis:libraryNavDraft";
+
 function rowToAsset(row: LibraryAssetRow): Asset {
   const tags = Array.isArray(row.tags) ? row.tags : [];
   const formatsRaw = Array.isArray(row.formats) ? row.formats : [];
@@ -96,7 +98,6 @@ function rowToAsset(row: LibraryAssetRow): Asset {
 }
 
 export function BrandLibrary() {
-  const navigate = useNavigate();
   const sb = useMemo(() => {
     try {
       return getSupabaseClient();
@@ -111,6 +112,11 @@ export function BrandLibrary() {
   const [sortBy, setSortBy] = useState<SortBy>("recent");
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+
+  const selectedCategoryRef = useRef(selectedCategory);
+  selectedCategoryRef.current = selectedCategory;
+  const favoritesOnlyRef = useRef(favoritesOnly);
+  favoritesOnlyRef.current = favoritesOnly;
 
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
@@ -140,6 +146,42 @@ export function BrandLibrary() {
     if (sb) void isCurrentUserAdmin(sb).then(setIsAdmin);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sb]);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(LIBRARY_NAV_DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw) as {
+        v?: number;
+        selectedCategory?: LibraryFilterCategory;
+        favoritesOnly?: boolean;
+      };
+      if (d.v !== 1) return;
+      if (d.selectedCategory && categories.some((c) => c.id === d.selectedCategory)) {
+        setSelectedCategory(d.selectedCategory);
+      }
+      if (typeof d.favoritesOnly === "boolean") setFavoritesOnly(d.favoritesOnly);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    return registerGlobalNavPersist(() => {
+      try {
+        sessionStorage.setItem(
+          LIBRARY_NAV_DRAFT_KEY,
+          JSON.stringify({
+            v: 1,
+            selectedCategory: selectedCategoryRef.current,
+            favoritesOnly: favoritesOnlyRef.current,
+          }),
+        );
+      } catch (e) {
+        console.warn("[libraryNavDraft]", e);
+      }
+    });
+  }, []);
 
   const categoryCounts = useMemo(() => {
     const counts: Record<LibraryFilterCategory, number> = {
@@ -245,22 +287,15 @@ function getThumbnailSurface(category: string): string {
   };
 
   return (
-    <div className="brand-app-shell flex min-h-screen">
-      <aside className="flex w-64 shrink-0 flex-col border-r border-[rgba(0,0,0,0.06)] bg-[#ECE9E4] sm:w-72">
-        <div className="border-b border-[rgba(0,0,0,0.06)] p-5 sm:p-6">
-          <button
-            type="button"
-            onClick={() => navigate("/options")}
-            className="mb-4 flex items-center gap-2 text-[13px] font-medium text-[#6B6B6B] transition-colors hover:text-[#1A1A1A]"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span className="text-sm">홈으로</span>
-          </button>
-          <div className="mb-1">
-            <AxisBrandTitle subtitle="브랜드 라이브러리" />
-          </div>
+    <div className="brand-app-shell flex min-h-screen flex-col">
+      <header className="sticky top-0 z-20 shrink-0 border-b border-[rgba(0,0,0,0.06)] bg-white/95 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] backdrop-blur-sm">
+        <div className="border-b border-[rgba(0,0,0,0.06)] px-4 py-3 sm:px-6">
+          <AxisBrandTitle subtitle="브랜드 라이브러리" />
         </div>
-
+        <GlobalBrandNav className="border-0 border-t-0 bg-transparent" innerClassName="w-full px-4 sm:px-6" />
+      </header>
+      <div className="flex min-h-0 flex-1">
+      <aside className="flex w-64 shrink-0 flex-col border-r border-[rgba(0,0,0,0.06)] bg-[#ECE9E4] sm:w-72">
         <div className="flex-1 overflow-y-auto p-3 sm:p-4">
           <div className="space-y-1">
             {categories.map((category) => {
@@ -623,6 +658,7 @@ function getThumbnailSurface(category: string): string {
           )}
         </div>
       </main>
+      </div>
 
       {selectedAsset && (
         <div

@@ -2,7 +2,6 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search,
-  ArrowLeft,
   FileImage,
   RectangleHorizontal,
   LayoutTemplate,
@@ -14,6 +13,7 @@ import {
 } from "lucide-react";
 import { templates as designTemplates, templateCategories } from "@/design/templates";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
+import { GlobalBrandNav } from "@/components/GlobalBrandNav";
 
 type MediaType = "online" | "offline";
 
@@ -136,37 +136,6 @@ export function TemplateGallery() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0, flex: "1 1 auto" }}>
-            <button
-              type="button"
-              onClick={() => navigate("/options")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: 13,
-                fontWeight: 500,
-                color: PAL.muted,
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                padding: "8px 10px",
-                borderRadius: 12,
-                flexShrink: 0,
-                transition: "color 0.15s, background 0.15s",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,0,0,0.04)";
-                (e.currentTarget as HTMLButtonElement).style.color = PAL.ink;
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-                (e.currentTarget as HTMLButtonElement).style.color = PAL.muted;
-              }}
-            >
-              <ArrowLeft style={{ width: 18, height: 18 }} />
-              <span>옵션으로</span>
-            </button>
-            <div style={{ width: 1, height: 24, background: PAL.borderSubtle, flexShrink: 0 }} aria-hidden />
             <div
               style={{
                 display: "flex",
@@ -210,6 +179,7 @@ export function TemplateGallery() {
             내 디자인
           </button>
         </div>
+        <GlobalBrandNav className="bg-[#FAFAFA]" innerClassName="max-w-[1200px] px-6" />
       </header>
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px 40px" }}>

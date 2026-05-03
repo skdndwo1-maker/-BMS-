@@ -1,12 +1,12 @@
 import { Fragment, useState, useRef, useEffect, type ChangeEvent } from "react";
-import { useNavigate } from "react-router-dom";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
+import { GlobalBrandNav } from "@/components/GlobalBrandNav";
+import { registerGlobalNavPersist } from "@/lib/globalNavPersistence";
 import {
   Upload,
   FileText,
   CheckCircle2,
   Sparkles,
-  ArrowLeft,
   ArrowUp,
   Download,
   Loader2,
@@ -327,6 +327,8 @@ function tierPackageToProposal(tp: TierPackageEvaluation): BrandNamingProposal {
 /** 생성 모드 평가 점수 바 — 대안 1~4 카드 공통: 고정 높이, 트랙·채움 색 통일 */
 const NAMING_EVAL_PROGRESS_HEIGHT_PX = 8;
 
+const NAMING_NAV_DRAFT_KEY = "brandAxis:namingNavDraft";
+
 const NAMING_TIER_LEGAL_TRACK = "bg-[#92b8b1]/14";
 const NAMING_TIER_LEGAL_FILL = "bg-[#92b8b1]";
 
@@ -511,9 +513,6 @@ function ProposalDimensionBars({ proposal }: { proposal: BrandNamingProposal }) 
 // Main Component
 // ───────────────────────────────────────────
 export function BrandNaming() {
-  const navigate = useNavigate();
-
-  /** 검수 모드 전용: 위·아래 분리 입력 */
   const [auditName, setAuditName] = useState("");
   const [auditOverview, setAuditOverview] = useState<NamingOverviewFields>(EMPTY_NAMING_OVERVIEW);
   const [generateOverview, setGenerateOverview] = useState<NamingOverviewFields>(EMPTY_NAMING_OVERVIEW);
@@ -546,6 +545,92 @@ export function BrandNaming() {
   const referenceInputRef = useRef<HTMLInputElement>(null);
   const namingStepTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const runTokenRef = useRef(0);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(NAMING_NAV_DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw) as {
+        v?: number;
+        auditName?: string;
+        auditOverview?: NamingOverviewFields;
+        generateOverview?: NamingOverviewFields;
+        auditCategoryMajor?: NamingAuditMajor | null;
+        auditCategoryMinor?: string;
+        namingMode?: "generate" | "audit";
+        generateStyle?: "general" | "tiered";
+        tierStepCount?: number;
+        tierLabels?: string[];
+        selectedGuidelineLibrary?: string;
+        namingExportFormat?: ExportFormat;
+      };
+      if (d.v !== 1) return;
+      if (typeof d.auditName === "string") setAuditName(d.auditName);
+      if (d.auditOverview && typeof d.auditOverview === "object") {
+        setAuditOverview({ ...EMPTY_NAMING_OVERVIEW, ...d.auditOverview });
+      }
+      if (d.generateOverview && typeof d.generateOverview === "object") {
+        setGenerateOverview({ ...EMPTY_NAMING_OVERVIEW, ...d.generateOverview });
+      }
+      if (d.auditCategoryMajor != null && (NAMING_AUDIT_MAJORS as readonly string[]).includes(d.auditCategoryMajor)) {
+        setAuditCategoryMajor(d.auditCategoryMajor as NamingAuditMajor);
+      }
+      if (typeof d.auditCategoryMinor === "string") setAuditCategoryMinor(d.auditCategoryMinor);
+      if (d.namingMode === "generate" || d.namingMode === "audit") setNamingMode(d.namingMode);
+      if (d.generateStyle === "general" || d.generateStyle === "tiered") setGenerateStyle(d.generateStyle);
+      if (typeof d.tierStepCount === "number" && Number.isFinite(d.tierStepCount)) {
+        const n = Math.min(6, Math.max(1, Math.round(d.tierStepCount)));
+        setTierStepCount(n);
+      }
+      if (Array.isArray(d.tierLabels) && d.tierLabels.every((x) => typeof x === "string")) {
+        setTierLabels(d.tierLabels);
+      }
+      if (typeof d.selectedGuidelineLibrary === "string") setSelectedGuidelineLibrary(d.selectedGuidelineLibrary);
+      if (d.namingExportFormat === "pdf" || d.namingExportFormat === "png" || d.namingExportFormat === "jpeg") {
+        setNamingExportFormat(d.namingExportFormat);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    return registerGlobalNavPersist(() => {
+      try {
+        sessionStorage.setItem(
+          NAMING_NAV_DRAFT_KEY,
+          JSON.stringify({
+            v: 1,
+            auditName,
+            auditOverview,
+            generateOverview,
+            auditCategoryMajor,
+            auditCategoryMinor,
+            namingMode,
+            generateStyle,
+            tierStepCount,
+            tierLabels,
+            selectedGuidelineLibrary,
+            namingExportFormat,
+          }),
+        );
+      } catch (e) {
+        console.warn("[namingNavDraft]", e);
+      }
+    });
+  }, [
+    auditName,
+    auditOverview,
+    generateOverview,
+    auditCategoryMajor,
+    auditCategoryMinor,
+    namingMode,
+    generateStyle,
+    tierStepCount,
+    tierLabels,
+    selectedGuidelineLibrary,
+    namingExportFormat,
+  ]);
 
   useEffect(() => {
     void fetchHealth()
@@ -774,24 +859,12 @@ export function BrandNaming() {
       <header className="sticky top-0 z-10 border-b border-[rgba(0,0,0,0.06)] bg-white shadow-[0_4px_24px_-6px_rgba(0,0,0,0.08),0_2px_10px_-4px_rgba(0,0,0,0.04)]">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                type="button"
-                onClick={() => navigate("/options")}
-                className="h-auto rounded-[12px] px-2.5 py-2 text-[13px] font-medium text-[#6B6B6B] hover:bg-black/[0.04] hover:text-[#1A1A1A]"
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                옵션으로
-              </Button>
-              <div className="h-6 w-px bg-[rgba(0,0,0,0.08)]" />
-              <div className="flex min-w-0 items-center gap-0">
-                <AxisBrandTitle subtitle="브랜드 네이밍 검토" />
-              </div>
+            <div className="flex min-w-0 flex-1 items-center">
+              <AxisBrandTitle subtitle="브랜드 네이밍 검토" />
             </div>
           </div>
         </div>
+        <GlobalBrandNav className="bg-white" innerClassName="max-w-7xl px-6" />
       </header>
 
       {/* ── 스텝 바 ── */}

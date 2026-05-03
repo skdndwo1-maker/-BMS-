@@ -1,5 +1,4 @@
 import { Fragment, useState, useRef, useEffect, type ChangeEvent } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   analyzeGuideline,
   fetchGuideline,
@@ -10,6 +9,8 @@ import {
 } from "@/lib/guidelineApi";
 import { GUIDELINE_REFERENCE_OPTIONS } from "@/constants/guidelineReferences";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
+import { GlobalBrandNav } from "@/components/GlobalBrandNav";
+import { registerGlobalNavPersist } from "@/lib/globalNavPersistence";
 import {
   downloadInspectionReport,
   downloadRevisedImageInFormat,
@@ -22,7 +23,6 @@ import {
   XCircle,
   AlertCircle,
   Sparkles,
-  ArrowLeft,
   Download,
   Loader2,
   FileCheck,
@@ -71,6 +71,8 @@ const categoryTabActive = "border-black bg-black text-white shadow-[0_4px_14px_-
 const inspectionCard =
   "rounded-[22px] border border-[rgba(0,0,0,0.06)] bg-white p-6 shadow-[0_4px_28px_-10px_rgba(0,0,0,0.08),0_2px_12px_-6px_rgba(0,0,0,0.04)]";
 
+const INSPECTION_NAV_DRAFT_KEY = "brandAxis:inspectionNavDraft";
+
 function InspectionSectionTitle({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
     <h2
@@ -116,7 +118,6 @@ interface PassedCriteria {
 }
 
 export function BrandInspection() {
-  const navigate = useNavigate();
   const [designFile, setDesignFile] = useState<File | null>(null);
   const [designPreview, setDesignPreview] = useState<string | null>(null);
   const [guidelineFile, setGuidelineFile] = useState<File | null>(null);
@@ -160,6 +161,66 @@ export function BrandInspection() {
 
   const suggestions: Suggestion[] = [];
   const passedCriteria: PassedCriteria[] = [];
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(INSPECTION_NAV_DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw) as {
+        v?: number;
+        selectedBusinessCategory?: BusinessCategory;
+        selectedBusinessSubCategory?: string;
+        selectedDesignGroup?: DesignGroup;
+        selectedDesignType?: DesignType | null;
+        guidelineText?: string;
+        selectedGuidelineLibrary?: string;
+      };
+      if (d.v !== 1) return;
+      if (d.selectedBusinessCategory && BUSINESS_CATEGORIES.includes(d.selectedBusinessCategory)) {
+        setSelectedBusinessCategory(d.selectedBusinessCategory);
+      }
+      if (typeof d.selectedBusinessSubCategory === "string") setSelectedBusinessSubCategory(d.selectedBusinessSubCategory);
+      if (d.selectedDesignGroup === "online" || d.selectedDesignGroup === "offline") setSelectedDesignGroup(d.selectedDesignGroup);
+      if (
+        d.selectedDesignType === null ||
+        (typeof d.selectedDesignType === "string" && (DESIGN_TYPES as readonly string[]).includes(d.selectedDesignType))
+      ) {
+        setSelectedDesignType(d.selectedDesignType ?? null);
+      }
+      if (typeof d.guidelineText === "string") setGuidelineText(d.guidelineText);
+      if (typeof d.selectedGuidelineLibrary === "string") setSelectedGuidelineLibrary(d.selectedGuidelineLibrary);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    return registerGlobalNavPersist(() => {
+      try {
+        sessionStorage.setItem(
+          INSPECTION_NAV_DRAFT_KEY,
+          JSON.stringify({
+            v: 1,
+            selectedBusinessCategory,
+            selectedBusinessSubCategory,
+            selectedDesignGroup,
+            selectedDesignType,
+            guidelineText,
+            selectedGuidelineLibrary,
+          }),
+        );
+      } catch (e) {
+        console.warn("[inspectionNavDraft]", e);
+      }
+    });
+  }, [
+    selectedBusinessCategory,
+    selectedBusinessSubCategory,
+    selectedDesignGroup,
+    selectedDesignType,
+    guidelineText,
+    selectedGuidelineLibrary,
+  ]);
 
   useEffect(() => {
     if (!guidelineDetailOpen) return;
@@ -344,24 +405,12 @@ export function BrandInspection() {
       <header className="sticky top-0 z-10 border-b border-[rgba(0,0,0,0.06)] bg-white/95 shadow-[0_4px_24px_-6px_rgba(0,0,0,0.06)] backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                type="button"
-                onClick={() => navigate("/options")}
-                className="h-auto rounded-[12px] px-2.5 py-2 text-[13px] font-medium text-[#6B6B6B] hover:bg-black/[0.04] hover:text-[#1A1A1A]"
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                옵션으로
-              </Button>
-              <div className="h-6 w-px bg-[rgba(0,0,0,0.08)]" />
-              <div className="flex min-w-0 items-center gap-0">
-                <AxisBrandTitle subtitle="브랜드 디자인 검수" />
-              </div>
+            <div className="flex min-w-0 flex-1 items-center">
+              <AxisBrandTitle subtitle="브랜드 디자인 검수" />
             </div>
           </div>
         </div>
+        <GlobalBrandNav className="bg-white/95" innerClassName="max-w-7xl px-6" />
       </header>
 
       {currentStep !== "idle" && (
