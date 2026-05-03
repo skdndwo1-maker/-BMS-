@@ -690,7 +690,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
 
   return (
     <TooltipProvider>
-      <div className="flex h-screen max-h-screen min-h-0 flex-col overflow-hidden bg-[#F5F5F5]" style={{ height: "100dvh", maxHeight: "100dvh" }}>
+      <div className="fixed inset-0 z-0 flex min-h-0 flex-col overflow-hidden bg-[#F5F5F5]">
 
         {/* ── Header ──────────────────────────────────────────────── */}
         <header className="flex-shrink-0 bg-white border-b border-gray-200">

@@ -390,9 +390,11 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const realSize = getRealSize();
   const realAspect = realSize.width / realSize.height;
 
-  const padding = 80;
-  const availW = containerW - padding;
-  const availH = containerH - padding;
+  /** 캔버스 주변 회색 여백 — 값이 클수록 화면에 맞춤 시 캔버스가 작아져 위·아래 빈 띠가 커짐 */
+  const OUTER_GUTTER_CSS_PX = 16;
+  const OUTER_GUTTER_TOTAL = OUTER_GUTTER_CSS_PX * 2;
+  const availW = Math.max(1, containerW - OUTER_GUTTER_TOTAL);
+  const availH = Math.max(1, containerH - OUTER_GUTTER_TOTAL);
   let baseW = availW;
   let baseH = baseW / realAspect;
   if (baseH > availH) {
@@ -1756,10 +1758,14 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         height: "100%",
         background: "#F0F0F0",
         display: "flex",
-        alignItems: overflowZoom > 1 ? "flex-start" : "center",
+        alignItems: "flex-start",
         justifyContent: "center",
         overflow: overflowZoom > 1 ? "auto" : "hidden",
-        padding: "40px",
+        /**
+         * zoom ≤ 1: 산식 OUTER_GUTTER_TOTAL 과 동일한 CSS 패딩.
+         * zoom > 1: 패딩 0 → 스크롤 높이 = 캔버스와 일치.
+         */
+        padding: overflowZoom > 1 ? "0px" : `${OUTER_GUTTER_CSS_PX}px`,
         boxSizing: "border-box",
       }}
     >
