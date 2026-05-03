@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useState, type ChangeEvent } from "react";
+import { Fragment, useCallback, useState, type ChangeEvent, type ReactNode } from "react";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 import { GlobalBrandNav } from "@/components/GlobalBrandNav";
 import { postSimplyHeartStep, type SimplyHeartImagePart } from "@/lib/simplyHeartApi";
@@ -44,6 +44,170 @@ function dataUrlToBareBase64(dataUrl: string): string {
 function mimeFromDataUrl(dataUrl: string): string {
   const m = /^data:([^;,]+)/.exec(dataUrl);
   return (m?.[1] ?? "image/png").split(";")[0].toLowerCase().replace("image/jpg", "image/jpeg");
+}
+
+/** Gemini 등이 붙이는 마크다운 강조(*) — 화면·PDF 표시에서 제거 */
+function stripSimplyHeartDisplayAsterisks(s: string): string {
+  return s.replace(/\*/g, "");
+}
+
+type Step4Block =
+  | { kind: "h3"; text: string }
+  | { kind: "tier2"; text: string }
+  | { kind: "proposal"; tag: string; summary: string; quote: string }
+  | { kind: "p"; text: string };
+
+function isBlankLine(line: string): boolean {
+  return !line.trim();
+}
+
+function looksLikeStep4Tier2Line(t: string): boolean {
+  if (t.length > 160) return false;
+  if (/^\d+\.\s/.test(t)) return false;
+  if (t.startsWith("- ") || t.startsWith("•") || t.startsWith("*")) return false;
+  if (/^(\[\d+\s*안\]|###)/.test(t)) return false;
+  return (
+    /^정제된 메시지/.test(t) ||
+    /^One Action/i.test(t) ||
+    /솔루션 메시지/.test(t) ||
+    (/\([^)]+\)/.test(t) && /제안|목적|행동|CTA|맥락/.test(t))
+  );
+}
+
+/** 4단계 본문을 섹션 / [N안] 요약 / 인용 세부 로 구분해 파싱 */
+function parseSimplyHeartStep4Blocks(raw: string): Step4Block[] {
+  const lines = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  const blocks: Step4Block[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    while (i < lines.length && isBlankLine(lines[i])) i++;
+    if (i >= lines.length) break;
+
+    const t = lines[i].trim();
+
+    if (t.startsWith("### ")) {
+      blocks.push({ kind: "h3", text: t.slice(4).trim() });
+      i++;
+      continue;
+    }
+
+    const proposalMatch = t.match(/^(\[\d+\s*안\])\s*(.*)$/);
+    if (proposalMatch) {
+      const tag = proposalMatch[1];
+      const summary = proposalMatch[2].trim();
+      i++;
+      const bodyLines: string[] = [];
+      while (i < lines.length) {
+        const Lt = lines[i].trim();
+        if (!Lt) {
+          let j = i + 1;
+          while (j < lines.length && isBlankLine(lines[j])) j++;
+          if (j >= lines.length) {
+            i = j;
+            break;
+          }
+          const next = lines[j]!.trim();
+          if (next.startsWith("### ") || /^\[\d+\s*안\]/.test(next)) {
+            i = j;
+            break;
+          }
+          bodyLines.push(lines[i]!);
+          i++;
+          continue;
+        }
+        if (Lt.startsWith("### ") || /^\[\d+\s*안\]/.test(Lt)) break;
+        bodyLines.push(lines[i]!);
+        i++;
+      }
+      blocks.push({ kind: "proposal", tag, summary, quote: bodyLines.join("\n").trim() });
+      continue;
+    }
+
+    if (looksLikeStep4Tier2Line(t)) {
+      blocks.push({ kind: "tier2", text: t });
+      i++;
+      continue;
+    }
+
+    const start = i;
+    i++;
+    while (i < lines.length) {
+      const Lt = lines[i]!.trim();
+      if (!Lt) break;
+      if (Lt.startsWith("### ") || /^\[\d+\s*안\]/.test(Lt)) break;
+      if (looksLikeStep4Tier2Line(Lt)) break;
+      i++;
+    }
+    const para = lines.slice(start, i).join("\n").trim();
+    if (para) blocks.push({ kind: "p", text: para });
+  }
+
+  return blocks;
+}
+
+function normalizeStep4Quote(s: string): string {
+  let x = s.trim();
+  if ((x.startsWith('"') && x.endsWith('"')) || (x.startsWith("\u201C") && x.endsWith("\u201D"))) {
+    x = x.slice(1, -1).trim();
+  }
+  if (x.startsWith("「") && x.endsWith("」")) x = x.slice(1, -1).trim();
+  return x;
+}
+
+function SimplyHeartStep4Structured({ text }: { text: string }): ReactNode {
+  const blocks = parseSimplyHeartStep4Blocks(text);
+  return (
+    <div className="space-y-5">
+      {blocks.map((b, bi) => {
+        if (b.kind === "h3") {
+          return (
+            <h4
+              key={bi}
+              className="mt-8 border-b border-[rgba(0,0,0,0.08)] pb-2 text-[16px] font-bold tracking-tight text-[#1A1A1A] first:mt-0"
+            >
+              {b.text}
+            </h4>
+          );
+        }
+        if (b.kind === "tier2") {
+          return (
+            <p key={bi} className="text-[14px] font-semibold tracking-tight text-[#333]">
+              {b.text}
+            </p>
+          );
+        }
+        if (b.kind === "p") {
+          return (
+            <p key={bi} className="whitespace-pre-wrap text-[15px] leading-relaxed text-[#2A2A2A]">
+              {b.text}
+            </p>
+          );
+        }
+        const q = normalizeStep4Quote(b.quote);
+        return (
+          <div
+            key={bi}
+            className="space-y-3 rounded-2xl border border-[rgba(255,127,102,0.22)] bg-white p-4 shadow-[0_2px_14px_-6px_rgba(0,0,0,0.06)]"
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
+              <span className="inline-flex shrink-0 items-center rounded-lg bg-[#FF7F66]/14 px-2.5 py-1 text-[13px] font-bold tabular-nums text-[#B54A32]">
+                {b.tag}
+              </span>
+              {b.summary ? (
+                <p className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-[#1A1A1A]">{b.summary}</p>
+              ) : null}
+            </div>
+            {q ? (
+              <div className="rounded-r-xl border-l-[3px] border-[#FF7F66] bg-[#FAFAF8] py-3 pl-4 pr-3">
+                <p className="whitespace-pre-wrap text-[15px] leading-[1.65] text-[#2A2A2A]">{q}</p>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 type ImageSlot = { id: string; name: string; dataUrl: string };
@@ -158,7 +322,7 @@ export function SimplyHeart() {
       "심플리하게 · 4단계 리포트",
       "",
       ...STEP_META.map((s) => {
-        const body = (results[s.n] ?? "").trim();
+        const body = stripSimplyHeartDisplayAsterisks((results[s.n] ?? "").trim());
         return [`## ${s.title}`, s.subtitle, "", body || "(없음)", ""].join("\n");
       }),
     ];
@@ -364,6 +528,7 @@ export function SimplyHeart() {
         <div className="flex flex-col gap-5">
           {STEP_META.map((meta, idx) => {
             const content = results[meta.n];
+            const displayContent = content ? stripSimplyHeartDisplayAsterisks(content) : "";
             const isLoading = loadingStep === meta.n;
             const isFinal = meta.n === 4;
             return (
@@ -385,8 +550,8 @@ export function SimplyHeart() {
                 >
                   <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <h3 className="text-[15px] font-bold text-[#1A1A1A]">{meta.title}</h3>
-                      <p className="text-[12px] text-[#6B6B6B]">{meta.subtitle}</p>
+                      <h3 className="text-[18px] font-bold text-[#1A1A1A]">{meta.title}</h3>
+                      <p className="text-[13px] text-[#6B6B6B]">{meta.subtitle}</p>
                     </div>
                     {isLoading ? (
                       <div className="flex items-center gap-2 text-[12px] text-[#6B6B6B]">
@@ -397,19 +562,17 @@ export function SimplyHeart() {
                   </div>
                   {meta.n === 3 ? (
                     <p className="mb-3 rounded-xl bg-[#FAF8F6] px-3 py-2 text-[11px] leading-relaxed text-[#6B6B6B]">
-                      <span className="font-semibold text-[#1A1A1A]">Do / Don&apos;t</span> 를 명확히 구분해 표시합니다. (
-                      마크다운 헤딩·목록 형식)
+                      <span className="font-semibold text-[#1A1A1A]">Do / Don&apos;t</span> 를 명확히 구분해 표시합니다.
                     </p>
                   ) : null}
-                  {content ? (
-                    <div
-                      className={cn(
-                        "whitespace-pre-wrap text-[13px] leading-relaxed text-[#2A2A2A]",
-                        isFinal && "rounded-xl bg-[#FF7F66]/08 px-4 py-3 font-medium text-[#1A1A1A]",
-                      )}
-                    >
-                      {content}
-                    </div>
+                  {displayContent ? (
+                    isFinal ? (
+                      <div className="rounded-xl bg-[#FF7F66]/08 px-4 py-4">
+                        <SimplyHeartStep4Structured text={displayContent} />
+                      </div>
+                    ) : (
+                      <div className="whitespace-pre-wrap text-[15px] leading-relaxed text-[#2A2A2A]">{displayContent}</div>
+                    )
                   ) : !isLoading ? (
                     <p className="text-[12px] text-[#9A9A9A]">분석 실행 후 이 단계 결과가 표시됩니다.</p>
                   ) : null}
