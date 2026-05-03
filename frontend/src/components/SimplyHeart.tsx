@@ -441,6 +441,104 @@ function mergeConsecutiveOlBlocks(blocks: EarlyStepBlock[]): EarlyStepBlock[] {
   return out;
 }
 
+/** 번호 목록 사이에 끼인 짧은 문단(구획용)을 건너뛰고 항목을 한 목록으로 합침 */
+function isTrivialSeparatorParagraph(text: string): boolean {
+  const t = text.trim();
+  if (!t) return true;
+  if (t.length > 22) return false;
+  if (/^[예※·∙\-\s]*$/.test(t)) return true;
+  if (/^(?:예|참고|※|Note)\s*[:：]?\s*$/i.test(t)) return true;
+  return t.length <= 14;
+}
+
+function mergeOlAcrossTrivialParagraphs(blocks: EarlyStepBlock[]): EarlyStepBlock[] {
+  const out: EarlyStepBlock[] = [];
+  let i = 0;
+  while (i < blocks.length) {
+    const b = blocks[i]!;
+    if (b.kind === "ol" && b.items.length > 0) {
+      const mergedItems = [...b.items];
+      let j = i + 1;
+      while (j < blocks.length) {
+        const mid = blocks[j]!;
+        if (mid.kind === "p" && isTrivialSeparatorParagraph(mid.text)) {
+          j++;
+          continue;
+        }
+        if (mid.kind === "ol" && mid.items.length > 0) {
+          mergedItems.push(...mid.items);
+          j++;
+          continue;
+        }
+        break;
+      }
+      if (j > i + 1) {
+        out.push({ kind: "ol", items: mergedItems });
+        i = j;
+        continue;
+      }
+    }
+    out.push(b);
+    i++;
+  }
+  return out;
+}
+
+function finalizeEarlyStepBlocks(blocks: EarlyStepBlock[]): EarlyStepBlock[] {
+  let b = mergeSingleLineNumberedParagraphs(blocks);
+  b = mergeOlAcrossTrivialParagraphs(b);
+  b = mergeConsecutiveOlBlocks(b);
+  b = mergeUlAcrossTrivialParagraphs(b);
+  b = mergeConsecutiveUlBlocks(b);
+  return b;
+}
+
+function mergeConsecutiveUlBlocks(blocks: EarlyStepBlock[]): EarlyStepBlock[] {
+  const out: EarlyStepBlock[] = [];
+  for (const b of blocks) {
+    if (b.kind === "ul" && out.length > 0 && out[out.length - 1]!.kind === "ul") {
+      const prev = out[out.length - 1] as { kind: "ul"; items: string[] };
+      prev.items.push(...b.items);
+    } else {
+      out.push(b);
+    }
+  }
+  return out;
+}
+
+function mergeUlAcrossTrivialParagraphs(blocks: EarlyStepBlock[]): EarlyStepBlock[] {
+  const out: EarlyStepBlock[] = [];
+  let i = 0;
+  while (i < blocks.length) {
+    const b = blocks[i]!;
+    if (b.kind === "ul" && b.items.length > 0) {
+      const mergedItems = [...b.items];
+      let j = i + 1;
+      while (j < blocks.length) {
+        const mid = blocks[j]!;
+        if (mid.kind === "p" && isTrivialSeparatorParagraph(mid.text)) {
+          j++;
+          continue;
+        }
+        if (mid.kind === "ul" && mid.items.length > 0) {
+          mergedItems.push(...mid.items);
+          j++;
+          continue;
+        }
+        break;
+      }
+      if (j > i + 1) {
+        out.push({ kind: "ul", items: mergedItems });
+        i = j;
+        continue;
+      }
+    }
+    out.push(b);
+    i++;
+  }
+  return out;
+}
+
 function parseSimplyHeartEarlyStepBlocks(raw: string): EarlyStepBlock[] {
   const lines = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
   const blocks: EarlyStepBlock[] = [];
@@ -525,7 +623,23 @@ function parseSimplyHeartEarlyStepBlocks(raw: string): EarlyStepBlock[] {
     }
   }
 
-  return mergeConsecutiveOlBlocks(mergeSingleLineNumberedParagraphs(blocks));
+  return finalizeEarlyStepBlocks(blocks);
+}
+
+/** 모델이 항목마다 `1.`로 리셋하거나 인용/빈 줄로 목록이 끊기면 ol이 항목 1개 블록 여러 개로 쪼개짐 → 뱃지는 본문 전체 기준 1,2,3…으로 유지 */
+function buildEarlyStepEnumBadgeIndices(blocks: EarlyStepBlock[]): Map<string, number> {
+  const map = new Map<string, number>();
+  let n = 0;
+  for (let bi = 0; bi < blocks.length; bi++) {
+    const b = blocks[bi]!;
+    if (b.kind === "ol" || b.kind === "ul") {
+      for (let ii = 0; ii < b.items.length; ii++) {
+        n += 1;
+        map.set(`${bi}:${ii}`, n);
+      }
+    }
+  }
+  return map;
 }
 
 type Step3Zone = "do" | "dont" | "neutral";
@@ -565,16 +679,94 @@ function splitStep3TitleBody(text: string): { title: string; body: string } | nu
   return { title: first, body: lines.slice(1).join("\n").trim() };
 }
 
+/** 리스트 마커 제거 후 본문만 (3단계 Do/Don't 항목) */
+function stripStep3ListItemMarkers(text: string): string {
+  return text
+    .trim()
+    .replace(/^(\d{1,3})[.)\uFF0E]\s+/, "")
+    .replace(/^[•\-*]\s+/, "")
+    .trim();
+}
+
+/**
+ * 3단계 전용: 엄격 분리 실패 시에도 소주제·상세를 최대한 나눔 (Do/Don't 공통).
+ * — / – / - 구분, 긴 콜론 제목, 첫 줄 분리, **제목** 패턴 등.
+ */
+function splitStep3TitleBodyLoose(text: string): { title?: string; body: string } {
+  const raw = text.trim();
+  if (!raw) return { body: "" };
+
+  const stripped = stripStep3ListItemMarkers(raw);
+  const base = stripped.length > 0 ? stripped : raw;
+
+  const strict = splitStep3TitleBody(base);
+  if (strict) return { title: strict.title, body: strict.body };
+
+  const boldLine = /^\*\*([^*]+)\*\*\s*\n+([\s\S]+)$/.exec(base);
+  if (boldLine) {
+    const title = boldLine[1]!.trim();
+    const body = boldLine[2]!.trim();
+    if (title.length >= 2 && body.length > 0) return { title, body };
+  }
+
+  const boldInline = /^\*\*([^*]+)\*\*\s+(.+)$/.exec(base);
+  if (boldInline) {
+    const title = boldInline[1]!.trim();
+    const body = boldInline[2]!.trim();
+    if (title.length >= 2 && body.length > 0) return { title, body };
+  }
+
+  const longColon = /^(.{2,120}?)\s*[:：]\s+([\s\S]+)$/.exec(base);
+  if (longColon) {
+    const title = longColon[1]!.trim();
+    const body = longColon[2]!.trim();
+    if (title.length >= 2 && body.length > 0 && !/^https?$/i.test(title)) return { title, body };
+  }
+
+  const dashSplit = /^(.{2,90}?)\s*(?:[–—]|\s-\s)\s+([\s\S]+)$/.exec(base);
+  if (dashSplit) {
+    const title = dashSplit[1]!.trim();
+    const body = dashSplit[2]!.trim();
+    if (title.length >= 2 && body.length > 0) return { title, body };
+  }
+
+  const lines = base.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length >= 2) {
+    const first = lines[0]!;
+    if (first.length >= 2 && first.length <= 120) {
+      const rest = lines.slice(1).join("\n").trim();
+      if (rest.length > 0) return { title: first, body: rest };
+    }
+  }
+
+  const ci = base.indexOf(":");
+  if (ci > 0 && ci <= 90 && !base.startsWith("http")) {
+    const maybeTitle = base.slice(0, ci).trim();
+    const maybeBody = base.slice(ci + 1).trim();
+    if (maybeTitle.length >= 2 && maybeBody.length > 0 && !maybeTitle.includes("/")) {
+      return { title: maybeTitle, body: maybeBody };
+    }
+  }
+
+  return { body: base };
+}
+
+function step3ItemToTitleBody(item: string): { title?: string; body: string } {
+  const t = item.trim();
+  if (!t) return { body: "" };
+  const normalized = stripStep3ListItemMarkers(t);
+  const working = normalized.length > 0 ? normalized : t;
+  const strict = splitStep3TitleBody(working);
+  if (strict) return { title: strict.title, body: strict.body };
+  return splitStep3TitleBodyLoose(working);
+}
+
 function splitStep3ParagraphChunks(text: string): { title?: string; body: string }[] {
   const chunks = text
     .split(/\n\n+/)
     .map((s) => s.trim())
     .filter(Boolean);
-  return chunks.map((part) => {
-    const tb = splitStep3TitleBody(part);
-    if (tb) return { title: tb.title, body: tb.body };
-    return { body: part };
-  });
+  return chunks.map((part) => step3ItemToTitleBody(part));
 }
 
 function step3ZoneAccent(zone: Step3Zone): string {
@@ -612,6 +804,11 @@ function SimplyHeartEarlyStepsStructured({
   step?: 1 | 2 | 3;
 }): ReactNode {
   const blocks = parseSimplyHeartEarlyStepBlocks(text);
+  const stepN = step == null ? NaN : Number(step);
+  /** 3단계만 숫자 뱃지 숨김. 문자열 "1" 등으로 넘어와도 1·2단계는 뱃지 유지 */
+  const showEnumBadges = stepN !== 3;
+  const enumBadge = showEnumBadges ? buildEarlyStepEnumBadgeIndices(blocks) : new Map<string, number>();
+  const badgeFor = (bi: number, ii: number) => enumBadge.get(`${bi}:${ii}`) ?? ii + 1;
   return (
     <div className="w-full space-y-3 text-left">
       {blocks.map((b, bi) => {
@@ -668,32 +865,41 @@ function SimplyHeartEarlyStepsStructured({
             </div>
           );
         }
-        /* ── 불릿 목록 — 항목별 카드 ── */
+        /* ── 불릿 목록 — 1~2단계만 번호 뱃지; 3단계는 Do/Don't 색·카드로만 구분 ── */
         if (b.kind === "ul") {
-          const z3 = step === 3 ? step3ZoneBeforeBlock(blocks, bi) : null;
+          const z3 = stepN === 3 ? step3ZoneBeforeBlock(blocks, bi) : null;
           return (
             <div key={bi} className="w-full space-y-1.5 text-left">
               {b.items.map((item, ii) => {
-                if (step === 3 && z3) {
-                  const tb = splitStep3TitleBody(item);
-                  if (tb) {
-                    return (
-                      <Step3SubCard key={ii} zone={z3} title={tb.title} body={tb.body} />
-                    );
-                  }
+                if (z3) {
+                  const tb = step3ItemToTitleBody(item);
+                  return (
+                    <div key={ii} className="w-full">
+                      <Step3SubCard zone={z3} title={tb.title} body={tb.body} />
+                    </div>
+                  );
                 }
                 return (
                   <div
                     key={ii}
                     className="flex w-full items-start gap-3 rounded-xl border border-[rgba(0,0,0,0.05)] bg-white px-4 py-3 shadow-[0_1px_6px_-3px_rgba(0,0,0,0.07)]"
                   >
-                    <div
-                      className="mt-[9px] h-2 w-2 shrink-0 rounded-full"
-                      style={{
-                        backgroundColor: step === 3 && z3 ? step3ZoneAccent(z3) : "#E8593A",
-                      }}
-                      aria-hidden
-                    />
+                    {showEnumBadges ? (
+                      <span
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[13px] font-black tabular-nums"
+                        style={{ backgroundColor: NUM_BADGE_BG, color: NUM_BADGE_TEXT }}
+                      >
+                        {badgeFor(bi, ii)}
+                      </span>
+                    ) : (
+                      <div
+                        className="mt-[9px] h-2 w-2 shrink-0 rounded-full"
+                        style={{
+                          backgroundColor: z3 ? step3ZoneAccent(z3) : "#E8593A",
+                        }}
+                        aria-hidden
+                      />
+                    )}
                     <span className="min-w-0 flex-1 whitespace-pre-wrap text-[15px] leading-[1.75] text-[#2A2A2A]">
                       {renderWithLeadDetail(item)}
                     </span>
@@ -703,41 +909,39 @@ function SimplyHeartEarlyStepsStructured({
             </div>
           );
         }
-        /* ── 번호 목록 — 연속 항목 통합, 배지 1부터 순차 ── */
+        /* ── 번호 목록 — 1~2단계만 좌측 번호 뱃지; 3단계는 카드·색만 사용 ── */
         if (b.kind === "ol") {
-          const z3 = step === 3 ? step3ZoneBeforeBlock(blocks, bi) : null;
+          const z3 = stepN === 3 ? step3ZoneBeforeBlock(blocks, bi) : null;
           return (
             <div key={bi} className="w-full space-y-1.5 text-left">
               {b.items.map((item, ii) => {
-                if (step === 3 && z3) {
-                  const tb = splitStep3TitleBody(item);
-                  if (tb) {
-                    return (
-                      <div key={ii} className="flex items-start gap-3">
-                        <span
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[13px] font-black tabular-nums"
-                          style={{ backgroundColor: NUM_BADGE_BG, color: NUM_BADGE_TEXT }}
-                        >
-                          {ii + 1}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <Step3SubCard zone={z3} title={tb.title} body={tb.body} />
-                        </div>
-                      </div>
-                    );
-                  }
+                if (z3) {
+                  const tb = step3ItemToTitleBody(item);
+                  return (
+                    <div key={ii} className="w-full">
+                      <Step3SubCard zone={z3} title={tb.title} body={tb.body} />
+                    </div>
+                  );
                 }
                 return (
                   <div
                     key={ii}
                     className="flex w-full items-start gap-3 rounded-xl border border-[rgba(0,0,0,0.05)] bg-white px-4 py-3 shadow-[0_1px_6px_-3px_rgba(0,0,0,0.07)]"
                   >
-                    <span
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[13px] font-black tabular-nums"
-                      style={{ backgroundColor: NUM_BADGE_BG, color: NUM_BADGE_TEXT }}
-                    >
-                      {ii + 1}
-                    </span>
+                    {showEnumBadges ? (
+                      <span
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[13px] font-black tabular-nums"
+                        style={{ backgroundColor: NUM_BADGE_BG, color: NUM_BADGE_TEXT }}
+                      >
+                        {badgeFor(bi, ii)}
+                      </span>
+                    ) : (
+                      <div
+                        className="mt-[9px] h-2 w-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: z3 ? step3ZoneAccent(z3) : "#E8593A" }}
+                        aria-hidden
+                      />
+                    )}
                     <span className="min-w-0 flex-1 whitespace-pre-wrap text-[15px] leading-[1.75] text-[#2A2A2A]">
                       {renderWithLeadDetail(item)}
                     </span>
@@ -749,22 +953,24 @@ function SimplyHeartEarlyStepsStructured({
         }
         /* ── 일반 단락 ── */
         if (b.kind === "p") {
-          if (step === 3) {
+          if (stepN === 3) {
             const z3 = step3ZoneBeforeBlock(blocks, bi);
-            const singleTb = splitStep3TitleBody(b.text);
-            if (singleTb) {
-              return <Step3SubCard key={bi} zone={z3} title={singleTb.title} body={singleTb.body} />;
-            }
             const chunks = splitStep3ParagraphChunks(b.text);
-            const hasStructured = chunks.some((c) => c.title);
-            if (hasStructured || chunks.length > 1) {
-              return (
-                <div key={bi} className="w-full space-y-2 text-left">
-                  {chunks.map((ch, ci) => (
-                    <Step3SubCard key={ci} zone={z3} title={ch.title} body={ch.body} />
-                  ))}
-                </div>
-              );
+            if (chunks.length > 1 || chunks.some((c) => c.title)) {
+              const filled = chunks.filter((c) => c.body.trim());
+              if (filled.length > 0) {
+                return (
+                  <div key={bi} className="w-full space-y-2 text-left">
+                    {filled.map((ch, ci) => (
+                      <Step3SubCard key={ci} zone={z3} title={ch.title} body={ch.body} />
+                    ))}
+                  </div>
+                );
+              }
+            }
+            const one = chunks[0];
+            if (one?.body.trim()) {
+              return <Step3SubCard key={bi} zone={z3} title={one.title} body={one.body} />;
             }
           }
           return (
