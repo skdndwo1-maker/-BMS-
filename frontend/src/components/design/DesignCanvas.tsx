@@ -1758,7 +1758,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         height: "100%",
         background: "#F0F0F0",
         display: "flex",
-        alignItems: "flex-start",
+        alignItems: overflowZoom > 1 ? "flex-start" : "center",
         justifyContent: "center",
         overflow: overflowZoom > 1 ? "auto" : "hidden",
         /**
