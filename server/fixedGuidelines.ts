@@ -21,7 +21,12 @@ export const FIXED_GUIDELINE_SOURCES: Record<string, { relativeSource: string; d
   "uplus-vi-guideline": {
     relativeSource: "data/guidelines/U+ VI 가이드라인/U+ VI 가이드라인.pdf",
     displayName: "U+ VI 가이드라인"
-  }
+  },
+  /** 심플리하게 분석 — repo의 고정 원본 PDF (sync-fixed 시 슬롯으로 복사) */
+  "simply-uplus-guideline": {
+    relativeSource: "data/guidelines/Simply U+ 가이드라인/Simply U+ 가이드라인.pdf",
+    displayName: "Simply U+ 가이드라인 (실천과제 설명자료)",
+  },
 };
 
 export function copyFixedGuidelineToSlot(id: string): GuidelineRecord {

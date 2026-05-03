@@ -1,6 +1,6 @@
 /**
  * 승인된 run을 RAG에 색인하기 전 type별 표준 MD 양식으로 정제합니다.
- * 지원 타입: naming_audit, naming_generate, inspection, design_editor_text_suggestion.
+ * 지원 타입: naming_audit, naming_generate, inspection, design_editor_text_suggestion, simply_heart.
  * 그 외 타입은 outputText/outputJson 폴백을 그대로 반환합니다.
  */
 
@@ -11,6 +11,7 @@ type AnyRec = Record<string, unknown>;
 const GUIDELINE_LABELS: Record<string, string> = {
   "uplus-brand-guideline": "U+ 브랜드 가이드라인",
   "uplus-vi-guideline": "U+ VI 가이드라인",
+  "simply-uplus-guideline": "Simply U+ 가이드라인",
 };
 
 function asObj(v: unknown): AnyRec {
@@ -104,6 +105,8 @@ export function normalizeRunForRag(args: {
       return formatInspection({ out, inp, guidelineId: args.guidelineId ?? null });
     case "design_editor_text_suggestion":
       return formatDesignEditorTextSuggestion({ out, inp, guidelineId: args.guidelineId ?? null });
+    case "simply_heart":
+      return formatSimplyHeart({ out, inp, guidelineId: args.guidelineId ?? null });
     default: {
       const fallback = text(args.outputText);
       if (fallback) return fallback;
@@ -111,6 +114,26 @@ export function normalizeRunForRag(args: {
       return "";
     }
   }
+}
+
+function formatSimplyHeart(p: { out: AnyRec; inp: AnyRec; guidelineId: string | null }): string {
+  const lines: string[] = [
+    "# Simply Heart (4단계)",
+    `- 가이드라인: ${guidelineLabel(p.guidelineId ?? text((p.inp as AnyRec).guidelineId))}`,
+    "",
+    "## 1단계 — Diagnosis",
+    text(p.out.step1),
+    "",
+    "## 2단계 — Empathy / Pain",
+    text(p.out.step2),
+    "",
+    "## 3단계 — Do & Don't",
+    text(p.out.step3),
+    "",
+    "## 4단계 — Simply 솔루션",
+    text(p.out.step4),
+  ];
+  return trimTrailingBlankLines(lines).join("\n");
 }
 
 function formatNamingAudit(p: { out: AnyRec; inp: AnyRec; guidelineId: string | null }): string {

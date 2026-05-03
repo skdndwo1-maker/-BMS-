@@ -563,3 +563,11 @@ export async function downloadBrandNamingReport(
     }, "image/png");
   }
 }
+
+/** 한글 평문 리포트 PDF (Simply Heart 등 공통) */
+export async function downloadPlainKoreanTextAsPdf(plain: string, filenamePrefix: string): Promise<void> {
+  const canvas = await buildPlainTextReportCanvas(plain);
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  addCanvasToPdfPages(doc, canvas, 48);
+  doc.save(`${filenamePrefix}-${Date.now()}.pdf`);
+}

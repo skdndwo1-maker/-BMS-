@@ -26,6 +26,7 @@ import {
   type DesignEditorTextSuggestionTarget
 } from "./gemini.js";
 import { copyFixedGuidelineToSlot, FIXED_GUIDELINE_SOURCES } from "./fixedGuidelines.js";
+import { extractPdfTextFromBase64, runSimplyHeartStep } from "./simplyHeart.js";
 import { buildExternalNamingReferences } from "./namingExternalContext.js";
 import { resolveLawApiOc, searchLawsJson } from "./lawApi.js";
 import { getPublicApiBaseUrl } from "./publicApiUrl.js";
@@ -286,7 +287,7 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-/** 옵션 페이지 하단 채팅 — Gemini 멀티턴 (브랜드 가이드라인 맥락) */
+/** 옵션 페이지 하단 채팅 — Gemini + 브랜드/VI 가이드라인 + (선택) RAG 통합 맥락 */
 app.post("/api/options/chat", async (req, res) => {
   try {
     if (!hasGeminiApiKey()) {
@@ -315,6 +316,96 @@ app.post("/api/options/chat", async (req, res) => {
     }
     const text = await runOptionsPageChat({ messages });
     res.json({ ok: true, text });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+/** Simply Heart — 4단계 중 한 단계 실행 (멀티모달: 텍스트 + 이미지; PDF는 base64로 텍스트 추출) */
+app.post("/api/simply-heart/step", async (req, res) => {
+  try {
+    if (!hasGeminiApiKey()) {
+      res.status(503).json({
+        ok: false,
+        error: "GEMINI_API_KEY가 설정되어 있지 않습니다."
+      });
+      return;
+    }
+    const step = Number((req.body as { step?: unknown })?.step);
+    if (![1, 2, 3, 4].includes(step)) {
+      res.status(400).json({ ok: false, error: "step은 1~4여야 합니다." });
+      return;
+    }
+    const userText = String((req.body as { text?: unknown })?.text ?? "").trim();
+    const rawPdf = (req.body as { pdfBase64?: unknown })?.pdfBase64;
+    const pdfBase64 = typeof rawPdf === "string" ? rawPdf.trim() : "";
+    let extractedPdfText: string | undefined;
+    if (pdfBase64) {
+      try {
+        const b64 = pdfBase64.replace(/^data:application\/pdf;base64,/, "");
+        extractedPdfText = await extractPdfTextFromBase64(b64);
+      } catch {
+        res.status(400).json({ ok: false, error: "PDF를 읽지 못했습니다. 올바른 PDF인지 확인하세요." });
+        return;
+      }
+    }
+    const rawImages = (req.body as { images?: unknown })?.images;
+    const images = Array.isArray(rawImages) ? rawImages : [];
+    const imageParts = images
+      .filter((x): x is { mimeType?: string; data?: string } => Boolean(x) && typeof x === "object")
+      .map((x) => ({
+        mimeType: String(x.mimeType ?? "image/png").split(";")[0].toLowerCase().replace("image/jpg", "image/jpeg"),
+        data: String(x.data ?? "").replace(/^data:image\/\w+;base64,/, ""),
+      }))
+      .filter((x) => x.data.length > 0);
+
+    const rawPrior = (req.body as { prior?: Record<string, unknown> })?.prior ?? {};
+    const prior = {
+      "1": typeof rawPrior["1"] === "string" ? rawPrior["1"] : undefined,
+      "2": typeof rawPrior["2"] === "string" ? rawPrior["2"] : undefined,
+      "3": typeof rawPrior["3"] === "string" ? rawPrior["3"] : undefined,
+    };
+
+    if (!userText && !extractedPdfText && imageParts.length === 0) {
+      res.status(400).json({ ok: false, error: "텍스트·PDF·이미지 중 하나 이상이 필요합니다." });
+      return;
+    }
+
+    const t0 = Date.now();
+    const { text, model } = await runSimplyHeartStep({
+      step: step as 1 | 2 | 3 | 4,
+      userText: userText || "(이미지·PDF만 제공)",
+      extractedPdfText,
+      imageParts: imageParts.length ? imageParts : undefined,
+      prior,
+    });
+
+    if (step === 4) {
+      void persistRun({
+        req,
+        type: "simply_heart",
+        status: "pending_review",
+        guidelineId: "simply-uplus-guideline",
+        inputJson: {
+          text: userText,
+          hadPdf: Boolean(pdfBase64),
+          imageCount: imageParts.length,
+        },
+        outputJson: {
+          step1: prior["1"] ?? null,
+          step2: prior["2"] ?? null,
+          step3: prior["3"] ?? null,
+          step4: text,
+        },
+        inputText: userText || null,
+        outputText: [prior["1"], prior["2"], prior["3"], text].filter(Boolean).join("\n\n---\n\n"),
+        model,
+        latencyMs: Date.now() - t0,
+      });
+    }
+
+    res.json({ ok: true, text, model });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     res.status(500).json({ ok: false, error: msg });

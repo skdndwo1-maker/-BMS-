@@ -9,7 +9,8 @@ export type RunType =
   | "naming_audit"
   | "design_editor_inspection"
   | "design_editor_text_suggestion"
-  | "design_editor_visual_correction";
+  | "design_editor_visual_correction"
+  | "simply_heart";
 
 export async function persistRun(args: {
   req: Request;
