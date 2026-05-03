@@ -111,13 +111,13 @@ export function LoginScreen() {
           zIndex: 2,
           transform: "scale(1.1)",
           transformOrigin: "left top",
-          pointerEvents: "none",
+          pointerEvents: "auto",
         }}
       >
         <AxisBrandTitle
           subtitle="Brand Contents Manager"
           compact
-          className="!flex-col !flex-nowrap !items-start !justify-start gap-1 self-start text-left indent-0 [column-gap:0] [&>span:first-child]:justify-start [&>span:last-child]:w-full [&>span:last-child]:text-left [&>span:last-child]:mt-px [&>span:last-child]:leading-snug [&>span:last-child]:font-normal [&>span:last-child]:text-[#9CA3AF]"
+          className="!flex-col !flex-nowrap !items-start !justify-start gap-1 self-start text-left indent-0 [column-gap:0] [&>button:first-child]:justify-start [&>span:last-child]:w-full [&>span:last-child]:text-left [&>span:last-child]:mt-px [&>span:last-child]:leading-snug [&>span:last-child]:font-normal [&>span:last-child]:text-[#9CA3AF]"
         />
       </div>
 

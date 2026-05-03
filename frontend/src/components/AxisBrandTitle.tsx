@@ -1,3 +1,5 @@
+import { useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { APP_DISPLAY_NAME } from "@/constants/appBranding";
 
 const wordmark = "var(--font-family-base)";
@@ -10,10 +12,19 @@ type AxisBrandTitleProps = {
   compact?: boolean;
 };
 
+const titleBtnReset =
+  "m-0 cursor-pointer border-0 bg-transparent p-0 font-inherit text-inherit shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6B7280]/35 focus-visible:ring-offset-2 rounded-sm";
+
 /**
  * 이미지 로고 없이, 옵션·그래픽 제작 페이지와 동일한 AXIS 텍스트 표기.
+ * 메인 워드마크 클릭 시 /options 옵션 선택 화면으로 이동.
  */
 export function AxisBrandTitle({ subtitle, className = "", compact = false }: AxisBrandTitleProps) {
+  const navigate = useNavigate();
+  const goOptions = useCallback(() => {
+    navigate("/options", { replace: false });
+  }, [navigate]);
+
   /* A–X: gapTight; X–I: gapMid; I–S: gapTight × 1.5 */
   const gapMid = compact ? "0.06em" : "0.07em";
   const gapTight = compact ? "0.03em" : "0.035em";
@@ -36,7 +47,13 @@ export function AxisBrandTitle({ subtitle, className = "", compact = false }: Ax
     <div
       className={`flex min-w-0 flex-row flex-wrap items-center [column-gap:14px] [row-gap:4px] ${className}`.trim()}
     >
-      <span className={axisTightWordmark ? titleCls : titleClsUniform} style={{ fontFamily: wordmark }}>
+      <button
+        type="button"
+        onClick={goOptions}
+        aria-label={`${APP_DISPLAY_NAME} — 처음 옵션 화면으로 이동`}
+        className={`${titleBtnReset} ${axisTightWordmark ? titleCls : titleClsUniform}`.trim()}
+        style={{ fontFamily: wordmark }}
+      >
         {axisTightWordmark ? (
           letters.map((ch, i) => (
             <span
@@ -51,7 +68,7 @@ export function AxisBrandTitle({ subtitle, className = "", compact = false }: Ax
         ) : (
           APP_DISPLAY_NAME
         )}
-      </span>
+      </button>
       <span className={subCls} style={{ fontFamily: wordmark }}>
         {subtitle}
       </span>
