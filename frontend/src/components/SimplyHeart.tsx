@@ -642,6 +642,49 @@ function buildEarlyStepEnumBadgeIndices(blocks: EarlyStepBlock[]): Map<string, n
   return map;
 }
 
+type Step12SectionKind = "target_purpose" | "list_aggregate" | "other";
+
+function lastHeadingIndexBefore(blocks: EarlyStepBlock[], bi: number): number {
+  for (let i = bi - 1; i >= 0; i--) {
+    if (blocks[i]!.kind === "h2" || blocks[i]!.kind === "h3") return i;
+  }
+  return -1;
+}
+
+/** 1·2단계: 마지막 ### / ## 기준 본문 구역 (타겟·목적 vs 부담·공감) */
+function earlyStep12SectionKind(blocks: EarlyStepBlock[], blockIndex: number, stepN: number): Step12SectionKind {
+  if (stepN !== 1 && stepN !== 2) return "other";
+  let lastH = "";
+  for (let i = 0; i < blockIndex; i++) {
+    const bb = blocks[i]!;
+    if (bb.kind === "h2") lastH = "";
+    else if (bb.kind === "h3") lastH = bb.text;
+  }
+  const h = lastH.trim();
+  if (stepN === 1) {
+    if (/부담|진단/i.test(h)) return "list_aggregate";
+    if (/타겟|세그|seg|목적|요청/i.test(h)) return "target_purpose";
+    return "other";
+  }
+  /* 2단계 카드는 공감·Pain 분석만 — 헤딩 표기가 달라도 목록은 항상 소주제·상세 카드 경로 */
+  if (stepN === 2) return "list_aggregate";
+  return "other";
+}
+
+/** 같은 ### 구역 안에서만 ol/ul 항목 순번 (타겟·목적 아래 목록 1,2 / 부담은 별도 구역에서 다시 1…) */
+function listItemBadgeInSection(blocks: EarlyStepBlock[], bi: number, ii: number): number {
+  const start = lastHeadingIndexBefore(blocks, bi);
+  let n = 0;
+  for (let j = start + 1; j <= bi; j++) {
+    const bj = blocks[j]!;
+    if (bj.kind === "ol" || bj.kind === "ul") {
+      if (j < bi) n += bj.items.length;
+      else n += ii + 1;
+    }
+  }
+  return Math.max(1, n);
+}
+
 type Step3Zone = "do" | "dont" | "neutral";
 
 function classifyStep3H3Zone(heading: string): Step3Zone {
@@ -761,6 +804,64 @@ function step3ItemToTitleBody(item: string): { title?: string; body: string } {
   return splitStep3TitleBodyLoose(working);
 }
 
+function isShortTopicLineForStep12(s: string): boolean {
+  const t = s.trim();
+  if (t.length < 6 || t.length > 100) return false;
+  if (t.includes("\n")) return false;
+  if (/[.!?。]$/u.test(t) && t.length > 42) return false;
+  return true;
+}
+
+function looksLikeTopicBodyContinuation(s: string): boolean {
+  const t = s.trim();
+  if (t.length > 110) return true;
+  return /^(?:진단|또한|이를|이는|예를|예시|구체|특히|따라|즉|달리|한편|또는)/.test(t);
+}
+
+/** 부담 진단·공감 포인트: 평면 번호 목록을 소주제+상세 묶음으로 병합 */
+function groupStep12ListItems(items: string[]): { title?: string; body: string }[] {
+  const out: { title?: string; body: string }[] = [];
+  for (const item of items) {
+    const t = item.trim();
+    if (!t) continue;
+    const parsed = step3ItemToTitleBody(item);
+    if (parsed.title) {
+      out.push({ title: parsed.title, body: parsed.body });
+      continue;
+    }
+    const body = (parsed.body || item).trim();
+    if (out.length > 0) {
+      const prev = out[out.length - 1]!;
+      if (prev.title != null) {
+        if (looksLikeTopicBodyContinuation(body) || !isShortTopicLineForStep12(body)) {
+          prev.body = `${prev.body.trim()}\n\n${body}`;
+          continue;
+        }
+      } else if (!isShortTopicLineForStep12(body)) {
+        prev.body = `${prev.body.trim()}\n\n${body}`;
+        continue;
+      }
+    }
+    out.push({ body });
+  }
+  return out;
+}
+
+function listAggregateGroupOffsetBefore(blocks: EarlyStepBlock[], bi: number, stepN: number): number {
+  const start = lastHeadingIndexBefore(blocks, bi);
+  let tot = 0;
+  for (let j = start + 1; j < bi; j++) {
+    const bj = blocks[j]!;
+    if (
+      (bj.kind === "ol" || bj.kind === "ul") &&
+      earlyStep12SectionKind(blocks, j, stepN) === "list_aggregate"
+    ) {
+      tot += groupStep12ListItems(bj.items).length;
+    }
+  }
+  return tot;
+}
+
 function splitStep3ParagraphChunks(text: string): { title?: string; body: string }[] {
   const chunks = text
     .split(/\n\n+/)
@@ -775,25 +876,135 @@ function step3ZoneAccent(zone: Step3Zone): string {
   return "#57534E";
 }
 
-function Step3SubCard({ zone, title, body }: { zone: Step3Zone; title?: string; body: string }): ReactNode {
+/** 3단계 서브카드와 동일 레이아웃 — 좌측 색 띠 + 소제목(accent) + 본문 */
+function SimplyHeartDetailCard({
+  accent,
+  title,
+  body,
+  quote,
+  bodyContent,
+}: {
+  accent: string;
+  title?: string;
+  body: string;
+  quote?: boolean;
+  bodyContent?: ReactNode;
+}): ReactNode {
   const b = body.trim();
-  if (!b) return null;
-  const accent = step3ZoneAccent(zone);
+  const t = title?.trim();
+
+  if (bodyContent != null) {
+    return (
+      <div className="flex min-w-0 flex-1 overflow-hidden rounded-xl border border-[rgba(0,0,0,0.06)] bg-white shadow-[0_1px_6px_-3px_rgba(0,0,0,0.06)]">
+        <div className="w-[3px] shrink-0 self-stretch" style={{ backgroundColor: accent }} aria-hidden />
+        <div className="min-w-0 flex-1 px-4 py-3">
+          {t ? (
+            <p className="text-[14px] font-bold leading-snug" style={{ color: accent }}>
+              {t}
+            </p>
+          ) : null}
+          <div
+            className={cn(
+              "min-w-0 text-[15px] leading-[1.75] text-[#2A2A2A]",
+              t ? "mt-2" : null,
+              quote ? "italic" : null,
+            )}
+          >
+            {bodyContent}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!b && !t) return null;
+  if (!b && t) {
+    return (
+      <div className="flex min-w-0 flex-1 overflow-hidden rounded-xl border border-[rgba(0,0,0,0.06)] bg-white shadow-[0_1px_6px_-3px_rgba(0,0,0,0.06)]">
+        <div className="w-[3px] shrink-0 self-stretch" style={{ backgroundColor: accent }} aria-hidden />
+        <div className="min-w-0 flex-1 px-4 py-3">
+          <p className="text-[14px] font-bold leading-snug" style={{ color: accent }}>
+            {t}
+          </p>
+        </div>
+      </div>
+    );
+  }
   return (
-    <div className="flex overflow-hidden rounded-xl border border-[rgba(0,0,0,0.06)] bg-white shadow-[0_1px_6px_-3px_rgba(0,0,0,0.06)]">
+    <div className="flex min-w-0 flex-1 overflow-hidden rounded-xl border border-[rgba(0,0,0,0.06)] bg-white shadow-[0_1px_6px_-3px_rgba(0,0,0,0.06)]">
       <div className="w-[3px] shrink-0 self-stretch" style={{ backgroundColor: accent }} aria-hidden />
       <div className="min-w-0 flex-1 px-4 py-3">
-        {title ? (
+        {t ? (
           <p className="text-[14px] font-bold leading-snug" style={{ color: accent }}>
-            {title}
+            {t}
           </p>
         ) : null}
-        <p className={cn("whitespace-pre-wrap text-[15px] leading-[1.75] text-[#2A2A2A]", title ? "mt-2" : null)}>
+        <p
+          className={cn(
+            "whitespace-pre-wrap text-[15px] leading-[1.75] text-[#2A2A2A]",
+            t ? "mt-2" : null,
+            quote ? "italic" : null,
+          )}
+        >
           {b}
         </p>
       </div>
     </div>
   );
+}
+
+function Step3SubCard({ zone, title, body }: { zone: Step3Zone; title?: string; body: string }): ReactNode {
+  const accent = step3ZoneAccent(zone);
+  return <SimplyHeartDetailCard accent={accent} title={title} body={body} />;
+}
+
+/** 1·2단계 본문 — 3단계와 동일 카드 시스템 (단계 악센트) */
+function Step12DetailCard(props: {
+  step: 1 | 2;
+  title?: string;
+  body: string;
+  quote?: boolean;
+  bodyContent?: ReactNode;
+}): ReactNode {
+  const accent = STEP_STYLES[props.step].accent;
+  return (
+    <SimplyHeartDetailCard
+      accent={accent}
+      title={props.title}
+      body={props.body}
+      quote={props.quote}
+      bodyContent={props.bodyContent}
+    />
+  );
+}
+
+/** 제목 파싱 실패 시 첫 줄만 소제목 후보로 분리 (2단계·부담 목록 가독성) */
+function step12FallbackTitleFromBody(raw: string): { title?: string; body: string } {
+  const t = raw.trim();
+  if (!t) return { body: "" };
+  const lines = t.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 2) return { body: t };
+  const head = lines[0]!;
+  if (head.length < 2 || head.length > 120) return { body: t };
+  if (/[.!?。]$/u.test(head) && head.length > 48) return { body: t };
+  const rest = lines.slice(1).join("\n").trim();
+  if (!rest) return { body: t };
+  return { title: head, body: rest };
+}
+
+/** 부담·공감 목록 항목 — 3단계와 동일 DetailCard (단계 색 띠) */
+function Step12TopicCard({ step, title, body }: { step: 1 | 2; title?: string; body: string }): ReactNode {
+  let displayTitle = title?.trim();
+  let displayBody = body.trim();
+  if (!displayTitle && displayBody) {
+    const fb = step12FallbackTitleFromBody(displayBody);
+    if (fb.title && fb.body.trim()) {
+      displayTitle = fb.title;
+      displayBody = fb.body.trim();
+    }
+  }
+  if (!displayBody && !displayTitle) return null;
+  return <Step12DetailCard step={step} title={displayTitle} body={displayBody} />;
 }
 
 function SimplyHeartEarlyStepsStructured({
@@ -805,15 +1016,39 @@ function SimplyHeartEarlyStepsStructured({
 }): ReactNode {
   const blocks = parseSimplyHeartEarlyStepBlocks(text);
   const stepN = step == null ? NaN : Number(step);
-  /** 3단계만 숫자 뱃지 숨김. 문자열 "1" 등으로 넘어와도 1·2단계는 뱃지 유지 */
+  /** 3단계만 숫자 뱃지 숨김. 1·2단계는 구역별 번호를 따로 계산 */
   const showEnumBadges = stepN !== 3;
-  const enumBadge = showEnumBadges ? buildEarlyStepEnumBadgeIndices(blocks) : new Map<string, number>();
+  const enumBadge =
+    showEnumBadges && stepN !== 1 && stepN !== 2 ? buildEarlyStepEnumBadgeIndices(blocks) : new Map<string, number>();
   const badgeFor = (bi: number, ii: number) => enumBadge.get(`${bi}:${ii}`) ?? ii + 1;
+
+  const enumBadgeSpan = (n: number) => (
+    <span
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[13px] font-black tabular-nums"
+      style={{ backgroundColor: NUM_BADGE_BG, color: NUM_BADGE_TEXT }}
+    >
+      {n}
+    </span>
+  );
+
   return (
     <div className="w-full space-y-3 text-left">
       {blocks.map((b, bi) => {
         /* ── 대제목 (##) ── */
         if (b.kind === "h2") {
+          if (stepN === 1 || stepN === 2) {
+            const st = STEP_STYLES[stepN];
+            return (
+              <div
+                key={bi}
+                className="mt-8 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left first:mt-0"
+                style={{ backgroundColor: st.accentLight }}
+              >
+                <div className="h-6 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: st.accent }} aria-hidden />
+                <h4 className="text-[17px] font-bold tracking-tight text-[#0F0F0F]">{b.text}</h4>
+              </div>
+            );
+          }
           return (
             <div
               key={bi}
@@ -824,8 +1059,21 @@ function SimplyHeartEarlyStepsStructured({
             </div>
           );
         }
-        /* ── 소제목 (###) — Do/Don't 감지해 색상 분기 ── */
+        /* ── 소제목 (###) — 1·2단계는 단계 악센트 / 3단계는 Do·Don't ── */
         if (b.kind === "h3") {
+          if (stepN === 1 || stepN === 2) {
+            const st = STEP_STYLES[stepN];
+            return (
+              <div
+                key={bi}
+                className="mt-6 flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left first:mt-0"
+                style={{ backgroundColor: st.accentLight }}
+              >
+                <div className="h-5 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: st.accent }} aria-hidden />
+                <h4 className="text-[15px] font-bold tracking-tight text-[#0F0F0F]">{b.text}</h4>
+              </div>
+            );
+          }
           const zone = classifyStep3H3Zone(b.text);
           const barColor = zone === "do" ? "#059669" : zone === "dont" ? "#DC2626" : "#E8593A";
           const wrapBg =
@@ -854,6 +1102,21 @@ function SimplyHeartEarlyStepsStructured({
         }
         /* ── 인용 블록 ── */
         if (b.kind === "quote") {
+          if (
+            stepN === 2 ||
+            ((stepN === 1 || stepN === 2) &&
+              earlyStep12SectionKind(blocks, bi, stepN) === "target_purpose")
+          ) {
+            return (
+              <Step12DetailCard
+                key={bi}
+                step={stepN as 1 | 2}
+                body=""
+                quote
+                bodyContent={<p className="whitespace-pre-wrap leading-[1.85]">{b.text}</p>}
+              />
+            );
+          }
           return (
             <div
               key={bi}
@@ -865,89 +1128,152 @@ function SimplyHeartEarlyStepsStructured({
             </div>
           );
         }
-        /* ── 불릿 목록 — 1~2단계만 번호 뱃지; 3단계는 Do/Don't 색·카드로만 구분 ── */
+        /* ── 불릿 목록 ── */
         if (b.kind === "ul") {
           const z3 = stepN === 3 ? step3ZoneBeforeBlock(blocks, bi) : null;
-          return (
-            <div key={bi} className="w-full space-y-1.5 text-left">
-              {b.items.map((item, ii) => {
-                if (z3) {
+          if (z3) {
+            return (
+              <div key={bi} className="w-full space-y-1.5 text-left">
+                {b.items.map((item, ii) => {
                   const tb = step3ItemToTitleBody(item);
                   return (
                     <div key={ii} className="w-full">
                       <Step3SubCard zone={z3} title={tb.title} body={tb.body} />
                     </div>
                   );
-                }
-                return (
-                  <div
-                    key={ii}
-                    className="flex w-full items-start gap-3 rounded-xl border border-[rgba(0,0,0,0.05)] bg-white px-4 py-3 shadow-[0_1px_6px_-3px_rgba(0,0,0,0.07)]"
-                  >
-                    {showEnumBadges ? (
-                      <span
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[13px] font-black tabular-nums"
-                        style={{ backgroundColor: NUM_BADGE_BG, color: NUM_BADGE_TEXT }}
-                      >
-                        {badgeFor(bi, ii)}
-                      </span>
-                    ) : (
-                      <div
-                        className="mt-[9px] h-2 w-2 shrink-0 rounded-full"
-                        style={{
-                          backgroundColor: z3 ? step3ZoneAccent(z3) : "#E8593A",
-                        }}
-                        aria-hidden
-                      />
-                    )}
-                    <span className="min-w-0 flex-1 whitespace-pre-wrap text-[15px] leading-[1.75] text-[#2A2A2A]">
-                      {renderWithLeadDetail(item)}
-                    </span>
+                })}
+              </div>
+            );
+          }
+          if (stepN === 1 || stepN === 2) {
+            const sec = earlyStep12SectionKind(blocks, bi, stepN);
+            if (sec === "list_aggregate") {
+              const groups = groupStep12ListItems(b.items).filter((g) => g.body.trim());
+              const offset = listAggregateGroupOffsetBefore(blocks, bi, stepN);
+              if (groups.length === 0) return null;
+              return (
+                <div key={bi} className="w-full space-y-2 text-left">
+                  {groups.map((g, gi) => (
+                    <div key={gi} className="flex w-full items-start gap-3">
+                      {enumBadgeSpan(offset + gi + 1)}
+                      <Step12TopicCard step={stepN} title={g.title} body={g.body} />
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+            return (
+              <div key={bi} className="w-full space-y-1.5 text-left">
+                {b.items.map((item, ii) => (
+                  <div key={ii} className="flex w-full items-start gap-3">
+                    {enumBadgeSpan(listItemBadgeInSection(blocks, bi, ii))}
+                    <Step12DetailCard
+                      step={stepN as 1 | 2}
+                      body=""
+                      bodyContent={
+                        <span className="whitespace-pre-wrap text-[15px] leading-[1.75] text-[#2A2A2A]">
+                          {renderWithLeadDetail(item)}
+                        </span>
+                      }
+                    />
                   </div>
-                );
-              })}
+                ))}
+              </div>
+            );
+          }
+          return (
+            <div key={bi} className="w-full space-y-1.5 text-left">
+              {b.items.map((item, ii) => (
+                <div
+                  key={ii}
+                  className="flex w-full items-start gap-3 rounded-xl border border-[rgba(0,0,0,0.05)] bg-white px-4 py-3 shadow-[0_1px_6px_-3px_rgba(0,0,0,0.07)]"
+                >
+                  {showEnumBadges ? (
+                    enumBadgeSpan(badgeFor(bi, ii))
+                  ) : (
+                    <div
+                      className="mt-[9px] h-2 w-2 shrink-0 rounded-full bg-[#E8593A]"
+                      aria-hidden
+                    />
+                  )}
+                  <span className="min-w-0 flex-1 whitespace-pre-wrap text-[15px] leading-[1.75] text-[#2A2A2A]">
+                    {renderWithLeadDetail(item)}
+                  </span>
+                </div>
+              ))}
             </div>
           );
         }
-        /* ── 번호 목록 — 1~2단계만 좌측 번호 뱃지; 3단계는 카드·색만 사용 ── */
+        /* ── 번호 목록 ── */
         if (b.kind === "ol") {
           const z3 = stepN === 3 ? step3ZoneBeforeBlock(blocks, bi) : null;
-          return (
-            <div key={bi} className="w-full space-y-1.5 text-left">
-              {b.items.map((item, ii) => {
-                if (z3) {
+          if (z3) {
+            return (
+              <div key={bi} className="w-full space-y-1.5 text-left">
+                {b.items.map((item, ii) => {
                   const tb = step3ItemToTitleBody(item);
                   return (
                     <div key={ii} className="w-full">
                       <Step3SubCard zone={z3} title={tb.title} body={tb.body} />
                     </div>
                   );
-                }
-                return (
+                })}
+              </div>
+            );
+          }
+          if (stepN === 1 || stepN === 2) {
+            const sec = earlyStep12SectionKind(blocks, bi, stepN);
+            if (sec === "list_aggregate") {
+              const groups = groupStep12ListItems(b.items).filter((g) => g.body.trim());
+              const offset = listAggregateGroupOffsetBefore(blocks, bi, stepN);
+              if (groups.length === 0) return null;
+              return (
+                <div key={bi} className="w-full space-y-2 text-left">
+                  {groups.map((g, gi) => (
+                    <div key={gi} className="flex w-full items-start gap-3">
+                      {enumBadgeSpan(offset + gi + 1)}
+                      <Step12TopicCard step={stepN} title={g.title} body={g.body} />
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+            return (
+              <div key={bi} className="w-full space-y-1.5 text-left">
+                {b.items.map((item, ii) => (
                   <div
                     key={ii}
                     className="flex w-full items-start gap-3 rounded-xl border border-[rgba(0,0,0,0.05)] bg-white px-4 py-3 shadow-[0_1px_6px_-3px_rgba(0,0,0,0.07)]"
                   >
-                    {showEnumBadges ? (
-                      <span
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[13px] font-black tabular-nums"
-                        style={{ backgroundColor: NUM_BADGE_BG, color: NUM_BADGE_TEXT }}
-                      >
-                        {badgeFor(bi, ii)}
-                      </span>
-                    ) : (
-                      <div
-                        className="mt-[9px] h-2 w-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: z3 ? step3ZoneAccent(z3) : "#E8593A" }}
-                        aria-hidden
-                      />
-                    )}
+                    {enumBadgeSpan(listItemBadgeInSection(blocks, bi, ii))}
                     <span className="min-w-0 flex-1 whitespace-pre-wrap text-[15px] leading-[1.75] text-[#2A2A2A]">
                       {renderWithLeadDetail(item)}
                     </span>
                   </div>
-                );
-              })}
+                ))}
+              </div>
+            );
+          }
+          return (
+            <div key={bi} className="w-full space-y-1.5 text-left">
+              {b.items.map((item, ii) => (
+                <div
+                  key={ii}
+                  className="flex w-full items-start gap-3 rounded-xl border border-[rgba(0,0,0,0.05)] bg-white px-4 py-3 shadow-[0_1px_6px_-3px_rgba(0,0,0,0.07)]"
+                >
+                  {showEnumBadges ? (
+                    enumBadgeSpan(badgeFor(bi, ii))
+                  ) : (
+                    <div
+                      className="mt-[9px] h-2 w-2 shrink-0 rounded-full bg-[#E8593A]"
+                      aria-hidden
+                    />
+                  )}
+                  <span className="min-w-0 flex-1 whitespace-pre-wrap text-[15px] leading-[1.75] text-[#2A2A2A]">
+                    {renderWithLeadDetail(item)}
+                  </span>
+                </div>
+              ))}
             </div>
           );
         }
@@ -972,6 +1298,12 @@ function SimplyHeartEarlyStepsStructured({
             if (one?.body.trim()) {
               return <Step3SubCard key={bi} zone={z3} title={one.title} body={one.body} />;
             }
+          }
+          if (
+            stepN === 2 ||
+            (stepN === 1 && earlyStep12SectionKind(blocks, bi, stepN) === "target_purpose")
+          ) {
+            return <Step12DetailCard key={bi} step={stepN as 1 | 2} body={b.text} />;
           }
           return (
             <p key={bi} className="w-full whitespace-pre-wrap text-left text-[15px] leading-[1.85] text-[#2A2A2A]">
