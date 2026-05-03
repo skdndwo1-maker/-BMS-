@@ -847,21 +847,6 @@ function groupStep12ListItems(items: string[]): { title?: string; body: string }
   return out;
 }
 
-function listAggregateGroupOffsetBefore(blocks: EarlyStepBlock[], bi: number, stepN: number): number {
-  const start = lastHeadingIndexBefore(blocks, bi);
-  let tot = 0;
-  for (let j = start + 1; j < bi; j++) {
-    const bj = blocks[j]!;
-    if (
-      (bj.kind === "ol" || bj.kind === "ul") &&
-      earlyStep12SectionKind(blocks, j, stepN) === "list_aggregate"
-    ) {
-      tot += groupStep12ListItems(bj.items).length;
-    }
-  }
-  return tot;
-}
-
 function splitStep3ParagraphChunks(text: string): { title?: string; body: string }[] {
   const chunks = text
     .split(/\n\n+/)
@@ -897,15 +882,15 @@ function SimplyHeartDetailCard({
     return (
       <div className="flex min-w-0 flex-1 overflow-hidden rounded-xl border border-[rgba(0,0,0,0.06)] bg-white shadow-[0_1px_6px_-3px_rgba(0,0,0,0.06)]">
         <div className="w-[3px] shrink-0 self-stretch" style={{ backgroundColor: accent }} aria-hidden />
-        <div className="min-w-0 flex-1 px-4 py-3">
+        <div className="min-w-0 flex-1 px-4 py-3 text-left">
           {t ? (
-            <p className="text-[14px] font-bold leading-snug" style={{ color: accent }}>
+            <p className="text-left text-[14px] font-bold leading-snug" style={{ color: accent }}>
               {t}
             </p>
           ) : null}
           <div
             className={cn(
-              "min-w-0 text-[15px] leading-[1.75] text-[#2A2A2A]",
+              "min-w-0 text-left text-[15px] leading-[1.75] text-[#2A2A2A]",
               t ? "mt-2" : null,
               quote ? "italic" : null,
             )}
@@ -922,8 +907,8 @@ function SimplyHeartDetailCard({
     return (
       <div className="flex min-w-0 flex-1 overflow-hidden rounded-xl border border-[rgba(0,0,0,0.06)] bg-white shadow-[0_1px_6px_-3px_rgba(0,0,0,0.06)]">
         <div className="w-[3px] shrink-0 self-stretch" style={{ backgroundColor: accent }} aria-hidden />
-        <div className="min-w-0 flex-1 px-4 py-3">
-          <p className="text-[14px] font-bold leading-snug" style={{ color: accent }}>
+        <div className="min-w-0 flex-1 px-4 py-3 text-left">
+          <p className="text-left text-[14px] font-bold leading-snug" style={{ color: accent }}>
             {t}
           </p>
         </div>
@@ -933,15 +918,15 @@ function SimplyHeartDetailCard({
   return (
     <div className="flex min-w-0 flex-1 overflow-hidden rounded-xl border border-[rgba(0,0,0,0.06)] bg-white shadow-[0_1px_6px_-3px_rgba(0,0,0,0.06)]">
       <div className="w-[3px] shrink-0 self-stretch" style={{ backgroundColor: accent }} aria-hidden />
-      <div className="min-w-0 flex-1 px-4 py-3">
+      <div className="min-w-0 flex-1 px-4 py-3 text-left">
         {t ? (
-          <p className="text-[14px] font-bold leading-snug" style={{ color: accent }}>
+          <p className="text-left text-[14px] font-bold leading-snug" style={{ color: accent }}>
             {t}
           </p>
         ) : null}
         <p
           className={cn(
-            "whitespace-pre-wrap text-[15px] leading-[1.75] text-[#2A2A2A]",
+            "whitespace-pre-wrap text-left text-[15px] leading-[1.75] text-[#2A2A2A]",
             t ? "mt-2" : null,
             quote ? "italic" : null,
           )}
@@ -1149,13 +1134,11 @@ function SimplyHeartEarlyStepsStructured({
             const sec = earlyStep12SectionKind(blocks, bi, stepN);
             if (sec === "list_aggregate") {
               const groups = groupStep12ListItems(b.items).filter((g) => g.body.trim());
-              const offset = listAggregateGroupOffsetBefore(blocks, bi, stepN);
               if (groups.length === 0) return null;
               return (
                 <div key={bi} className="w-full space-y-2 text-left">
                   {groups.map((g, gi) => (
-                    <div key={gi} className="flex w-full items-start gap-3">
-                      {enumBadgeSpan(offset + gi + 1)}
+                    <div key={gi} className="w-full text-left">
                       <Step12TopicCard step={stepN} title={g.title} body={g.body} />
                     </div>
                   ))}
@@ -1225,13 +1208,11 @@ function SimplyHeartEarlyStepsStructured({
             const sec = earlyStep12SectionKind(blocks, bi, stepN);
             if (sec === "list_aggregate") {
               const groups = groupStep12ListItems(b.items).filter((g) => g.body.trim());
-              const offset = listAggregateGroupOffsetBefore(blocks, bi, stepN);
               if (groups.length === 0) return null;
               return (
                 <div key={bi} className="w-full space-y-2 text-left">
                   {groups.map((g, gi) => (
-                    <div key={gi} className="flex w-full items-start gap-3">
-                      {enumBadgeSpan(offset + gi + 1)}
+                    <div key={gi} className="w-full text-left">
                       <Step12TopicCard step={stepN} title={g.title} body={g.body} />
                     </div>
                   ))}
