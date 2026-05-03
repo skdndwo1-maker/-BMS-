@@ -23,7 +23,6 @@ import { apiUrl } from "@/lib/apiUrl";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { APP_DISPLAY_NAME } from "@/constants/appBranding";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
-import { GlobalBrandNav } from "@/components/GlobalBrandNav";
 
 /** Soft UI ref: warm cream bg, salmon coral, black CTAs, large radius, soft lift shadows */
 const PALETTE = {
@@ -360,7 +359,6 @@ export function OptionSelection() {
             </button>
           </div>
         </div>
-        <GlobalBrandNav className="bg-[#FAFAFA]" innerClassName="max-w-[1080px] px-6" />
       </header>
 
       <main
@@ -540,55 +538,20 @@ export function OptionSelection() {
                       {option.badge}
                     </span>
                   </div>
-                  <div
+                  <h2
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "10px",
-                      marginBottom: "8px",
+                      color: isHovered ? "#FFFFFF" : PALETTE.ink,
+                      fontSize: "16px",
+                      fontWeight: 700,
+                      margin: "0 0 8px 0",
+                      lineHeight: 1.35,
+                      letterSpacing: "-0.02em",
+                      wordBreak: "keep-all",
+                      transition: "color 0.2s",
                     }}
                   >
-                    <h2
-                      style={{
-                        color: isHovered ? "#FFFFFF" : PALETTE.ink,
-                        fontSize: "16px",
-                        fontWeight: 700,
-                        margin: 0,
-                        lineHeight: 1.35,
-                        letterSpacing: "-0.02em",
-                        wordBreak: "keep-all",
-                        transition: "color 0.2s",
-                        flex: "0 1 auto",
-                        minWidth: 0,
-                      }}
-                    >
-                      {option.title}
-                    </h2>
-                    <div
-                      aria-hidden
-                      style={{
-                        flex: 1,
-                        minWidth: "12px",
-                        height: "1px",
-                        background: isHovered ? "rgba(255, 255, 255, 0.45)" : PALETTE.coral,
-                        opacity: isHovered ? 1 : 0.45,
-                        borderRadius: "1px",
-                        transition: "opacity 0.2s, background 0.2s",
-                        alignSelf: "center",
-                        transform: "scaleY(0.35)",
-                        transformOrigin: "center",
-                      }}
-                    />
-                    <SectionDot
-                      size={6}
-                      style={{
-                        flexShrink: 0,
-                        alignSelf: "center",
-                        background: isHovered ? "#FFFFFF" : PALETTE.coral,
-                        boxShadow: isHovered ? "0 0 0 1px rgba(255,255,255,0.35)" : undefined,
-                      }}
-                    />
-                  </div>
+                    {option.title}
+                  </h2>
                   <p
                     style={{
                       color: isHovered ? "rgba(255, 255, 255, 0.9)" : PALETTE.muted,
