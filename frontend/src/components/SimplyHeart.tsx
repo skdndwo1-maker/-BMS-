@@ -702,9 +702,53 @@ function SimplyHeartDetailCard({
   );
 }
 
-function Step3SubCard({ zone, title, body }: { zone: Step3Zone; title?: string; body: string }): ReactNode {
-  const accent = step3ZoneAccent(zone);
-  return <SimplyHeartDetailCard accent={accent} title={title} body={body} />;
+/** Do / Don't 등: 항목마다 카드 대신 한 박스 안에서 소제목·본문만 구분 */
+function Step3ZoneUnifiedCard(props: {
+  zone: Step3Zone;
+  items?: string[];
+  rows?: { title?: string; body: string }[];
+}): ReactNode {
+  const accent = step3ZoneAccent(props.zone);
+  const resolved: { title?: string; body: string }[] = [];
+  if (props.rows) {
+    for (const r of props.rows) {
+      const t = r.title?.trim();
+      const b = r.body.trim();
+      if (!b && !t) continue;
+      resolved.push({ title: t, body: b });
+    }
+  } else {
+    for (const raw of props.items ?? []) {
+      const tb = step3ItemToTitleBody(raw);
+      if (!tb.body.trim() && !tb.title?.trim()) continue;
+      resolved.push({ title: tb.title, body: tb.body });
+    }
+  }
+  if (resolved.length === 0) return null;
+  return (
+    <div className="flex min-w-0 w-full overflow-hidden rounded-xl border border-[rgba(0,0,0,0.06)] bg-white shadow-[0_1px_6px_-3px_rgba(0,0,0,0.06)]">
+      <div className="w-[3px] shrink-0 self-stretch" style={{ backgroundColor: accent }} aria-hidden />
+      <div className="min-w-0 flex-1 space-y-4 px-4 py-4 text-left">
+        {resolved.map((row, gi) => (
+          <div key={gi} className={gi > 0 ? "border-t border-[rgba(0,0,0,0.08)] pt-4" : undefined}>
+            {row.title ? (
+              <p className="text-[14px] font-bold leading-snug" style={{ color: accent }}>
+                {row.title}
+              </p>
+            ) : null}
+            <p
+              className={cn(
+                "whitespace-pre-wrap text-[15px] leading-[1.75] text-[#2A2A2A]",
+                row.title ? "mt-2" : null,
+              )}
+            >
+              {row.body}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /** 1·2단계 본문 — 3단계와 동일 카드 시스템 (단계 악센트) */
@@ -754,6 +798,50 @@ function Step12TopicCard({ step, title, body }: { step: 1 | 2; title?: string; b
   }
   if (!displayBody && !displayTitle) return null;
   return <Step12DetailCard step={step} title={displayTitle} body={displayBody} />;
+}
+
+/** 1단계 문제 진단: 소제목·본문 구조 유지, 항목들은 한 카드 안에 구역만 나눔 */
+function Step12DiagnosisUnifiedCard({ groups }: { groups: { title?: string; body: string }[] }): ReactNode {
+  const st = STEP_STYLES[1];
+  const rows: { displayTitle?: string; displayBody: string }[] = [];
+  for (const g of groups) {
+    let displayTitle = g.title?.trim();
+    let displayBody = g.body.trim();
+    if (!displayTitle && displayBody) {
+      const fb = step12FallbackTitleFromBody(displayBody);
+      if (fb.title && fb.body.trim()) {
+        displayTitle = fb.title;
+        displayBody = fb.body.trim();
+      }
+    }
+    if (!displayBody && !displayTitle) continue;
+    rows.push({ displayTitle, displayBody });
+  }
+  if (rows.length === 0) return null;
+  return (
+    <div className="flex min-w-0 w-full overflow-hidden rounded-xl border border-[rgba(0,0,0,0.06)] bg-white shadow-[0_1px_6px_-3px_rgba(0,0,0,0.06)]">
+      <div className="w-[3px] shrink-0 self-stretch" style={{ backgroundColor: st.accent }} aria-hidden />
+      <div className="min-w-0 flex-1 space-y-4 px-4 py-4 text-left">
+        {rows.map((row, gi) => (
+          <div key={gi} className={gi > 0 ? "border-t border-[rgba(0,0,0,0.08)] pt-4" : undefined}>
+            {row.displayTitle ? (
+              <p className="text-[14px] font-bold leading-snug" style={{ color: st.accent }}>
+                {row.displayTitle}
+              </p>
+            ) : null}
+            <p
+              className={cn(
+                "whitespace-pre-wrap text-[15px] leading-[1.75] text-[#2A2A2A]",
+                row.displayTitle ? "mt-2" : null,
+              )}
+            >
+              {row.displayBody}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function SimplyHeartEarlyStepsStructured({
@@ -898,15 +986,8 @@ function SimplyHeartEarlyStepsStructured({
           const z3 = stepN === 3 ? step3ZoneBeforeBlock(blocks, bi) : null;
           if (z3) {
             return (
-              <div key={bi} className="w-full space-y-1.5 text-left">
-                {b.items.map((item, ii) => {
-                  const tb = step3ItemToTitleBody(item);
-                  return (
-                    <div key={ii} className="w-full">
-                      <Step3SubCard zone={z3} title={tb.title} body={tb.body} />
-                    </div>
-                  );
-                })}
+              <div key={bi} className="w-full text-left">
+                <Step3ZoneUnifiedCard zone={z3} items={b.items} />
               </div>
             );
           }
@@ -915,6 +996,13 @@ function SimplyHeartEarlyStepsStructured({
             if (sec === "list_aggregate") {
               const groups = groupStep12ListItems(b.items).filter((g) => g.body.trim());
               if (groups.length === 0) return null;
+              if (stepN === 1) {
+                return (
+                  <div key={bi} className="w-full text-left">
+                    <Step12DiagnosisUnifiedCard groups={groups} />
+                  </div>
+                );
+              }
               return (
                 <div key={bi} className="w-full space-y-2 text-left">
                   {groups.map((g, gi) => (
@@ -979,15 +1067,8 @@ function SimplyHeartEarlyStepsStructured({
           const z3 = stepN === 3 ? step3ZoneBeforeBlock(blocks, bi) : null;
           if (z3) {
             return (
-              <div key={bi} className="w-full space-y-1.5 text-left">
-                {b.items.map((item, ii) => {
-                  const tb = step3ItemToTitleBody(item);
-                  return (
-                    <div key={ii} className="w-full">
-                      <Step3SubCard zone={z3} title={tb.title} body={tb.body} />
-                    </div>
-                  );
-                })}
+              <div key={bi} className="w-full text-left">
+                <Step3ZoneUnifiedCard zone={z3} items={b.items} />
               </div>
             );
           }
@@ -996,6 +1077,13 @@ function SimplyHeartEarlyStepsStructured({
             if (sec === "list_aggregate") {
               const groups = groupStep12ListItems(b.items).filter((g) => g.body.trim());
               if (groups.length === 0) return null;
+              if (stepN === 1) {
+                return (
+                  <div key={bi} className="w-full text-left">
+                    <Step12DiagnosisUnifiedCard groups={groups} />
+                  </div>
+                );
+              }
               return (
                 <div key={bi} className="w-full space-y-2 text-left">
                   {groups.map((g, gi) => (
@@ -1061,17 +1149,19 @@ function SimplyHeartEarlyStepsStructured({
               const filled = chunks.filter((c) => c.body.trim());
               if (filled.length > 0) {
                 return (
-                  <div key={bi} className="w-full space-y-2 text-left">
-                    {filled.map((ch, ci) => (
-                      <Step3SubCard key={ci} zone={z3} title={ch.title} body={ch.body} />
-                    ))}
+                  <div key={bi} className="w-full text-left">
+                    <Step3ZoneUnifiedCard zone={z3} rows={filled} />
                   </div>
                 );
               }
             }
             const one = chunks[0];
             if (one?.body.trim()) {
-              return <Step3SubCard key={bi} zone={z3} title={one.title} body={one.body} />;
+              return (
+                <div key={bi} className="w-full text-left">
+                  <Step3ZoneUnifiedCard zone={z3} rows={[{ title: one.title, body: one.body }]} />
+                </div>
+              );
             }
           }
           if (
