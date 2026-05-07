@@ -5,7 +5,7 @@ import { APP_DISPLAY_NAME } from "@/constants/appBranding";
 const wordmark = "var(--font-family-base)";
 
 type AxisBrandTitleProps = {
-  /** Option / TemplateGallery와 동일: AXIS(대문자·자간) + 부제 (예: Brand Contents Manager, 브랜드 그래픽 제작) */
+  /** Option / TemplateGallery와 동일: AXIS(대문자·자간) + 부제 (예: Brand Contents Manager, 브랜드 디자인) */
   subtitle: string;
   className?: string;
   /** 툴바 등 좁은 영역: 글자 크기만 약간 축소(표기 방식은 동일) */

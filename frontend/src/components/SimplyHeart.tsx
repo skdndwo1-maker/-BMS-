@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useState, type ChangeEvent, type ReactNode } from "react";
+import { useCallback, useState, type ChangeEvent, type ReactNode } from "react";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 import { GlobalBrandNav } from "@/components/GlobalBrandNav";
 import { postSimplyHeartStep, type SimplyHeartImagePart } from "@/lib/simplyHeartApi";
@@ -17,30 +17,16 @@ import {
   X,
 } from "lucide-react";
 
-const STEP_META = [
-  { n: 1 as const, title: "1단계. 요청내용 분석 (Diagnosis)", subtitle: "타겟·목적·부담 진단" },
-  { n: 2 as const, title: "2단계. Simply Pain Point (Empathy)", subtitle: "고객 불편·결정장애 탐지" },
-  { n: 3 as const, title: "3단계. Do & Don't (Guideline)", subtitle: "가이드라인 기준 구분" },
-  { n: 4 as const, title: "4단계. Simply U+ 솔루션 (Delivery)", subtitle: "정제 메시지·단 하나의 행동" },
-];
 
-const STEP_STYLES: Record<1 | 2 | 3 | 4, { accent: string; accentLight: string }> = {
+const STEP_STYLES: Record<1 | 2 | 3, { accent: string; accentLight: string }> = {
   1: { accent: "#2563EB", accentLight: "rgba(37,99,235,0.07)" },
   2: { accent: "#7C3AED", accentLight: "rgba(124,58,237,0.07)" },
   3: { accent: "#059669", accentLight: "rgba(5,150,105,0.07)" },
-  4: { accent: "#E8593A", accentLight: "rgba(232,89,58,0.07)" },
 };
 
 /** 01–04 단계 헤더 · 1~3단계 번호 목록 — 블랙 */
 const NUM_BADGE_BG = "#111111";
 const NUM_BADGE_TEXT = "#FFFFFF";
-
-/** 4단계 제안 [N안] 칩 — 오렌지 */
-const PROPOSAL_AN_ORANGE = "#E8593A";
-
-/** 4단계에서 메시지 안 카드 밖 하위 섹션(네이밍·프로세스 등) 구분용 */
-const STEP4_SUBSECTION_BOX =
-  "rounded-2xl border-2 border-[rgba(154,139,114,0.42)] bg-[#F3EFE5] px-5 py-4 shadow-[0_2px_12px_-6px_rgba(0,0,0,0.08)]";
 
 const cardBase =
   "rounded-[22px] border border-[rgba(0,0,0,0.06)] bg-white p-6 shadow-[0_4px_28px_-10px_rgba(0,0,0,0.08),0_2px_12px_-6px_rgba(0,0,0,0.04)]";
@@ -95,237 +81,9 @@ function renderWithLeadDetail(text: string): ReactNode {
   return <>{text}</>;
 }
 
-type Step4Block =
-  | { kind: "h3"; text: string }
-  | { kind: "tier2"; text: string }
-  | { kind: "proposal"; tag: string; summary: string; quote: string }
-  | { kind: "subsection"; title: string; body: string }
-  | { kind: "p"; text: string };
 
 function isBlankLine(line: string): boolean {
   return !line.trim();
-}
-
-function looksLikeStep4Tier2Line(t: string): boolean {
-  if (t.length > 160) return false;
-  if (/^\d+\.\s/.test(t)) return false;
-  if (t.startsWith("- ") || t.startsWith("•") || t.startsWith("*")) return false;
-  if (/^(\[\d+\s*안\]|###)/.test(t)) return false;
-  return (
-    /^정제된 메시지/.test(t) ||
-    /^One Action/i.test(t) ||
-    /솔루션 메시지/.test(t) ||
-    /심플해진/.test(t) ||
-    /네이밍\s*[\/／]\s*표현|표현\s*제안/.test(t) ||
-    /간소화(?:된)?\s*프로세스/.test(t) ||
-    /단\s*하나의\s*행동/.test(t) ||
-    (/\([^)]+\)/.test(t) && /제안|목적|행동|CTA|맥락/.test(t))
-  );
-}
-
-/** [N안] 본문 안에서 메인 카피 뒤 이어지는 하위 제안 블록 제목 (별도 박스) */
-function isStep4ProposalSubsectionTitle(t: string): boolean {
-  const u = t.trim();
-  if (u.length < 6 || u.length > 120) return false;
-  if (/^\[\d+\s*안\]/.test(u) || u.startsWith("###")) return false;
-  return (
-    /심플해진/.test(u) ||
-    /네이밍\s*[\/／]\s*표현|표현\s*제안/.test(u) ||
-    /간소화(?:된)?\s*프로세스/.test(u) ||
-    /One\s*Action/i.test(u) ||
-    /단\s*하나의\s*행동/.test(u) ||
-    /^고객.*(?:행동|CTA)/i.test(u)
-  );
-}
-
-function parseSimplyHeartStep4Blocks(raw: string): Step4Block[] {
-  const lines = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
-  const blocks: Step4Block[] = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    while (i < lines.length && isBlankLine(lines[i])) i++;
-    if (i >= lines.length) break;
-
-    const t = lines[i].trim();
-
-    if (t.startsWith("### ")) {
-      blocks.push({ kind: "h3", text: t.slice(4).trim() });
-      i++;
-      continue;
-    }
-
-    const proposalMatch = t.match(/^(\[\d+\s*안\])\s*(.*)$/);
-    if (proposalMatch) {
-      const tag = proposalMatch[1];
-      const summary = proposalMatch[2].trim();
-      i++;
-      const mainLines: string[] = [];
-      const subsections: { title: string; lines: string[] }[] = [];
-      let curSub: { title: string; lines: string[] } | null = null;
-
-      const pushSubIfAny = () => {
-        if (curSub && (curSub.title || curSub.lines.length > 0)) {
-          subsections.push(curSub);
-        }
-        curSub = null;
-      };
-
-      while (i < lines.length) {
-        const Lt = lines[i]!.trim();
-        if (!Lt) {
-          let j = i + 1;
-          while (j < lines.length && isBlankLine(lines[j]!)) j++;
-          if (j >= lines.length) {
-            i = j;
-            break;
-          }
-          const next = lines[j]!.trim();
-          if (next.startsWith("### ") || /^\[\d+\s*안\]/.test(next)) {
-            i = j;
-            break;
-          }
-          if (curSub) curSub.lines.push("");
-          else mainLines.push("");
-          i++;
-          continue;
-        }
-        if (Lt.startsWith("### ") || /^\[\d+\s*안\]/.test(Lt)) break;
-
-        if (isStep4ProposalSubsectionTitle(Lt)) {
-          pushSubIfAny();
-          curSub = { title: Lt.trim(), lines: [] };
-          i++;
-          continue;
-        }
-
-        if (curSub) curSub.lines.push(lines[i]!);
-        else mainLines.push(lines[i]!);
-        i++;
-      }
-      pushSubIfAny();
-
-      blocks.push({ kind: "proposal", tag, summary, quote: mainLines.join("\n").trim() });
-      for (const sub of subsections) {
-        const body = sub.lines.join("\n").trim();
-        if (sub.title || body) {
-          blocks.push({ kind: "subsection", title: sub.title, body });
-        }
-      }
-      continue;
-    }
-
-    if (looksLikeStep4Tier2Line(t)) {
-      blocks.push({ kind: "tier2", text: t });
-      i++;
-      continue;
-    }
-
-    const start = i;
-    i++;
-    while (i < lines.length) {
-      const Lt = lines[i]!.trim();
-      if (!Lt) break;
-      if (Lt.startsWith("### ") || /^\[\d+\s*안\]/.test(Lt)) break;
-      if (looksLikeStep4Tier2Line(Lt)) break;
-      i++;
-    }
-    const para = lines.slice(start, i).join("\n").trim();
-    if (para) blocks.push({ kind: "p", text: para });
-  }
-
-  return blocks;
-}
-
-function normalizeStep4Quote(s: string): string {
-  let x = s.trim();
-  if ((x.startsWith('"') && x.endsWith('"')) || (x.startsWith("“") && x.endsWith("”"))) {
-    x = x.slice(1, -1).trim();
-  }
-  if (x.startsWith("「") && x.endsWith("」")) x = x.slice(1, -1).trim();
-  return x;
-}
-
-function SimplyHeartStep4Structured({ text }: { text: string }): ReactNode {
-  const blocks = parseSimplyHeartStep4Blocks(text);
-  return (
-    <div className="w-full space-y-4 text-left">
-      {blocks.map((b, bi) => {
-        if (b.kind === "h3") {
-          return (
-            <div
-              key={bi}
-              className="mt-8 flex items-center gap-3 rounded-xl bg-[rgba(232,89,58,0.06)] px-4 py-3 text-left first:mt-0"
-            >
-              <div className="h-5 w-[3px] shrink-0 rounded-full bg-[#E8593A]" aria-hidden />
-              <h4 className="text-[15px] font-bold tracking-tight text-[#1A1A1A]">{b.text}</h4>
-            </div>
-          );
-        }
-        if (b.kind === "tier2") {
-          return (
-            <div key={bi} className={cn(STEP4_SUBSECTION_BOX, "text-left")}>
-              <p className="text-[14px] font-semibold leading-snug text-[#4A4234]">{b.text}</p>
-            </div>
-          );
-        }
-        if (b.kind === "subsection") {
-          return (
-            <div key={bi} className={cn(STEP4_SUBSECTION_BOX, "text-left")}>
-              {b.title ? (
-                <p className="text-[14px] font-bold text-[#4A4234]">{b.title}</p>
-              ) : null}
-              {b.body ? (
-                <p
-                  className={cn(
-                    b.title ? "mt-2" : null,
-                    "whitespace-pre-wrap text-[15px] leading-[1.75] text-[#2A2A2A]",
-                  )}
-                >
-                  {normalizeStep4Quote(b.body)}
-                </p>
-              ) : null}
-            </div>
-          );
-        }
-        if (b.kind === "p") {
-          return (
-            <p
-              key={bi}
-              className="w-full whitespace-pre-wrap text-left text-[15px] leading-[1.85] text-[#2A2A2A]"
-            >
-              {b.text}
-            </p>
-          );
-        }
-        if (b.kind !== "proposal") return null;
-        const q = normalizeStep4Quote(b.quote);
-        return (
-          <div
-            key={bi}
-            className="overflow-hidden rounded-2xl border border-[rgba(232,89,58,0.18)] bg-white text-left shadow-[0_2px_16px_-6px_rgba(0,0,0,0.1)]"
-          >
-            <div className="flex items-start gap-3 border-b border-[rgba(0,0,0,0.06)] px-5 py-4">
-              <span
-                className="shrink-0 rounded-lg px-3 py-1 text-[12px] font-black tracking-tight text-white"
-                style={{ backgroundColor: PROPOSAL_AN_ORANGE }}
-              >
-                {b.tag}
-              </span>
-              {b.summary ? (
-                <p className="min-w-0 flex-1 text-[17px] font-bold leading-snug text-[#0F0F0F]">{b.summary}</p>
-              ) : null}
-            </div>
-            {q ? (
-              <div className="bg-[#FAFAF8] px-5 py-4">
-                <p className="whitespace-pre-wrap text-[14px] leading-[1.85] text-[#3A3A3A]">{q}</p>
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 type EarlyStepBlock =
@@ -1298,6 +1056,65 @@ function SimplyHeartEarlyStepsStructured({
   );
 }
 
+function stripLeadingH2Block(s: string): string {
+  return s.replace(/^##\s+[^\n]+\n?/m, "").trim();
+}
+
+/** 서버 응답의 `##` 대제목 3구역 분할 실패 시 null → 통째 렌더 */
+function partitionUnifiedReport(raw: string): { diagnosis: string; doDont: string; solutions: string } | null {
+  const norm = raw.replace(/\r\n/g, "\n").trim();
+  if (!norm) return null;
+  const parts = norm.split(/\n(?=## )/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  const diagnosis: string[] = [];
+  const doDont: string[] = [];
+  const solutions: string[] = [];
+  const other: string[] = [];
+  for (const p of parts) {
+    const head = (p.split("\n")[0] ?? "").trim();
+    if (/요청내용\s*분석|문제\s*진단/i.test(head)) diagnosis.push(p);
+    else if (/Do\s*&\s*Don'?t|Do\s*\/\s*Don'?t/i.test(head)) doDont.push(p);
+    else if (/Simply\s*U\+|솔루션/i.test(head)) solutions.push(p);
+    else other.push(p);
+  }
+  for (const o of other) {
+    if (!diagnosis.length) diagnosis.push(o);
+    else if (!doDont.length) doDont.push(o);
+    else solutions.push(o);
+  }
+  const d = diagnosis.join("\n\n").trim();
+  const dd = doDont.join("\n\n").trim();
+  const sol = solutions.join("\n\n").trim();
+  if (!d || !dd || !sol) return null;
+  return { diagnosis: d, doDont: dd, solutions: sol };
+}
+
+function SimplyHeartUnifiedResult({ text }: { text: string }): ReactNode {
+  const display = stripSimplyHeartDisplayAsterisks(text);
+  const parted = partitionUnifiedReport(display);
+  if (!parted) {
+    return <SimplyHeartEarlyStepsStructured text={display} />;
+  }
+  return (
+    <div className="space-y-8">
+      <div>
+        <p className="mb-3 text-[12px] font-bold uppercase tracking-widest text-[#2563EB]">
+          요청내용 분석 · 문제 진단
+        </p>
+        <SimplyHeartEarlyStepsStructured text={stripLeadingH2Block(parted.diagnosis)} step={1} />
+      </div>
+      <div className="border-t border-[rgba(0,0,0,0.08)] pt-8">
+        <p className="mb-3 text-[12px] font-bold uppercase tracking-widest text-[#059669]">{"Do & Don't"}</p>
+        <SimplyHeartEarlyStepsStructured text={stripLeadingH2Block(parted.doDont)} step={3} />
+      </div>
+      <div className="border-t border-[rgba(0,0,0,0.08)] pt-8">
+        <p className="mb-3 text-[12px] font-bold uppercase tracking-widest text-[#E8593A]">Simply U+ 솔루션 (3안)</p>
+        <SimplyHeartEarlyStepsStructured text={stripLeadingH2Block(parted.solutions)} />
+      </div>
+    </div>
+  );
+}
+
 type ImageSlot = { id: string; name: string; dataUrl: string };
 
 function buildSimplyHeartPromptText(topic: string, detail: string): string {
@@ -1315,8 +1132,8 @@ export function SimplyHeart() {
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
   const [pdfName, setPdfName] = useState<string | null>(null);
   const [images, setImages] = useState<ImageSlot[]>([]);
-  const [results, setResults] = useState<Partial<Record<1 | 2 | 3 | 4, string>>>({});
-  const [loadingStep, setLoadingStep] = useState<0 | 1 | 2 | 3 | 4>(0);
+  const [report, setReport] = useState<string | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [pdfExporting, setPdfExporting] = useState(false);
 
@@ -1329,9 +1146,9 @@ export function SimplyHeart() {
     setPdfDataUrl(null);
     setPdfName(null);
     setImages([]);
-    setResults({});
+    setReport(null);
     setRunError(null);
-    setLoadingStep(0);
+    setAnalyzing(false);
   }, []);
 
   const onPickPdf = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -1374,47 +1191,33 @@ export function SimplyHeart() {
   };
 
   const runPipeline = async () => {
-    if (!canRun || loadingStep !== 0) return;
+    if (!canRun || analyzing) return;
     setRunError(null);
-    setResults({});
+    setReport(null);
     const imageParts: SimplyHeartImagePart[] = images.map((im) => ({
       mimeType: mimeFromDataUrl(im.dataUrl),
       data: dataUrlToBareBase64(im.dataUrl),
     }));
     const pdfBase64 = pdfDataUrl ? dataUrlToBareBase64(pdfDataUrl) : undefined;
 
-    const prior: Partial<Record<"1" | "2" | "3", string>> = {};
-
     try {
-      for (const step of [1, 2, 3, 4] as const) {
-        setLoadingStep(step);
-        const { text: out } = await postSimplyHeartStep({
-          step,
-          text: promptText.trim() || "(이미지·PDF만 제공)",
-          pdfBase64,
-          images: imageParts.length ? imageParts : undefined,
-          prior: { ...prior },
-        });
-        if (step <= 3) prior[String(step) as "1" | "2" | "3"] = out;
-        setResults((r) => ({ ...r, [step]: out }));
-      }
+      setAnalyzing(true);
+      const { text: out } = await postSimplyHeartStep({
+        text: promptText.trim() || "(이미지·PDF만 제공)",
+        pdfBase64,
+        images: imageParts.length ? imageParts : undefined,
+      });
+      setReport(out);
     } catch (e) {
       setRunError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoadingStep(0);
+      setAnalyzing(false);
     }
   };
 
   const buildReportPlain = (): string => {
-    const lines: string[] = [
-      "심플리하게 · 4단계 리포트",
-      "",
-      ...STEP_META.map((s) => {
-        const body = stripSimplyHeartDisplayAsterisks((results[s.n] ?? "").trim());
-        return [`## ${s.title}`, s.subtitle, "", body || "(없음)", ""].join("\n");
-      }),
-    ];
-    return lines.join("\n").trim();
+    const body = stripSimplyHeartDisplayAsterisks((report ?? "").trim());
+    return ["심플리 가이드 · 통합 분석 리포트", "", body || "(없음)"].join("\n").trim();
   };
 
   const downloadPdf = async () => {
@@ -1432,7 +1235,7 @@ export function SimplyHeart() {
       <header className="sticky top-0 z-10 border-b border-[rgba(0,0,0,0.06)] bg-white shadow-[0_4px_24px_-6px_rgba(0,0,0,0.08),0_2px_10px_-4px_rgba(0,0,0,0.04)]">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            <AxisBrandTitle subtitle="심플리하게 — 고객 부담을 줄이는 메시지 진단" />
+            <AxisBrandTitle subtitle="심플리 가이드 — 고객 부담을 줄이는 메시지 진단" />
           </div>
         </div>
         <GlobalBrandNav className="bg-white" innerClassName="max-w-7xl px-4 sm:px-6" />
@@ -1461,8 +1264,8 @@ export function SimplyHeart() {
           <div>
             <h1 className="text-[20px] font-bold tracking-tight text-[#1A1A1A]">입력</h1>
             <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-[#6B6B6B]">
-              텍스트를 주 입력으로 하고, 시안·배너 이미지(PNG/JPG) 또는 기획 PDF를 함께 올리면 멀티모달로 분석합니다. Gemini가
-              이미지 내 문구·구조를 읽고 동일한 4단계로 정리합니다.
+              텍스트를 주 입력으로 하고, 시안·배너 이미지(PNG/JPG) 또는 기획 PDF를 함께 올리면 멀티모달로 분석합니다. 한 번의 실행으로
+              요청 진단, Do &amp; Don&apos;t, Simply U+ 솔루션 3안을 한 화면에서 확인할 수 있습니다.
             </p>
           </div>
           <Button type="button" variant="outline" className="shrink-0 rounded-full" onClick={clearAll}>
@@ -1570,19 +1373,19 @@ export function SimplyHeart() {
           <div className="mt-6 border-t border-[rgba(0,0,0,0.06)] pt-6">
             <Button
               type="button"
-              disabled={!canRun || loadingStep !== 0}
+              disabled={!canRun || analyzing}
               className="brand-btn-primary h-14 w-full text-[17px] font-semibold disabled:pointer-events-none disabled:opacity-45"
               onClick={() => void runPipeline()}
             >
-              {loadingStep !== 0 ? (
+              {analyzing ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden />
-                  {loadingStep}단계 실행 중…
+                  통합 분석 중…
                 </>
               ) : (
                 <>
                   <Sparkles className="mr-2 h-5 w-5" aria-hidden />
-                  4단계 분석 실행
+                  분석 실행
                 </>
               )}
             </Button>
@@ -1595,124 +1398,51 @@ export function SimplyHeart() {
           ) : null}
         </div>
 
-        {/* ── 결과 섹션 헤더 ── */}
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-[22px] font-bold tracking-tight text-[#0F0F0F]">분석 결과</h2>
-            <p className="mt-1 text-[13px] text-[#9A9A9A]">4단계 Simply U+ AI 리포트</p>
+        <section
+          className={cn(
+            cardBase,
+            "overflow-hidden",
+            report ? "border-[rgba(232,89,58,0.22)] shadow-[0_8px_40px_-12px_rgba(232,89,58,0.15)]" : null,
+          )}
+        >
+          <div className="h-[3px] w-full bg-[#FF7F66]" aria-hidden />
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[rgba(0,0,0,0.06)] px-6 py-5">
+            <div className="min-w-0">
+              <h2 className="text-[19px] font-bold tracking-tight text-[#0F0F0F]">분석 결과</h2>
+              <p className="mt-1 text-[13px] text-[#6B6B6B]">
+                요청내용 분석(문제진단) → Do &amp; Don&apos;t → Simply U+ 솔루션 3안
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="shrink-0 rounded-full border-[rgba(0,0,0,0.12)] text-[14px]"
+              disabled={!report || pdfExporting}
+              onClick={() => void downloadPdf()}
+            >
+              {pdfExporting ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                <Download className="mr-1.5 h-4 w-4" aria-hidden />
+              )}
+              PDF 리포트 다운로드
+            </Button>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="rounded-full border-[rgba(0,0,0,0.12)] text-[14px]"
-            disabled={!results[4] || pdfExporting}
-            onClick={() => void downloadPdf()}
-          >
-            {pdfExporting ? (
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden />
-            ) : (
-              <Download className="mr-1.5 h-4 w-4" aria-hidden />
-            )}
-            PDF 리포트 다운로드
-          </Button>
-        </div>
-
-        {/* ── 결과 카드 목록 ── */}
-        <div className="flex flex-col gap-5">
-          {STEP_META.map((meta, idx) => {
-            const content = results[meta.n];
-            const displayContent = content ? stripSimplyHeartDisplayAsterisks(content) : "";
-            const isLoading = loadingStep === meta.n;
-            const isFinal = meta.n === 4;
-            const stepStyle = STEP_STYLES[meta.n];
-            return (
-              <Fragment key={meta.n}>
-                <section
-                  className={cn(
-                    "overflow-hidden rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_4px_28px_-10px_rgba(0,0,0,0.08)]",
-                    "transition-all duration-500",
-                    isFinal && content
-                      ? "border-[rgba(232,89,58,0.3)] shadow-[0_8px_40px_-12px_rgba(232,89,58,0.22)]"
-                      : null,
-                    content ? "animate-in fade-in slide-in-from-bottom-2 duration-500" : null,
-                  )}
-                  style={
-                    content
-                      ? { animationDelay: `${idx * 90}ms`, animationFillMode: "forwards" as const }
-                      : undefined
-                  }
-                >
-                  {/* 4단계 상단 강조 바 */}
-                  {isFinal && content ? (
-                    <div className="h-[3px] w-full bg-[#E8593A]" />
-                  ) : null}
-
-                  {/* 카드 헤더 — 단계 번호 + 제목 + 상태 */}
-                  <div
-                    className="flex items-center gap-4 border-b border-[rgba(0,0,0,0.06)] px-6 py-5"
-                    style={{ borderLeftColor: stepStyle.accent, borderLeftWidth: 4 }}
-                  >
-                    {/* 단계 번호 뱃지 */}
-                    <div
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[14px] font-black"
-                      style={{ backgroundColor: NUM_BADGE_BG, color: NUM_BADGE_TEXT }}
-                    >
-                      {String(meta.n).padStart(2, "0")}
-                    </div>
-                    {/* 제목 영역 */}
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-[19px] font-bold leading-tight tracking-tight text-[#0F0F0F]">
-                        {meta.title}
-                      </h3>
-                      <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#ABABAB]">
-                        {meta.subtitle}
-                      </p>
-                    </div>
-                    {/* 로딩 상태 (단계색 서클 미사용) */}
-                    {isLoading ? (
-                      <div className="flex shrink-0 items-center gap-1.5 text-[12px] font-medium text-[#6B6B6B]">
-                        <Loader2 className="h-4 w-4 animate-spin text-[#6B6B6B]" aria-hidden />
-                        분석 중…
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {/* 3단계 Do/Don't 안내 레이블 */}
-                  {meta.n === 3 && displayContent ? (
-                    <div className="flex items-center gap-2 border-b border-[rgba(0,0,0,0.05)] bg-[#F9F9F7] px-6 py-2.5">
-                      <span className="text-[11px] font-bold uppercase tracking-widest text-[#059669]">Do</span>
-                      <span className="text-[11px] text-[#C0C0C0]">/</span>
-                      <span className="text-[11px] font-bold uppercase tracking-widest text-[#DC2626]">Don't</span>
-                      <span className="ml-1.5 text-[12px] text-[#ABABAB]">항목별 색상으로 구분됩니다</span>
-                    </div>
-                  ) : null}
-
-                  {/* 콘텐츠 본문 */}
-                  {displayContent ? (
-                    <div className="px-6 py-6 text-left">
-                      {isFinal ? (
-                        <SimplyHeartStep4Structured text={displayContent} />
-                      ) : (
-                        <SimplyHeartEarlyStepsStructured text={displayContent} step={meta.n} />
-                      )}
-                    </div>
-                  ) : !isLoading ? (
-                    <div className="px-6 py-10 text-center">
-                      <p className="text-[13px] text-[#C0C0C0]">
-                        분석 실행 후 이 단계 결과가 표시됩니다.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center gap-3 px-6 py-10">
-                      <Loader2 className="h-5 w-5 animate-spin text-[#6B6B6B]" aria-hidden />
-                      <p className="text-[14px] text-[#6B6B6B]">AI 분석 중입니다…</p>
-                    </div>
-                  )}
-                </section>
-              </Fragment>
-            );
-          })}
-        </div>
+          {analyzing ? (
+            <div className="flex items-center justify-center gap-3 px-6 py-16">
+              <Loader2 className="h-6 w-6 shrink-0 animate-spin text-[#6B6B6B]" aria-hidden />
+              <p className="text-[15px] text-[#6B6B6B]">AI 통합 분석 중입니다…</p>
+            </div>
+          ) : report ? (
+            <div className="px-6 py-6">
+              <SimplyHeartUnifiedResult text={report} />
+            </div>
+          ) : (
+            <div className="px-6 py-14 text-center">
+              <p className="text-[14px] text-[#C0C0C0]">분석 실행 후 결과가 이 영역에 표시됩니다.</p>
+            </div>
+          )}
+        </section>
       </main>
     </div>
   );

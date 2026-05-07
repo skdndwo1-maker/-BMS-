@@ -28,6 +28,7 @@ import {
   Grid3x3,
   Magnet,
   X,
+  Layers,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
@@ -818,9 +819,9 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
         {/* ── Header ──────────────────────────────────────────────── */}
         <header className="flex-shrink-0 bg-white border-b border-gray-200">
           <div className="flex items-center justify-between px-4 py-3">
-            <div className="flex min-w-0 flex-1 items-center gap-4">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
               <div className="min-w-0 shrink">
-                <AxisBrandTitle subtitle="브랜드 그래픽 제작" compact />
+                <AxisBrandTitle subtitle="브랜드 디자인" compact />
               </div>
               <Separator orientation="vertical" className="h-6 shrink-0" />
               <Button variant="ghost" size="sm" className="shrink-0" onClick={() => navigate(-1)}>
@@ -891,6 +892,31 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
             </div>
           </div>
           <GlobalBrandNav className="border-t border-b-0 bg-white" innerClassName="w-full px-4 sm:px-6" />
+          <div className="flex flex-col gap-2 border-t border-gray-100 bg-white px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex min-w-0 items-center gap-2">
+              <Layers className="h-4 w-4 shrink-0 text-[#FF7F66]" aria-hidden />
+              <span className="text-sm font-bold tracking-tight text-gray-900">카테고리 선택</span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2 sm:ml-auto" role="group" aria-label="브랜드 디자인 모드">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 rounded-full border-transparent bg-black px-4 text-white shadow-[0_4px_12px_-4px_rgba(0,0,0,0.25)] hover:bg-black/90"
+              >
+                디자인 제작
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 rounded-full border-[rgba(0,0,0,0.1)] bg-white text-[#6B6B6B]"
+                onClick={() => navigate("/inspection")}
+              >
+                디자인 검수
+              </Button>
+            </div>
+          </div>
         </header>
 
         {/* ── Main Editor ─────────────────────────────────────────── */}

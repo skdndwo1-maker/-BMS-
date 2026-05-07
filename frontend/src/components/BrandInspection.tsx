@@ -1,4 +1,5 @@
 import { Fragment, useState, useRef, useEffect, type ChangeEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   analyzeGuideline,
   fetchGuideline,
@@ -34,32 +35,17 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type InspectionStep = "idle" | "uploading" | "analyzing" | "reviewing" | "complete";
 
-type BusinessCategory = "Personal" | "Enterprise" | "AI" | "ETC";
 type DesignGroup = "online" | "offline";
 type DesignType = "사내공지" | "프로모션" | "신제품 홍보" | "매장 제작물" | "안전";
 
-const BUSINESS_CATEGORIES: readonly BusinessCategory[] = ["Personal", "Enterprise", "AI", "ETC"];
-const BUSINESS_CATEGORY_SUBS: Record<BusinessCategory, readonly string[]> = {
-  Personal: ["모바일", "인터넷", "IPTV", "스마트홈", "멤버십", "구독", "채널"],
-  Enterprise: ["Infra", "Works", "AX"],
-  AI: ["Service", "Feature", "Tech"],
-  ETC: [],
-};
 const DESIGN_GROUPS: ReadonlyArray<{ id: DesignGroup; label: string }> = [
   { id: "online", label: "온라인" },
   { id: "offline", label: "오프라인" },
 ];
 const DESIGN_TYPES: readonly DesignType[] = ["사내공지", "프로모션", "신제품 홍보", "매장 제작물", "안전"];
-
-const ETC_TOOLTIP_TEXT = [
-  "브랜드 위계체계에 포함되지 않는 내부 사용,",
-  "프로모션용 서비스, 사업, AI와 무관한",
-  "작명 업무 시 사용",
-].join("\n");
 
 /** 대시보드 ref: 필터·칩 — 비활성 베이지 톤, 활성 검은 pill */
 const categoryTabBase =
@@ -118,6 +104,7 @@ interface PassedCriteria {
 }
 
 export function BrandInspection() {
+  const navigate = useNavigate();
   const [designFile, setDesignFile] = useState<File | null>(null);
   const [designPreview, setDesignPreview] = useState<string | null>(null);
   const [guidelineFile, setGuidelineFile] = useState<File | null>(null);
@@ -142,8 +129,6 @@ export function BrandInspection() {
   const [reportExportFormat, setReportExportFormat] = useState<ExportFormat>("png");
   const [revisedExportFormat, setRevisedExportFormat] = useState<ExportFormat>("png");
 
-  const [selectedBusinessCategory, setSelectedBusinessCategory] = useState<BusinessCategory>("Personal");
-  const [selectedBusinessSubCategory, setSelectedBusinessSubCategory] = useState<string>("");
   const [selectedDesignGroup, setSelectedDesignGroup] = useState<DesignGroup>("online");
   const [selectedDesignType, setSelectedDesignType] = useState<DesignType | null>(null);
 
@@ -168,18 +153,12 @@ export function BrandInspection() {
       if (!raw) return;
       const d = JSON.parse(raw) as {
         v?: number;
-        selectedBusinessCategory?: BusinessCategory;
-        selectedBusinessSubCategory?: string;
         selectedDesignGroup?: DesignGroup;
         selectedDesignType?: DesignType | null;
         guidelineText?: string;
         selectedGuidelineLibrary?: string;
       };
       if (d.v !== 1) return;
-      if (d.selectedBusinessCategory && BUSINESS_CATEGORIES.includes(d.selectedBusinessCategory)) {
-        setSelectedBusinessCategory(d.selectedBusinessCategory);
-      }
-      if (typeof d.selectedBusinessSubCategory === "string") setSelectedBusinessSubCategory(d.selectedBusinessSubCategory);
       if (d.selectedDesignGroup === "online" || d.selectedDesignGroup === "offline") setSelectedDesignGroup(d.selectedDesignGroup);
       if (
         d.selectedDesignType === null ||
@@ -201,8 +180,6 @@ export function BrandInspection() {
           INSPECTION_NAV_DRAFT_KEY,
           JSON.stringify({
             v: 1,
-            selectedBusinessCategory,
-            selectedBusinessSubCategory,
             selectedDesignGroup,
             selectedDesignType,
             guidelineText,
@@ -214,8 +191,6 @@ export function BrandInspection() {
       }
     });
   }, [
-    selectedBusinessCategory,
-    selectedBusinessSubCategory,
     selectedDesignGroup,
     selectedDesignType,
     guidelineText,
@@ -340,9 +315,6 @@ export function BrandInspection() {
           guidelineId: selectedGuidelineLibrary,
           additionalNotes: guidelineText,
           supplementaryReference: guidelineFile ?? undefined,
-          businessCategory: selectedBusinessSubCategory
-            ? `${selectedBusinessCategory} / ${selectedBusinessSubCategory}`
-            : selectedBusinessCategory,
           designGroup: selectedDesignGroup,
           designType: selectedDesignType ?? undefined,
         });
@@ -404,8 +376,8 @@ export function BrandInspection() {
     <div className="min-h-screen bg-[#F8F7F4] font-sans">
       <header className="sticky top-0 z-10 border-b border-[rgba(0,0,0,0.06)] bg-white/95 shadow-[0_4px_24px_-6px_rgba(0,0,0,0.06)] backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex min-w-0 flex-1 items-center">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
               <AxisBrandTitle subtitle="브랜드 디자인 검수" />
             </div>
           </div>
@@ -466,101 +438,60 @@ export function BrandInspection() {
 
       <main className="mx-auto max-w-7xl px-5 py-8 sm:px-6 sm:py-10">
         <div className="space-y-8">
-          {/* ── 카테고리 선택 ── */}
+          {/* ── 제작물 유형 ── */}
           <div className={`${inspectionCard} px-5 py-5 sm:px-8`}>
-            <div className="mb-5">
-              <InspectionSectionTitle>카테고리 선택</InspectionSectionTitle>
-              <p className="mt-2 text-sm text-[#6B6B6B]">검수 맥락에 맞는 영역·채널·제작물 유형을 지정하세요.</p>
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <InspectionSectionTitle>제작물 유형</InspectionSectionTitle>
+                <p className="mt-2 text-sm text-[#6B6B6B]">검수 맥락에 맞는 온라인·오프라인과 세부 유형을 지정하세요.</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2 sm:ml-auto" role="group" aria-label="브랜드 디자인 모드">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 rounded-full border-[rgba(0,0,0,0.1)] bg-white text-[#6B6B6B]"
+                  onClick={() => navigate("/brand-graphics")}
+                >
+                  디자인 제작
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 rounded-full border-transparent bg-black px-4 text-white shadow-[0_4px_12px_-4px_rgba(0,0,0,0.25)] hover:bg-black/90"
+                >
+                  디자인 검수
+                </Button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 min-[900px]:grid-cols-2">
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6B6B6B]">영역 선택</p>
-                <div className="flex flex-wrap gap-2">
-                  <TooltipProvider>
-                    {BUSINESS_CATEGORIES.map((c) =>
-                      c === "ETC" ? (
-                        <Tooltip key={c}>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedBusinessCategory(c);
-                                setSelectedBusinessSubCategory("");
-                              }}
-                              className={`${categoryTabBase} ${selectedBusinessCategory === c ? categoryTabActive : categoryTabIdle}`}
-                            >
-                              {c}
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-[320px] whitespace-pre-line">
-                            {ETC_TOOLTIP_TEXT}
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => {
-                            setSelectedBusinessCategory(c);
-                            setSelectedBusinessSubCategory("");
-                          }}
-                          className={`${categoryTabBase} ${selectedBusinessCategory === c ? categoryTabActive : categoryTabIdle}`}
-                        >
-                          {c}
-                        </button>
-                      )
-                    )}
-                  </TooltipProvider>
-                </div>
-                {selectedBusinessCategory !== "ETC" ? (
-                  <div className="mt-2 flex min-h-0 flex-1 flex-wrap content-start gap-2 overflow-y-auto">
-                    {BUSINESS_CATEGORY_SUBS[selectedBusinessCategory].map((sub) => (
-                      <button
-                        key={sub}
-                        type="button"
-                        onClick={() => setSelectedBusinessSubCategory(sub)}
-                        className={`${categoryTabBase} ${selectedBusinessSubCategory === sub ? categoryTabActive : categoryTabIdle}`}
-                      >
-                        {sub}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {DESIGN_GROUPS.map((g) => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => setSelectedDesignGroup(g.id)}
+                    className={`${categoryTabBase} ${selectedDesignGroup === g.id ? categoryTabActive : categoryTabIdle}`}
+                  >
+                    {g.label}
+                  </button>
+                ))}
               </div>
-
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6B6B6B]">제작물 유형</p>
-                <div className="flex flex-col gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {DESIGN_GROUPS.map((g) => (
-                      <button
-                        key={g.id}
-                        type="button"
-                        onClick={() => setSelectedDesignGroup(g.id)}
-                        className={`${categoryTabBase} ${selectedDesignGroup === g.id ? categoryTabActive : categoryTabIdle}`}
-                      >
-                        {g.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {DESIGN_TYPES.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setSelectedDesignType(t)}
-                        className={`${categoryTabBase} ${selectedDesignType === t ? categoryTabActive : categoryTabIdle}`}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-[11px] text-gray-400">
-                    온라인/오프라인 전환 시에도 세부 유형 선택은 유지됩니다.
-                  </p>
-                </div>
+              <div className="flex flex-wrap gap-2">
+                {DESIGN_TYPES.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setSelectedDesignType(t)}
+                    className={`${categoryTabBase} ${selectedDesignType === t ? categoryTabActive : categoryTabIdle}`}
+                  >
+                    {t}
+                  </button>
+                ))}
               </div>
+              <p className="text-[11px] text-gray-400">온라인/오프라인 전환 시에도 세부 유형 선택은 유지됩니다.</p>
             </div>
           </div>
 

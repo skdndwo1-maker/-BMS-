@@ -860,7 +860,7 @@ export function BrandNaming() {
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex min-w-0 flex-1 items-center">
-              <AxisBrandTitle subtitle="브랜드 네이밍 검토" />
+              <AxisBrandTitle subtitle="브랜드 네이밍" />
             </div>
           </div>
         </div>

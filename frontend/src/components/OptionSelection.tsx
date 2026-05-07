@@ -11,7 +11,6 @@ import {
 import { useNavigate } from "react-router-dom";
 import {
   Palette,
-  ScanSearch,
   PenTool,
   Library,
   Send,
@@ -87,28 +86,18 @@ const mainOptions = [
   {
     id: "graphic",
     icon: Palette,
-    badge: "Create",
-    title: "브랜드 그래픽 제작",
+    badge: "Studio",
+    title: "브랜드 디자인",
     description:
-      "포스터·플래카드·SNS 등 다양한 사이즈의 템플릿으로 브랜드 가이드에 맞는 비주얼을 손쉽게 디자인합니다.",
+      "템플릿으로 비주얼을 만들고(디자인 제작), 업로드한 시안이 가이드에 맞는지 AI로 검수할 수 있습니다. 상단에서 디자인 제작·디자인 검수를 바꿔 쓰세요.",
     cta: "스튜디오 열기",
     route: "/brand-graphics",
-  },
-  {
-    id: "inspection",
-    icon: ScanSearch,
-    badge: "AI Powered",
-    title: "브랜드 디자인 검수",
-    description:
-      "그래픽·영상·사진·템플릿을 업로드하면 Gemini AI가 브랜드 가이드라인 부합 여부를 자동으로 검토합니다.",
-    cta: "검수 시작하기",
-    route: "/inspection",
   },
   {
     id: "naming",
     icon: PenTool,
     badge: "AI Integrated",
-    title: "브랜드 네이밍 검토",
+    title: "브랜드 네이밍",
     description:
       "로고·브랜드명·슬로건이 브랜드 원칙에 부합하는지 AI가 즉시 피드백을 제공합니다.",
     cta: "네이밍 검토하기",
@@ -128,10 +117,10 @@ const mainOptions = [
     id: "simply-heart",
     icon: Gem,
     badge: "Simply",
-    title: "심플리하게",
+    title: "심플리 가이드",
     description:
       "요금·카피·기획안을 텍스트와 이미지·PDF로 넣으면, Simply U+ 관점에서 4단계로 진단하고 고객 부담을 줄인 메시지와 행동을 제안합니다.",
-    cta: "심플리하게 열기",
+    cta: "심플리 가이드 열기",
     route: "/simply-heart",
   },
 ];

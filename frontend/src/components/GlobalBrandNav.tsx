@@ -7,16 +7,16 @@ import { cn } from "@/components/ui/utils";
 const navItems = [
   {
     key: "graphics",
-    label: "그래픽 제작",
+    label: "브랜드 디자인",
     to: "/brand-graphics",
-    match: (p: string) => p === "/options" || p === "/brand-graphics" || p.startsWith("/create"),
+    match: (p: string) =>
+      p === "/options" || p === "/brand-graphics" || p.startsWith("/create") || p === "/inspection",
   },
-  { key: "inspection", label: "디자인 검수", to: "/inspection", match: (p: string) => p === "/inspection" },
-  { key: "naming", label: "네이밍 검토", to: "/naming", match: (p: string) => p === "/naming" },
-  { key: "library", label: "라이브러리", to: "/library", match: (p: string) => p === "/library" },
+  { key: "naming", label: "브랜드 네이밍", to: "/naming", match: (p: string) => p === "/naming" },
+  { key: "library", label: "브랜드 라이브러리", to: "/library", match: (p: string) => p === "/library" },
   {
     key: "simplyHeart",
-    label: "심플리하게",
+    label: "심플리 가이드",
     to: "/simply-heart",
     match: (p: string) => p === "/simply-heart",
   },

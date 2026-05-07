@@ -322,7 +322,7 @@ app.post("/api/options/chat", async (req, res) => {
   }
 });
 
-/** Simply Heart — 4단계 중 한 단계 실행 (멀티모달: 텍스트 + 이미지; PDF는 base64로 텍스트 추출) */
+/** Simply Heart — 심플리 가이드 통합 분석 (step=0) */
 app.post("/api/simply-heart/step", async (req, res) => {
   try {
     if (!hasGeminiApiKey()) {
@@ -333,8 +333,8 @@ app.post("/api/simply-heart/step", async (req, res) => {
       return;
     }
     const step = Number((req.body as { step?: unknown })?.step);
-    if (![1, 2, 3, 4].includes(step)) {
-      res.status(400).json({ ok: false, error: "step은 1~4여야 합니다." });
+    if (step !== 0) {
+      res.status(400).json({ ok: false, error: "step은 0(통합 분석)만 지원합니다." });
       return;
     }
     const userText = String((req.body as { text?: unknown })?.text ?? "").trim();
@@ -360,13 +360,6 @@ app.post("/api/simply-heart/step", async (req, res) => {
       }))
       .filter((x) => x.data.length > 0);
 
-    const rawPrior = (req.body as { prior?: Record<string, unknown> })?.prior ?? {};
-    const prior = {
-      "1": typeof rawPrior["1"] === "string" ? rawPrior["1"] : undefined,
-      "2": typeof rawPrior["2"] === "string" ? rawPrior["2"] : undefined,
-      "3": typeof rawPrior["3"] === "string" ? rawPrior["3"] : undefined,
-    };
-
     if (!userText && !extractedPdfText && imageParts.length === 0) {
       res.status(400).json({ ok: false, error: "텍스트·PDF·이미지 중 하나 이상이 필요합니다." });
       return;
@@ -374,36 +367,32 @@ app.post("/api/simply-heart/step", async (req, res) => {
 
     const t0 = Date.now();
     const { text, model } = await runSimplyHeartStep({
-      step: step as 1 | 2 | 3 | 4,
+      step: 0,
       userText: userText || "(이미지·PDF만 제공)",
       extractedPdfText,
       imageParts: imageParts.length ? imageParts : undefined,
-      prior,
+      prior: {},
     });
 
-    if (step === 4) {
-      void persistRun({
-        req,
-        type: "simply_heart",
-        status: "pending_review",
-        guidelineId: "simply-uplus-guideline",
-        inputJson: {
-          text: userText,
-          hadPdf: Boolean(pdfBase64),
-          imageCount: imageParts.length,
-        },
-        outputJson: {
-          step1: prior["1"] ?? null,
-          step2: prior["2"] ?? null,
-          step3: prior["3"] ?? null,
-          step4: text,
-        },
-        inputText: userText || null,
-        outputText: [prior["1"], prior["2"], prior["3"], text].filter(Boolean).join("\n\n---\n\n"),
-        model,
-        latencyMs: Date.now() - t0,
-      });
-    }
+    void persistRun({
+      req,
+      type: "simply_heart",
+      status: "pending_review",
+      guidelineId: "simply-uplus-guideline",
+      inputJson: {
+        text: userText,
+        hadPdf: Boolean(pdfBase64),
+        imageCount: imageParts.length,
+        unified: true,
+      },
+      outputJson: {
+        unified: text,
+      },
+      inputText: userText || null,
+      outputText: text,
+      model,
+      latencyMs: Date.now() - t0,
+    });
 
     res.json({ ok: true, text, model });
   } catch (e) {

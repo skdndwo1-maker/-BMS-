@@ -1,5 +1,5 @@
 /**
- * Simply Heart — 4단계 Gemini 분석 (텍스트 + 이미지 멀티모달, PDF는 텍스트 추출 후 텍스트로 병합)
+ * Simply Heart — 심플리 가이드 통합 분석 또는(레거시) 단계별 Gemini 호출
  */
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { GuidelineRecord } from "./store.js";
@@ -99,12 +99,60 @@ async function buildGuidelineContext(): Promise<string> {
 
 function sharedRules(): string {
   return `
-[추론 원칙 — 심플리하게 전용]
+[추론 원칙 — 심플리 가이드 전용]
 - **Simply U+ 가이드라인(실천과제·설명자료)** 는 사용자가 업로드한 텍스트·이미지·PDF·기타 문서보다도 **항상 우선**합니다. 판단·권고·Do/Don't의 **기본 축**은 오직 이 가이드입니다.
 - U+ 브랜드 가이드라인·VI 가이드라인은 **Simply U+에 어긋나지 않는 범위에서만** 보조로 참고합니다. 브랜드·VI와 Simply U+가 충돌하면 **Simply U+를 따르고**, 브랜드·VI 측 내용은 «보조 참고만 가능, 적용 불가»로 짧게 적습니다.
 - 사용자 첨부만으로 Simply U+와 모순되는 제안을 하지 마세요. 추론·결론은 **위 첫 번째 가이드 블록**에 명시된 원칙과 우선순위를 따릅니다.
 - 근거가 없는 부분은 추측임을 명시하세요.
 - 응답은 한국어 마크다운으로 작성하세요.
+`.trim();
+}
+
+/** 통합 분석: Diagnosis + Do/Don't + 솔루션 3안을 한 번에 출력 */
+function unifiedInstruction(): string {
+  return `
+당신은 LG U+ **심플리 가이드** 통합 분석 담당입니다. **한 번의 응답**에 아래 **세 구역**을 **모두** 포함하세요.
+중간 단계(Pain·Empathy 전용 구역 등)는 **두지 마세요.** 내용은 각 구역 안에 **간결히** 녹이세요.
+
+[필수 — 대제목(##) 문구를 아래와 정확히 사용]
+1) 첫 번째: ## 요청내용 분석 (문제 진단)
+2) 두 번째: ## Do & Don't
+3) 세 번째: ## Simply U+ 솔루션
+
+위 세 줄 외에 다른 \`##\` 대제목을 추가하지 마세요.
+
+---
+
+## 요청내용 분석 (문제 진단)
+- 타겟(Seg) 추정, 요청·메시지의 목적을 짧게 정리합니다.
+- **문제 진단**에는 고객 **부담**, 인지 부하, 결정 피로, 불필요한 공부·선택의 짐 등을 **이 구역 안에서** 함께 다룹니다.
+- \`###\` 소제목과 불릿(-)으로 구조화합니다. 장문 서술은 피합니다.
+
+## Do & Don't
+### Do
+- Simply U+ 가이드에 근거한 실행 가능한 항목 (\`소제목: 본문\` 형식 권장).
+
+### Don't
+- 지양 사항 (가이드·VI와 연결해 짧게).
+
+### 가이드 정합성 메모
+- 1~2문단 이내.
+
+## Simply U+ 솔루션
+- 서로 다른 **솔루션 정확히 3개**만 제시합니다. 아래 소제목 문구를 **그대로** 쓰세요.
+
+### 솔루션 1
+- 핵심 제안(한 줄)과 실행 포인트(불릿). 필요 시 고객 대면 문구 예시(따옴표).
+- (선택) One Action(CTA) 한 줄.
+
+### 솔루션 2
+- (동일 구조)
+
+### 솔루션 3
+- (동일 구조)
+
+## 출력 규칙
+- 한국어 마크다운.
 `.trim();
 }
 
@@ -192,11 +240,15 @@ function buildUserPayload(opts: {
   userText: string;
   extractedPdfText?: string;
   prior: Partial<Record<"1" | "2" | "3", string>>;
-  step: 1 | 2 | 3 | 4;
+  step: 0 | 1 | 2 | 3 | 4;
 }): string {
   const chunks: string[] = [`[사용자 입력 — 텍스트]\n${opts.userText || "(없음)"}`];
   if (opts.extractedPdfText?.trim()) {
     chunks.push(`[사용자 첨부 PDF에서 추출한 텍스트]\n${opts.extractedPdfText.trim()}`);
+  }
+  if (opts.step === 0) {
+    chunks.push(`\n---\n${unifiedInstruction()}`);
+    return chunks.join("\n\n");
   }
   if (opts.prior["1"]) chunks.push(`[1단계 결과 요약·전문]\n${opts.prior["1"]}`);
   if (opts.prior["2"]) chunks.push(`[2단계 결과 요약·전문]\n${opts.prior["2"]}`);
@@ -208,7 +260,7 @@ function buildUserPayload(opts: {
 export type SimplyHeartImagePart = { mimeType: string; data: string };
 
 export async function runSimplyHeartStep(opts: {
-  step: 1 | 2 | 3 | 4;
+  step: 0 | 1 | 2 | 3 | 4;
   userText: string;
   extractedPdfText?: string;
   imageParts?: SimplyHeartImagePart[];
@@ -266,5 +318,6 @@ ${guidelineContext}`;
       throw e;
     }
   }
-  throw new Error(`Simply Heart 단계 ${opts.step} 실패: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`);
+  const label = opts.step === 0 ? "통합 분석" : `단계 ${opts.step}`;
+  throw new Error(`Simply Heart ${label} 실패: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`);
 }

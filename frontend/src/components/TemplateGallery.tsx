@@ -11,6 +11,7 @@ import {
   Presentation,
   Layers,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { templates as designTemplates, templateCategories } from "@/design/templates";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 import { GlobalBrandNav } from "@/components/GlobalBrandNav";
@@ -136,19 +137,7 @@ export function TemplateGallery() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0, flex: "1 1 auto" }}>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "row",
-                flexWrap: "wrap",
-                alignItems: "center",
-                columnGap: 14,
-                rowGap: 4,
-                minWidth: 0,
-              }}
-            >
-              <AxisBrandTitle subtitle="브랜드 그래픽 제작" />
-            </div>
+            <AxisBrandTitle subtitle="브랜드 디자인" />
           </div>
           <button
             type="button"
@@ -193,43 +182,73 @@ export function TemplateGallery() {
             boxShadow: PAL.shadow,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 12,
-                background: PAL.coralSoft,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Layers style={{ width: 20, height: 20, color: PAL.coral }} />
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              marginBottom: 16,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 12,
+                  background: PAL.coralSoft,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Layers style={{ width: 20, height: 20, color: PAL.coral }} />
+              </div>
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: 19,
+                  fontWeight: 700,
+                  color: PAL.ink,
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                카테고리 선택
+              </h2>
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: PAL.coral,
+                  marginLeft: 2,
+                  boxShadow: "0 0 0 1px rgba(255, 127, 102, 0.2)",
+                }}
+                aria-hidden
+              />
             </div>
-            <h2
-              style={{
-                margin: 0,
-                fontSize: 19,
-                fontWeight: 700,
-                color: PAL.ink,
-                letterSpacing: "-0.02em",
-              }}
-            >
-              카테고리 선택
-            </h2>
-            <span
-              style={{
-                display: "inline-block",
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: PAL.coral,
-                marginLeft: 2,
-                boxShadow: "0 0 0 1px rgba(255, 127, 102, 0.2)",
-              }}
-              aria-hidden
-            />
+            <div className="flex shrink-0 items-center gap-2 sm:ml-auto" role="group" aria-label="브랜드 디자인 모드">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 rounded-full border-transparent bg-black px-4 text-white shadow-[0_4px_12px_-4px_rgba(0,0,0,0.25)] hover:bg-black/90"
+              >
+                디자인 제작
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 rounded-full border-[rgba(0,0,0,0.1)] bg-white text-[#6B6B6B]"
+                onClick={() => navigate("/inspection")}
+              >
+                디자인 검수
+              </Button>
+            </div>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

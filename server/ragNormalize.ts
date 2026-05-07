@@ -117,22 +117,31 @@ export function normalizeRunForRag(args: {
 }
 
 function formatSimplyHeart(p: { out: AnyRec; inp: AnyRec; guidelineId: string | null }): string {
+  const u = text(p.out.unified);
+  if (u) {
+    return trimTrailingBlankLines([
+      "# 심플리 가이드 (통합 분석)",
+      `- 가이드라인: ${guidelineLabel(p.guidelineId ?? text((p.inp as AnyRec).guidelineId))}`,
+      "",
+      u,
+    ]).join("\n");
+  }
   const lines: string[] = [
-    "# Simply Heart (4단계)",
+    "# 심플리 가이드 (통합·레거시)",
     `- 가이드라인: ${guidelineLabel(p.guidelineId ?? text((p.inp as AnyRec).guidelineId))}`,
     "",
-    "## 1단계 — Diagnosis",
+    "## 요청내용 분석 (문제 진단)",
     text(p.out.step1),
     "",
-    "## 2단계 — Empathy / Pain",
-    text(p.out.step2),
-    "",
-    "## 3단계 — Do & Don't",
+    "## Do & Don't",
     text(p.out.step3),
     "",
-    "## 4단계 — Simply 솔루션",
+    "## Simply U+ 솔루션",
     text(p.out.step4),
   ];
+  if (text(p.out.step2)) {
+    lines.push("", "## (레거시) 공감 포인트", text(p.out.step2));
+  }
   return trimTrailingBlankLines(lines).join("\n");
 }
 

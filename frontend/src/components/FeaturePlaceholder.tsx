@@ -3,9 +3,9 @@ import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 
 const titles: Record<string, string> = {
   "/dashboard": "내 디자인",
-  "/brand-graphics": "브랜드 그래픽 제작",
+  "/brand-graphics": "브랜드 디자인",
   "/inspection": "브랜드 디자인 검수",
-  "/naming": "브랜드 네이밍 검토",
+  "/naming": "브랜드 네이밍",
   "/library": "브랜드 라이브러리",
 };
 

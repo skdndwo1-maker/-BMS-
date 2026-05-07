@@ -475,7 +475,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   );
 
   // ════════════════════════════════════════════════════════════════════
-  // ── 브랜드 그래픽 패널 (갤러리의 모든 온·오프라인 템플릿 — A1과 동일 기능)
+  // ── 브랜드 디자인 패널 (갤러리의 모든 온·오프라인 템플릿 — A1과 동일 기능)
   // ════════════════════════════════════════════════════════════════════
   if (useBrandGraphicPanel) {
     const currentCat=POSTER_CATEGORIES.find(c=>c.key===normalizePosterCategory(content.posterCategory))??POSTER_CATEGORIES[0];
@@ -517,7 +517,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           onDropFiles={(files) => onAssetDrop(files, "pictogram")}
         />
         <div>
-          <h2 className="font-semibold text-gray-900 mb-1">브랜드 그래픽 콘텐츠</h2>
+          <h2 className="font-semibold text-gray-900 mb-1">브랜드 디자인 콘텐츠</h2>
           <div className="flex flex-col gap-1 mt-1">
             <p className="text-sm text-gray-500">
               {templateMeta
