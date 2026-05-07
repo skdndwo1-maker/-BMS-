@@ -37,6 +37,24 @@ function displaySimplySolutionH3(text: string): string {
 const cardBase =
   "rounded-[22px] border border-[rgba(0,0,0,0.06)] bg-white p-6 shadow-[0_4px_28px_-10px_rgba(0,0,0,0.08),0_2px_12px_-6px_rgba(0,0,0,0.04)]";
 
+/** 통신 대기업 내부·고객향 점검에 흔한 확인 분야 (프리셋 버튼) */
+const SIMPLY_HEART_TOPIC_PRESETS: readonly string[] = [
+  "대고객 요금·혜택·청구 안내 (문자·앱·웹)",
+  "가입·변경·해지·멤버십 등 프로모션",
+  "고객센터·챗봇·상담 스크립트",
+  "앱·웹 UI 마이크로카피·토스트·에러 문구",
+  "명세서·청구서·영수증·우편 안내장",
+  "점포·대리점 POP·전단·현수막",
+  "SNS·배너·디지털·옥외 광고",
+  "장애·점검·긴급 공지 (고객향)",
+  "사내 공지·인트라넷·업무 메일",
+  "내부 규정·업무 가이드·교육·온보딩 자료",
+  "보안·준법·개인정보·윤리 (내부·대외)",
+  "IR·보도자료·미디어 Q&A",
+  "B2B·기업·제휴 제안·계약·과금 안내",
+  "결합·단말·부가서비스 번들·업셀 제안",
+];
+
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -1272,6 +1290,8 @@ function buildSimplyHeartPromptText(topic: string, detail: string): string {
 
 export function SimplyHeart() {
   const [fieldTopic, setFieldTopic] = useState("");
+  /** false: 프리셋만 사용(텍스트 입력 숨김). true: 직접 입력 모드 */
+  const [topicCustom, setTopicCustom] = useState(false);
   const [fieldDetail, setFieldDetail] = useState("");
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
   const [pdfName, setPdfName] = useState<string | null>(null);
@@ -1286,6 +1306,7 @@ export function SimplyHeart() {
 
   const clearAll = useCallback(() => {
     setFieldTopic("");
+    setTopicCustom(false);
     setFieldDetail("");
     setPdfDataUrl(null);
     setPdfName(null);
@@ -1425,17 +1446,62 @@ export function SimplyHeart() {
           </div>
 
           <div className="mb-4">
-            <label htmlFor="simply-field-topic" className="mb-1.5 block text-[18px] font-semibold text-[#1A1A1A]">
-              1. 확인 분야
-            </label>
-            <input
-              id="simply-field-topic"
-              type="text"
-              value={fieldTopic}
-              onChange={(e) => setFieldTopic(e.target.value)}
-              placeholder="예) 요금 안내 카피, 사내 공지, 배너 문구 등"
-              className="h-12 w-full rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 text-[15px] leading-normal text-[#1A1A1A] outline-none ring-[#FF7F66]/20 placeholder:text-[15px] placeholder:text-[#9A9A9A] focus:ring-2"
-            />
+            <p className="mb-1.5 text-[18px] font-semibold text-[#1A1A1A]">1. 확인 분야</p>
+            <p className="mb-3 text-[13px] leading-relaxed text-[#6B6B6B]">
+              아래에서 분야를 고르거나, <strong className="font-medium text-[#2A2A2A]">직접 입력</strong>을 눌러 유형을 직접 적을 수 있습니다.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {SIMPLY_HEART_TOPIC_PRESETS.map((label) => {
+                const selected = !topicCustom && fieldTopic === label;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    aria-pressed={selected}
+                    className={cn(
+                      "max-w-full rounded-full border px-3.5 py-2 text-left text-[13px] font-semibold leading-snug transition-colors sm:px-4 sm:text-[14px]",
+                      selected
+                        ? "border-[#FF7F66] bg-[rgba(255,127,102,0.14)] text-[#1A1A1A] shadow-[0_0_0_1px_rgba(255,127,102,0.25)]"
+                        : "border-[rgba(0,0,0,0.1)] bg-white text-[#2A2A2A] hover:border-[rgba(0,0,0,0.18)]",
+                    )}
+                    onClick={() => {
+                      setTopicCustom(false);
+                      setFieldTopic(label);
+                      setRunError(null);
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                aria-pressed={topicCustom}
+                className={cn(
+                  "rounded-full border px-3.5 py-2 text-[13px] font-semibold transition-colors sm:px-4 sm:text-[14px]",
+                  topicCustom
+                    ? "border-[#C14D38] bg-[#FFF5F3] text-[#9A3412]"
+                    : "border-dashed border-[rgba(0,0,0,0.18)] bg-[#FAFAF8] text-[#5C5C5C] hover:border-[rgba(255,127,102,0.45)]",
+                )}
+                onClick={() => {
+                  setTopicCustom(true);
+                  setFieldTopic("");
+                  setRunError(null);
+                }}
+              >
+                직접 입력
+              </button>
+            </div>
+            {topicCustom ? (
+              <input
+                id="simply-field-topic"
+                type="text"
+                value={fieldTopic}
+                onChange={(e) => setFieldTopic(e.target.value)}
+                placeholder="예) 단말 유통망 전용 공지, 특정 캠페인 랜딩 카피 등"
+                className="mt-3 h-12 w-full rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 text-[15px] leading-normal text-[#1A1A1A] outline-none ring-[#FF7F66]/20 placeholder:text-[15px] placeholder:text-[#9A9A9A] focus:ring-2"
+              />
+            ) : null}
           </div>
 
           <div>
