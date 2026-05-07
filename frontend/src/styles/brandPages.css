@@ -123,6 +123,11 @@
   box-shadow: 0 6px 20px -6px rgba(0, 0, 0, 0.28);
 }
 
+/* 심플리 가이드 · 분석 실행 — 이전 22.1px 대비 20% 축소 */
+.brand-btn-primary.brand-btn-simply-guide-analyze {
+  font-size: 17.68px;
+}
+
 /* 2차(코랄 solid CTA) */
 .brand-btn-coral {
   display: inline-flex;

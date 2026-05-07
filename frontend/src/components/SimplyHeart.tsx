@@ -24,9 +24,15 @@ const STEP_STYLES: Record<1 | 2 | 3, { accent: string; accentLight: string }> = 
   3: { accent: "#059669", accentLight: "rgba(5,150,105,0.07)" },
 };
 
-/** 01–04 단계 헤더 · 1~3단계 번호 목록 — 블랙 */
-const NUM_BADGE_BG = "#111111";
+/** 번호 목록 뱃지 — 메인 오렌지 */
+const NUM_BADGE_BG = "#E8593A";
 const NUM_BADGE_TEXT = "#FFFFFF";
+
+function displaySimplySolutionH3(text: string): string {
+  const t = text.trim();
+  if (/^교정안$/i.test(t)) return "Simply U+ 솔루션";
+  return t;
+}
 
 const cardBase =
   "rounded-[22px] border border-[rgba(0,0,0,0.06)] bg-white p-6 shadow-[0_4px_28px_-10px_rgba(0,0,0,0.08),0_2px_12px_-6px_rgba(0,0,0,0.04)]";
@@ -753,9 +759,11 @@ function Step12TopicCard({ step, title, body }: { step: 1 | 2; title?: string; b
 function SimplyHeartEarlyStepsStructured({
   text,
   step,
+  variant = "default",
 }: {
   text: string;
   step?: 1 | 2 | 3;
+  variant?: "default" | "solution";
 }): ReactNode {
   const blocks = parseSimplyHeartEarlyStepBlocks(text);
   const stepN = step == null ? NaN : Number(step);
@@ -767,16 +775,14 @@ function SimplyHeartEarlyStepsStructured({
 
   const enumBadgeSpan = (n: number) => (
     <span
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[13px] font-black tabular-nums"
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[13px] font-black tabular-nums shadow-[0_2px_8px_-2px_rgba(232,89,58,0.45)]"
       style={{ backgroundColor: NUM_BADGE_BG, color: NUM_BADGE_TEXT }}
     >
       {n}
     </span>
   );
 
-  return (
-    <div className="w-full space-y-3 text-left">
-      {blocks.map((b, bi) => {
+  const nodes = blocks.map((b, bi) => {
         /* ── 대제목 (##) ── */
         if (b.kind === "h2") {
           if (stepN === 1 || stepN === 2) {
@@ -817,6 +823,10 @@ function SimplyHeartEarlyStepsStructured({
               </div>
             );
           }
+          const h3Label = variant === "solution" ? displaySimplySolutionH3(b.text) : b.text;
+          if (variant === "solution" && /^simply\s*u\+\s*솔루션$/i.test(h3Label.trim())) {
+            return null;
+          }
           const zone = classifyStep3H3Zone(b.text);
           const barColor = zone === "do" ? "#059669" : zone === "dont" ? "#DC2626" : "#E8593A";
           const wrapBg =
@@ -838,7 +848,7 @@ function SimplyHeartEarlyStepsStructured({
                 aria-hidden
               />
               <h4 className="text-[15px] font-bold tracking-tight" style={{ color: textColor }}>
-                {b.text}
+                {h3Label}
               </h4>
             </div>
           );
@@ -858,6 +868,18 @@ function SimplyHeartEarlyStepsStructured({
                 quote
                 bodyContent={<p className="whitespace-pre-wrap leading-[1.85]">{b.text}</p>}
               />
+            );
+          }
+          if (variant === "solution") {
+            return (
+              <div
+                key={bi}
+                className="w-full rounded-xl border-2 border-[rgba(232,89,58,0.4)] bg-white px-6 py-5 text-left shadow-[0_6px_28px_-12px_rgba(232,89,58,0.35)]"
+              >
+                <p className="whitespace-pre-wrap text-[18px] font-semibold leading-[1.75] tracking-tight text-[#141414]">
+                  {b.text}
+                </p>
+              </div>
             );
           }
           return (
@@ -937,7 +959,14 @@ function SimplyHeartEarlyStepsStructured({
                       aria-hidden
                     />
                   )}
-                  <span className="min-w-0 flex-1 whitespace-pre-wrap text-[15px] leading-[1.75] text-[#2A2A2A]">
+                  <span
+                    className={cn(
+                      "min-w-0 flex-1 whitespace-pre-wrap leading-[1.75]",
+                      variant === "solution"
+                        ? "text-[16px] font-medium text-[#1A1A1A]"
+                        : "text-[15px] text-[#2A2A2A]",
+                    )}
+                  >
                     {renderWithLeadDetail(item)}
                   </span>
                 </div>
@@ -1008,7 +1037,14 @@ function SimplyHeartEarlyStepsStructured({
                       aria-hidden
                     />
                   )}
-                  <span className="min-w-0 flex-1 whitespace-pre-wrap text-[15px] leading-[1.75] text-[#2A2A2A]">
+                  <span
+                    className={cn(
+                      "min-w-0 flex-1 whitespace-pre-wrap leading-[1.75]",
+                      variant === "solution"
+                        ? "text-[16px] font-medium text-[#1A1A1A]"
+                        : "text-[15px] text-[#2A2A2A]",
+                    )}
+                  >
                     {renderWithLeadDetail(item)}
                   </span>
                 </div>
@@ -1044,6 +1080,16 @@ function SimplyHeartEarlyStepsStructured({
           ) {
             return <Step12DetailCard key={bi} step={stepN as 1 | 2} body={b.text} />;
           }
+          if (variant === "solution") {
+            return (
+              <div
+                key={bi}
+                className="w-full rounded-xl border-2 border-[rgba(232,89,58,0.35)] bg-white px-6 py-5 text-left shadow-[0_6px_28px_-12px_rgba(232,89,58,0.3)]"
+              >
+                <p className="whitespace-pre-wrap text-[18px] font-semibold leading-[1.75] text-[#141414]">{b.text}</p>
+              </div>
+            );
+          }
           return (
             <p key={bi} className="w-full whitespace-pre-wrap text-left text-[15px] leading-[1.85] text-[#2A2A2A]">
               {b.text}
@@ -1051,9 +1097,17 @@ function SimplyHeartEarlyStepsStructured({
           );
         }
         return null;
-      })}
-    </div>
-  );
+      });
+
+  if (variant === "solution") {
+    return (
+      <div className="w-full rounded-2xl border-2 border-[rgba(232,89,58,0.38)] bg-gradient-to-br from-[#FFF9F6] via-[#FFF5F0] to-[#FFEEE8] px-5 py-6 shadow-[0_8px_32px_-14px_rgba(232,89,58,0.28)] sm:px-7 sm:py-7">
+        <div className="w-full space-y-4 text-left sm:space-y-5">{nodes}</div>
+      </div>
+    );
+  }
+
+  return <div className="w-full space-y-3 text-left">{nodes}</div>;
 }
 
 function stripLeadingH2Block(s: string): string {
@@ -1108,8 +1162,8 @@ function SimplyHeartUnifiedResult({ text }: { text: string }): ReactNode {
         <SimplyHeartEarlyStepsStructured text={stripLeadingH2Block(parted.doDont)} step={3} />
       </div>
       <div className="border-t border-[rgba(0,0,0,0.08)] pt-8">
-        <p className="mb-3 text-[12px] font-bold uppercase tracking-widest text-[#E8593A]">Simply U+ 솔루션 (3안)</p>
-        <SimplyHeartEarlyStepsStructured text={stripLeadingH2Block(parted.solutions)} />
+        <p className="mb-3 text-[12px] font-bold uppercase tracking-widest text-[#E8593A]">Simply U+ 솔루션</p>
+        <SimplyHeartEarlyStepsStructured text={stripLeadingH2Block(parted.solutions)} variant="solution" />
       </div>
     </div>
   );
@@ -1264,8 +1318,8 @@ export function SimplyHeart() {
           <div>
             <h1 className="text-[20px] font-bold tracking-tight text-[#1A1A1A]">입력</h1>
             <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-[#6B6B6B]">
-              텍스트를 주 입력으로 하고, 시안·배너 이미지(PNG/JPG) 또는 기획 PDF를 함께 올리면 멀티모달로 분석합니다. 한 번의 실행으로
-              요청 진단, Do &amp; Don&apos;t, Simply U+ 솔루션 3안을 한 화면에서 확인할 수 있습니다.
+              텍스트를 주 입력으로 하고, 시안·배너 이미지(PNG/JPG) 또는 기획 PDF를 함께 올리면 멀티모달로 분석합니다. 한 번에 요청 진단, Do &amp; Don&apos;t,{" "}
+              <strong className="font-semibold text-[#2A2A2A]">Simply U+ 솔루션</strong>을 확인할 수 있습니다.
             </p>
           </div>
           <Button type="button" variant="outline" className="shrink-0 rounded-full" onClick={clearAll}>
@@ -1374,7 +1428,7 @@ export function SimplyHeart() {
             <Button
               type="button"
               disabled={!canRun || analyzing}
-              className="brand-btn-primary h-14 w-full text-[17px] font-semibold disabled:pointer-events-none disabled:opacity-45"
+              className="brand-btn-primary brand-btn-simply-guide-analyze h-14 w-full font-semibold disabled:pointer-events-none disabled:opacity-45"
               onClick={() => void runPipeline()}
             >
               {analyzing ? (
@@ -1410,7 +1464,7 @@ export function SimplyHeart() {
             <div className="min-w-0">
               <h2 className="text-[19px] font-bold tracking-tight text-[#0F0F0F]">분석 결과</h2>
               <p className="mt-1 text-[13px] text-[#6B6B6B]">
-                요청내용 분석(문제진단) → Do &amp; Don&apos;t → Simply U+ 솔루션 3안
+                요청내용 분석 → Do &amp; Don&apos;t → Simply U+ 솔루션
               </p>
             </div>
             <Button
