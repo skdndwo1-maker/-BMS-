@@ -25,9 +25,21 @@ export const FIXED_GUIDELINE_SOURCES: Record<string, { relativeSource: string; d
   /** 심플리하게 분석 — repo의 고정 원본 PDF (sync-fixed 시 슬롯으로 복사) */
   "simply-uplus-guideline": {
     relativeSource: "data/guidelines/Simply U+ 가이드라인/Simply U+ 가이드라인.pdf",
-    displayName: "Simply U+ 가이드라인 (실천과제 설명자료)",
+    displayName: "Simply U+ 설명자료·실천과제 V2 (18개 분류·학습용)",
+  },
+  /** simplyHeart 분석 두 번째 참조: 직무별 실행 가이드 (레포 고정 경로) */
+  "simply-uplus-job-guide": {
+    relativeSource:
+      "data/guidelines/Simply U+ 직무별 실행 가이드/직무별 Simply. U+ 실행 가이드_v1_학습용.pdf",
+    displayName: "직무별 Simply U+ 실행 가이드 v1 (학습용)",
   },
 };
+
+/** `simplyHeart` 통합 분석에서 항상 레포 고정 PDF로 맥락에 넣는 id (브랜드/VI 제외) */
+export const SIMPLY_HEART_FIXED_GUIDE_IDS: readonly string[] = [
+  "simply-uplus-guideline",
+  "simply-uplus-job-guide",
+];
 
 export function copyFixedGuidelineToSlot(id: string): GuidelineRecord {
   const spec = FIXED_GUIDELINE_SOURCES[id];

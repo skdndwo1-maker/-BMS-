@@ -37,22 +37,23 @@ function displaySimplySolutionH3(text: string): string {
 const cardBase =
   "rounded-[22px] border border-[rgba(0,0,0,0.06)] bg-white p-6 shadow-[0_4px_28px_-10px_rgba(0,0,0,0.08),0_2px_12px_-6px_rgba(0,0,0,0.04)]";
 
-/** 통신 대기업 내부·고객향 점검에 흔한 확인 분야 (프리셋 버튼) */
-const SIMPLY_HEART_TOPIC_PRESETS: readonly string[] = [
-  "대고객 요금·혜택·청구 안내 (문자·앱·웹)",
-  "가입·변경·해지·멤버십 등 프로모션",
-  "고객센터·챗봇·상담 스크립트",
-  "앱·웹 UI 마이크로카피·토스트·에러 문구",
-  "명세서·청구서·영수증·우편 안내장",
-  "점포·대리점 POP·전단·현수막",
-  "SNS·배너·디지털·옥외 광고",
-  "장애·점검·긴급 공지 (고객향)",
-  "사내 공지·인트라넷·업무 메일",
-  "내부 규정·업무 가이드·교육·온보딩 자료",
-  "보안·준법·개인정보·윤리 (내부·대외)",
-  "IR·보도자료·미디어 Q&A",
-  "B2B·기업·제휴 제안·계약·과금 안내",
-  "결합·단말·부가서비스 번들·업셀 제안",
+/**
+ * Simply U+ 가이드라인(실천과제·설명자료)에서 다루는 주체별·협력 부서 구분에 맞춘 선택지.
+ * (PDF에 명시된 역할/조직 맥락을 반영; 상세 명칭은 사내 조직 개편 시 조정 가능)
+ */
+const SIMPLY_UPLUS_DEPARTMENT_OPTIONS: readonly string[] = [
+  "브랜드·커뮤니케이션",
+  "마케팅·광고",
+  "고객센터·CX",
+  "상품·서비스기획",
+  "채널·영업",
+  "앱·디지털 채널",
+  "UX·UI·디자인",
+  "사내커뮤니케이션",
+  "준법·보안·개인정보",
+  "데이터·분석",
+  "B2B·기업사업",
+  "IR·대외협력",
 ];
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -1279,19 +1280,34 @@ function SimplyHeartUnifiedResult({ text }: { text: string }): ReactNode {
 
 type ImageSlot = { id: string; name: string; dataUrl: string };
 
-function buildSimplyHeartPromptText(topic: string, detail: string): string {
+type SimplyGuideMode = "generate" | "audit";
+
+function buildSimplyHeartPromptText(
+  department: string,
+  topic: string,
+  detail: string,
+  mode: SimplyGuideMode,
+): string {
+  const dept = department.trim();
   const t = topic.trim();
   const d = detail.trim();
   const parts: string[] = [];
+  if (mode === "audit") {
+    parts.push("[작업 유형]\n검수 — 배포·확정 전 문구를 Simply U+·브랜드 관점에서 점검해 주세요.");
+  } else {
+    parts.push("[작업 유형]\n생성·초안 — 아래 내용을 바탕으로 가이드에 맞게 진단해 주세요.");
+  }
+  if (dept) parts.push(`[소속 부서]\n${dept}`);
   if (t) parts.push(`[확인 분야]\n${t}`);
-  if (d) parts.push(`[상세 내용]\n${d}`);
+  const detailKey = mode === "audit" ? "검수 내용" : "생성 내용";
+  if (d) parts.push(`[${detailKey}]\n${d}`);
   return parts.join("\n\n");
 }
 
 export function SimplyHeart() {
+  const [department, setDepartment] = useState("");
   const [fieldTopic, setFieldTopic] = useState("");
-  /** false: 프리셋만 사용(텍스트 입력 숨김). true: 직접 입력 모드 */
-  const [topicCustom, setTopicCustom] = useState(false);
+  const [guideMode, setGuideMode] = useState<SimplyGuideMode>("generate");
   const [fieldDetail, setFieldDetail] = useState("");
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
   const [pdfName, setPdfName] = useState<string | null>(null);
@@ -1301,12 +1317,13 @@ export function SimplyHeart() {
   const [runError, setRunError] = useState<string | null>(null);
   const [pdfExporting, setPdfExporting] = useState(false);
 
-  const promptText = buildSimplyHeartPromptText(fieldTopic, fieldDetail);
+  const promptText = buildSimplyHeartPromptText(department, fieldTopic, fieldDetail, guideMode);
   const canRun = promptText.length > 0 || Boolean(pdfDataUrl) || images.length > 0;
 
   const clearAll = useCallback(() => {
+    setDepartment("");
     setFieldTopic("");
-    setTopicCustom(false);
+    setGuideMode("generate");
     setFieldDetail("");
     setPdfDataUrl(null);
     setPdfName(null);
@@ -1413,15 +1430,22 @@ export function SimplyHeart() {
         >
           <FileCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#C14D38]" aria-hidden />
           <div className="min-w-0 text-[13px] leading-relaxed text-[#2A2A2A]">
-            <p className="font-semibold text-[#1A1A1A]">분석 시 고정 참조 (서버 등록 PDF)</p>
+            <p className="font-semibold text-[#1A1A1A]">분석 시 참조 자료 (Simply U+ 자료 2종)</p>
             <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-[#4B4B4B]">
               <li>
-                <strong>Simply U+ 가이드라인</strong> — «2604_Simply.U+설명자료_실천과제» 원문(
-                <code className="rounded bg-white/80 px-1 text-[12px]">Simply U+ 가이드라인.pdf</code>)을
-                기준으로 분석합니다.
+                <strong>Simply U+ 설명자료·실천과제 V2 (18개 분류·학습용)</strong> —{" "}
+                <code className="rounded bg-white/80 px-1 text-[12px]">Simply U+ 가이드라인.pdf</code>
               </li>
-              <li>U+ 브랜드 가이드라인 · U+ VI 가이드라인 — Simply U+에 어긋나지 않는 범위에서만 보조 참고합니다.</li>
+              <li>
+                <strong>직무별 Simply U+ 실행 가이드 v1 (학습용)</strong> —{" "}
+                <code className="rounded bg-white/80 px-1 text-[12px]">
+                  직무별 Simply. U+ 실행 가이드_v1_학습용.pdf
+                </code>
+              </li>
             </ul>
+            <p className="mt-2 text-[12px] text-[#5C5C5C]">
+              위 두 PDF 원문만 근거로 하며, 브랜드·VI 가이드는 이 페이지 분석에서 사용하지 않습니다.
+            </p>
           </div>
         </div>
 
@@ -1440,19 +1464,55 @@ export function SimplyHeart() {
         </div>
 
         <div className={cn(cardBase, "mb-8")}>
-          <div className="mb-4 flex items-center gap-2">
-            <FileText className="h-6 w-6 shrink-0 text-[#FF7F66]" />
-            <h2 className="text-[20px] font-bold text-[#1A1A1A]">텍스트 (주요)</h2>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-2">
+              <FileText className="h-6 w-6 shrink-0 text-[#FF7F66]" />
+              <h2 className="text-[20px] font-bold text-[#1A1A1A]">심플리 가이드</h2>
+            </div>
+            <div className="flex shrink-0 items-center gap-2 sm:ml-auto">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={
+                  guideMode === "generate"
+                    ? "h-8 rounded-full border-transparent bg-black px-4 text-white shadow-[0_4px_12px_-4px_rgba(0,0,0,0.25)] hover:bg-black/90"
+                    : "h-8 rounded-full border-[rgba(0,0,0,0.1)] bg-white text-[#6B6B6B]"
+                }
+                onClick={() => {
+                  setGuideMode("generate");
+                  setRunError(null);
+                }}
+              >
+                생성
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className={
+                  guideMode === "audit"
+                    ? "h-8 rounded-full border-transparent bg-black px-4 text-white shadow-[0_4px_12px_-4px_rgba(0,0,0,0.25)] hover:bg-black/90"
+                    : "h-8 rounded-full border-[rgba(0,0,0,0.1)] bg-white text-[#6B6B6B]"
+                }
+                onClick={() => {
+                  setGuideMode("audit");
+                  setRunError(null);
+                }}
+              >
+                검수
+              </Button>
+            </div>
           </div>
 
           <div className="mb-4">
-            <p className="mb-1.5 text-[18px] font-semibold text-[#1A1A1A]">1. 확인 분야</p>
+            <p className="mb-1.5 text-[18px] font-semibold text-[#1A1A1A]">1. 소속 부서</p>
             <p className="mb-3 text-[13px] leading-relaxed text-[#6B6B6B]">
-              아래에서 분야를 고르거나, <strong className="font-medium text-[#2A2A2A]">직접 입력</strong>을 눌러 유형을 직접 적을 수 있습니다.
+              Simply U+ 가이드 기준 부서(추진·협력 주체)를 선택합니다. 분석 맥락에 포함됩니다.
             </p>
-            <div className="flex flex-wrap gap-2">
-              {SIMPLY_HEART_TOPIC_PRESETS.map((label) => {
-                const selected = !topicCustom && fieldTopic === label;
+            <div className="flex flex-wrap gap-2" role="group" aria-label="소속 부서">
+              {SIMPLY_UPLUS_DEPARTMENT_OPTIONS.map((label) => {
+                const selected = department === label;
                 return (
                   <button
                     key={label}
@@ -1465,8 +1525,7 @@ export function SimplyHeart() {
                         : "border-[rgba(0,0,0,0.1)] bg-white text-[#2A2A2A] hover:border-[rgba(0,0,0,0.18)]",
                     )}
                     onClick={() => {
-                      setTopicCustom(false);
-                      setFieldTopic(label);
+                      setDepartment(label);
                       setRunError(null);
                     }}
                   >
@@ -1474,46 +1533,40 @@ export function SimplyHeart() {
                   </button>
                 );
               })}
-              <button
-                type="button"
-                aria-pressed={topicCustom}
-                className={cn(
-                  "rounded-full border px-3.5 py-2 text-[13px] font-semibold transition-colors sm:px-4 sm:text-[14px]",
-                  topicCustom
-                    ? "border-[#C14D38] bg-[#FFF5F3] text-[#9A3412]"
-                    : "border-dashed border-[rgba(0,0,0,0.18)] bg-[#FAFAF8] text-[#5C5C5C] hover:border-[rgba(255,127,102,0.45)]",
-                )}
-                onClick={() => {
-                  setTopicCustom(true);
-                  setFieldTopic("");
-                  setRunError(null);
-                }}
-              >
-                직접 입력
-              </button>
             </div>
-            {topicCustom ? (
-              <input
-                id="simply-field-topic"
-                type="text"
-                value={fieldTopic}
-                onChange={(e) => setFieldTopic(e.target.value)}
-                placeholder="예) 단말 유통망 전용 공지, 특정 캠페인 랜딩 카피 등"
-                className="mt-3 h-12 w-full rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 text-[15px] leading-normal text-[#1A1A1A] outline-none ring-[#FF7F66]/20 placeholder:text-[15px] placeholder:text-[#9A9A9A] focus:ring-2"
-              />
-            ) : null}
+          </div>
+
+          <div className="mb-4">
+            <label htmlFor="simply-field-topic" className="mb-1.5 block text-[18px] font-semibold text-[#1A1A1A]">
+              2. 확인 분야
+            </label>
+            <p className="mb-3 text-[13px] leading-relaxed text-[#6B6B6B]">
+              점검할 업무·채널·자료 유형을 한 줄로 적어 주세요. (예: 요금 문자, 사내 공지, 배너 카피)
+            </p>
+            <input
+              id="simply-field-topic"
+              type="text"
+              value={fieldTopic}
+              onChange={(e) => setFieldTopic(e.target.value)}
+              placeholder="예) 대고객 MMS 요금 안내, 인트라넷 점검 공지, 앱 결제 오류 토스트"
+              className="h-12 w-full rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 text-[15px] leading-normal text-[#1A1A1A] outline-none ring-[#FF7F66]/20 placeholder:text-[15px] placeholder:text-[#9A9A9A] focus:ring-2"
+            />
           </div>
 
           <div>
             <label htmlFor="simply-field-detail" className="mb-1.5 block text-[18px] font-semibold text-[#1A1A1A]">
-              2. 상세 내용
+              {guideMode === "audit" ? "3. 검수 내용" : "3. 생성 내용"}
             </label>
             <textarea
               id="simply-field-detail"
               value={fieldDetail}
               onChange={(e) => setFieldDetail(e.target.value)}
               rows={7}
-              placeholder="요금제명, 메시지, 기획안, 카피, 공지사항 등 자유 입력…"
+              placeholder={
+                guideMode === "audit"
+                  ? "검수할 카피, 공지, 문자·앱 문구, 기획안 텍스트 등을 붙여 넣어 주세요…"
+                  : "작성 중인 요금 안내, 카피, 공지, 기획 초안 등을 자유롭게 입력…"
+              }
               className="min-h-[162px] w-full resize-y rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-3 text-[15px] leading-relaxed text-[#1A1A1A] outline-none ring-[#FF7F66]/20 placeholder:text-[15px] placeholder:text-[#9A9A9A] focus:ring-2"
             />
           </div>

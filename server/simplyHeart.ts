@@ -1,19 +1,25 @@
 /**
  * Simply Heart — 심플리 가이드 통합 분석 또는(레거시) 단계별 Gemini 호출
  */
+import { existsSync } from "node:fs";
+import { basename } from "node:path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { FIXED_GUIDELINE_SOURCES, SIMPLY_HEART_FIXED_GUIDE_IDS } from "./fixedGuidelines.js";
 import type { GuidelineRecord } from "./store.js";
-import { loadMeta } from "./store.js";
+import { loadMeta, resolveStoredPath } from "./store.js";
 import { excerptGuidelineForInspection } from "./gemini.js";
 
 const CORE_GUIDES: readonly { id: string; title: string; cap?: number }[] = [
   {
     id: "simply-uplus-guideline",
-    title: "Simply U+ 가이드라인 — 실천과제·설명자료 (모든 입력·첨부보다 최우선)",
-    cap: 52_000,
+    title: "Simply U+ 가이드라인 (2604 설명자료·실천과제 V2, 18개 분류·학습용)",
+    cap: 60_000,
   },
-  { id: "uplus-brand-guideline", title: "U+ 브랜드 가이드라인 (보조)", cap: 28_000 },
-  { id: "uplus-vi-guideline", title: "U+ VI 가이드라인 (보조)", cap: 28_000 },
+  {
+    id: "simply-uplus-job-guide",
+    title: "직무별 Simply U+ 실행 가이드 v1 (학습용)",
+    cap: 45_000,
+  },
 ] as const;
 
 function getKey(): string | undefined {
@@ -69,6 +75,26 @@ export async function extractPdfTextFromBase64(base64: string): Promise<string> 
   return t.slice(0, 85_000);
 }
 
+/** 레포 고정 경로 PDF를 우선 사용(슬롯·구버전 aiSummary와 무관하게 최신 파일 반영) */
+function recordFromFixedSimplyHeartGuide(id: string): GuidelineRecord | null {
+  if (!SIMPLY_HEART_FIXED_GUIDE_IDS.includes(id)) return null;
+  const spec = FIXED_GUIDELINE_SOURCES[id];
+  if (!spec) return null;
+  const rel = spec.relativeSource.replace(/\\/g, "/");
+  if (!existsSync(resolveStoredPath(rel))) return null;
+  return {
+    id,
+    displayName: spec.displayName,
+    originalName: basename(rel),
+    storedRelativePath: rel,
+    mimeType: "application/pdf",
+    size: 0,
+    uploadedAt: "",
+    aiSummary: null,
+    aiAnalyzedAt: null,
+  };
+}
+
 async function buildGuidelineContext(): Promise<string> {
   const meta = loadMeta();
   const parts: string[] = [];
@@ -77,11 +103,13 @@ async function buildGuidelineContext(): Promise<string> {
   for (const entry of CORE_GUIDES) {
     const { id, title } = entry;
     const perCap = entry.cap ?? defaultCap;
-    const g: GuidelineRecord | undefined = meta.guidelines[id];
+    const g: GuidelineRecord | undefined =
+      SIMPLY_HEART_FIXED_GUIDE_IDS.includes(id) ? recordFromFixedSimplyHeartGuide(id) ?? meta.guidelines[id] : meta.guidelines[id];
     if (!g) {
-      parts.push(
-        `[${title}]\n(슬롯 미등록: 고정 PDF를 sync-fixed로 복사하거나 업로드하면 이 맥락이 채워집니다.)`
-      );
+      const hint = SIMPLY_HEART_FIXED_GUIDE_IDS.includes(id)
+        ? `고정 PDF 없음: ${FIXED_GUIDELINE_SOURCES[id]?.relativeSource ?? id} 에 파일을 두세요.`
+        : "슬롯 미등록: 고정 PDF를 sync-fixed로 복사하거나 업로드하면 이 맥락이 채워집니다.";
+      parts.push(`[${title}]\n(${hint})`);
       continue;
     }
     try {
@@ -100,7 +128,7 @@ async function buildGuidelineContext(): Promise<string> {
 function sharedRules(): string {
   return `
 [심플리 가이드]
-- 판단 기준은 **Simply U+ 가이드라인** 최우선. 브랜드·VI는 Simply U+와 어긋나면 적용하지 않음.
+- 판단·근거는 **오직 [참고 가이드라인]**에 실린 (1) Simply U+ 설명자료·실천과제 V2(18개 분류·학습용), (2) 직무별 Simply U+ 실행 가이드 v1(학습용)만 사용. 브랜드·VI 등 **그 외 PDF는 참조하지 않음**.
 - 한국어 마크다운. **군더더기 설명·반복 주석·메타 코멘트**는 쓰지 말 것.
 `.trim();
 }
@@ -181,7 +209,7 @@ function stepInstruction(step: 1 | 2 | 3 | 4): string {
 
 출력에 반드시 포함:
 1. [참고 가이드라인]에 근거한 **Do** 목록 (실천 가능한 문장)
-2. **Don't** 목록 (지양 사항, 반드시 가이드·VI와 연결해 설명)
+2. **Don't** 목록 (지양 사항, 반드시 Simply U+ 가이드라인 근거와 연결해 설명)
 3. 전문용어·혜택 직관성·「보이지 않는 기술로 처리 가능한 영역」인지 여부에 대한 평가
 
 ## 형식 (마크다운)
