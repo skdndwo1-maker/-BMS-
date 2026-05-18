@@ -35,9 +35,9 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { InspectionSectionTitle } from "@/components/InspectionSectionTitle";
 
 type InspectionStep = "idle" | "uploading" | "analyzing" | "reviewing" | "complete";
-
 type DesignGroup = "online" | "offline";
 type DesignType = "사내공지" | "프로모션" | "신제품 홍보" | "매장 제작물" | "안전";
 
@@ -53,25 +53,16 @@ const categoryTabBase =
 const categoryTabIdle =
   "border-[rgba(0,0,0,0.08)] bg-white text-[#5C5C5C] hover:bg-[#EBE9E1] hover:border-[rgba(0,0,0,0.1)]";
 const categoryTabActive = "border-black bg-black text-white shadow-[0_4px_14px_-4px_rgba(0,0,0,0.25)]";
+/** 세부 유형(사내공지~안전) — 코랄 액센트 */
+const designTypeTabIdle =
+  "border-[rgba(255,127,102,0.4)] bg-white text-[#5C5C5C] hover:bg-[#FFF7F5] hover:border-[rgba(255,127,102,0.55)]";
+const designTypeTabActive =
+  "border-[#FF7F66] bg-[#FF7F66] text-white shadow-[0_4px_14px_-4px_rgba(255,127,102,0.45)]";
 
 const inspectionCard =
   "rounded-[22px] border border-[rgba(0,0,0,0.06)] bg-white p-6 shadow-[0_4px_28px_-10px_rgba(0,0,0,0.08),0_2px_12px_-6px_rgba(0,0,0,0.04)]";
 
 const INSPECTION_NAV_DRAFT_KEY = "brandAxis:inspectionNavDraft";
-
-function InspectionSectionTitle({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return (
-    <h2
-      className={`flex items-center gap-2.5 text-[17px] font-bold tracking-tight text-[#1A1A1A] ${className}`.trim()}
-    >
-      <span
-        className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#FF7F66] shadow-[0_0_0_3px_rgba(255,127,102,0.22)]"
-        aria-hidden
-      />
-      {children}
-    </h2>
-  );
-}
 
 interface Violation {
   category: string;
@@ -438,11 +429,11 @@ export function BrandInspection() {
 
       <main className="mx-auto max-w-7xl px-5 py-8 sm:px-6 sm:py-10">
         <div className="space-y-8">
-          {/* ── 제작물 유형 ── */}
+          {/* ── 제작물유형 ── */}
           <div className={`${inspectionCard} px-5 py-5 sm:px-8`}>
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
-                <InspectionSectionTitle>제작물 유형</InspectionSectionTitle>
+                <InspectionSectionTitle>제작물유형</InspectionSectionTitle>
                 <p className="mt-2 text-sm text-[#6B6B6B]">검수 맥락에 맞는 온라인·오프라인과 세부 유형을 지정하세요.</p>
               </div>
               <div className="flex shrink-0 items-center gap-2 sm:ml-auto" role="group" aria-label="브랜드 디자인 모드">
@@ -485,7 +476,7 @@ export function BrandInspection() {
                     key={t}
                     type="button"
                     onClick={() => setSelectedDesignType(t)}
-                    className={`${categoryTabBase} ${selectedDesignType === t ? categoryTabActive : categoryTabIdle}`}
+                    className={`${categoryTabBase} ${selectedDesignType === t ? designTypeTabActive : designTypeTabIdle}`}
                   >
                     {t}
                   </button>

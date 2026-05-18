@@ -28,7 +28,6 @@ import {
   Grid3x3,
   Magnet,
   X,
-  Layers,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
@@ -45,6 +44,7 @@ import {
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 import { GlobalBrandNav } from "@/components/GlobalBrandNav";
 import { registerGlobalNavPersist } from "@/lib/globalNavPersistence";
+import { InspectionSectionTitle } from "@/components/InspectionSectionTitle";
 
 const ExportDialog = lazy(() => import("./ExportDialog").then((m) => ({ default: m.ExportDialog })));
 
@@ -894,8 +894,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
           <GlobalBrandNav className="border-t border-b-0 bg-white" innerClassName="w-full px-4 sm:px-6" />
           <div className="flex flex-col gap-2 border-t border-gray-100 bg-white px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div className="flex min-w-0 items-center gap-2">
-              <Layers className="h-4 w-4 shrink-0 text-[#FF7F66]" aria-hidden />
-              <span className="text-sm font-bold tracking-tight text-gray-900">카테고리 선택</span>
+              <InspectionSectionTitle>제작물유형</InspectionSectionTitle>
             </div>
             <div className="flex shrink-0 items-center gap-2 sm:ml-auto" role="group" aria-label="브랜드 디자인 모드">
               <Button

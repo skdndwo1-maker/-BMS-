@@ -80,6 +80,16 @@ const categoryTabBase =
 const categoryTabIdle = "border-[rgba(0,0,0,0.08)] bg-white text-[#6B6B6B] hover:border-[rgba(0,0,0,0.12)]";
 const categoryTabActive =
   "border-black bg-black text-white shadow-[0_4px_14px_-4px_rgba(0,0,0,0.22)] hover:bg-black/90";
+/** 생성 모드 — 생성 방식(일반/단계별): 검수 세부 유형과 동일 코랄 액센트 */
+const generateStyleTabIdle =
+  "h-7 rounded-full border-[rgba(255,127,102,0.4)] bg-white px-2.5 text-[11px] font-medium text-[#5C5C5C] hover:bg-[#FFF7F5] hover:border-[rgba(255,127,102,0.55)]";
+const generateStyleTabActive =
+  "h-7 rounded-full border-[#FF7F66] bg-[#FF7F66] px-2.5 text-[11px] font-medium text-white shadow-[0_4px_12px_-4px_rgba(255,127,102,0.35)] hover:bg-[#FF7F66]/90";
+/** 하위 카테고리(Personal 등 아래 모바일·인터넷…): 디자인 검수 세부 유형과 동일 코랄 */
+const namingMinorTabIdle =
+  "border-[rgba(255,127,102,0.4)] bg-white text-[#5C5C5C] hover:bg-[#FFF7F5] hover:border-[rgba(255,127,102,0.55)]";
+const namingMinorTabActive =
+  "border-[#FF7F66] bg-[#FF7F66] text-white shadow-[0_4px_14px_-4px_rgba(255,127,102,0.45)] hover:bg-[#FF7F66]/90";
 const SECTION_ICON = "h-[26px] w-[26px] shrink-0";
 
 const ETC_TOOLTIP_TEXT = [
@@ -932,7 +942,7 @@ export function BrandNaming() {
                         key={sub}
                         type="button"
                         onClick={() => setAuditCategoryMinor(sub)}
-                        className={`${categoryTabBase} ${auditCategoryMinor === sub ? categoryTabActive : categoryTabIdle}`}
+                        className={`${categoryTabBase} ${auditCategoryMinor === sub ? namingMinorTabActive : namingMinorTabIdle}`}
                       >
                         {sub}
                       </button>
@@ -988,11 +998,7 @@ export function BrandNaming() {
                       type="button"
                       size="sm"
                       variant="outline"
-                      className={
-                        generateStyle === "general"
-                          ? "h-7 rounded-full border-transparent bg-black px-2.5 text-[11px] text-white hover:bg-black/90"
-                          : "h-7 rounded-full border-[rgba(0,0,0,0.1)] px-2.5 text-[11px]"
-                      }
+                      className={generateStyle === "general" ? generateStyleTabActive : generateStyleTabIdle}
                       onClick={() => setGenerateStyle("general")}
                     >
                       일반 생성
@@ -1001,11 +1007,7 @@ export function BrandNaming() {
                       type="button"
                       size="sm"
                       variant="outline"
-                      className={
-                        generateStyle === "tiered"
-                          ? "h-7 rounded-full border-transparent bg-black px-2.5 text-[11px] text-white hover:bg-black/90"
-                          : "h-7 rounded-full border-[rgba(0,0,0,0.1)] px-2.5 text-[11px]"
-                      }
+                      className={generateStyle === "tiered" ? generateStyleTabActive : generateStyleTabIdle}
                       onClick={() => setGenerateStyle("tiered")}
                     >
                       단계별 생성

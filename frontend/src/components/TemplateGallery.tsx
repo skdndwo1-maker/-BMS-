@@ -9,12 +9,12 @@ import {
   Bell,
   Signpost,
   Presentation,
-  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { templates as designTemplates, templateCategories } from "@/design/templates";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 import { GlobalBrandNav } from "@/components/GlobalBrandNav";
+import { InspectionSectionTitle } from "@/components/InspectionSectionTitle";
 
 type MediaType = "online" | "offline";
 
@@ -193,42 +193,7 @@ export function TemplateGallery() {
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-              <div
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 12,
-                  background: PAL.coralSoft,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Layers style={{ width: 20, height: 20, color: PAL.coral }} />
-              </div>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 19,
-                  fontWeight: 700,
-                  color: PAL.ink,
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                카테고리 선택
-              </h2>
-              <span
-                style={{
-                  display: "inline-block",
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: PAL.coral,
-                  marginLeft: 2,
-                  boxShadow: "0 0 0 1px rgba(255, 127, 102, 0.2)",
-                }}
-                aria-hidden
-              />
+              <InspectionSectionTitle>제작물유형</InspectionSectionTitle>
             </div>
             <div className="flex shrink-0 items-center gap-2 sm:ml-auto" role="group" aria-label="브랜드 디자인 모드">
               <Button

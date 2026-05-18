@@ -24,6 +24,7 @@ import {
 import { adjustBoldRangesOnPlainReplace } from "@/design/bodyBoldRanges";
 import { ILLUSTRATION_PRESETS, PICTOGRAM_PRESETS, filterAssetPresets } from "@/design/assetPresets";
 import { AssetPresetPickerDialog } from "@/components/design/AssetPresetPickerDialog";
+import { CoralTitleMarker } from "@/components/InspectionSectionTitle";
 import { resolveRcsMessageBackground } from "@/components/design/RCSCanvas";
 import { templates as allDesignTemplates } from "@/design/templates";
 import { resolvePosterBodyBlocksForRender, applyBodyBlockTextEdit } from "@/design/posterBodyDisplay";
@@ -546,11 +547,14 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           </div>
         )}
 
-        {/* 카테고리 */}
+        {/* 제작물유형 */}
         {isRcs ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-semibold text-gray-700">템플릿 카테고리</Label>
+              <div className="flex items-center gap-2">
+                <CoralTitleMarker />
+                <Label className="text-sm font-semibold text-gray-700">제작물유형</Label>
+              </div>
               <span className="text-[10px] font-medium text-[#FF7F66] bg-[#FF7F66]/10 border border-[#FF7F66]/20 rounded-full px-2 py-0.5">
                 RCS 전용
               </span>
@@ -643,19 +647,25 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         ) : (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-semibold text-gray-700">템플릿 카테고리</Label>
+              <div className="flex items-center gap-2">
+                <CoralTitleMarker />
+                <Label className="text-sm font-semibold text-gray-700">제작물유형</Label>
+              </div>
               <button onClick={()=>setShowCategoryPalette(!showCategoryPalette)} className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
                 {showCategoryPalette?<ChevronUp className="w-3.5 h-3.5"/>:<ChevronDown className="w-3.5 h-3.5"/>}{showCategoryPalette?'닫기':'변경'}
               </button>
             </div>
             <div className="flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 cursor-pointer transition-all" style={{borderColor:currentCat.color,backgroundColor:`${currentCat.color}10`}} onClick={()=>setShowCategoryPalette(!showCategoryPalette)}>
               <span className="text-lg">{currentCat.emoji}</span>
-              <div><p className="text-sm font-bold" style={{color:currentCat.color}}>{currentCat.label}</p><p className="text-[10px] text-gray-400">클릭하여 카테고리 변경</p></div>
+              <div><p className="text-sm font-bold" style={{color:currentCat.color}}>{currentCat.label}</p><p className="text-[10px] text-gray-400">클릭하여 제작물유형 변경</p></div>
               <ChevronDown className="w-4 h-4 ml-auto text-gray-400"/>
             </div>
             {showCategoryPalette&&(
               <div className="border border-gray-200 rounded-xl p-3 bg-gray-50 space-y-2">
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">카테고리 선택</p>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <CoralTitleMarker variant="compact" />
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider m-0">제작물유형</p>
+                </div>
                 {POSTER_CATEGORIES.map((cat)=>{
                   const isActive=normalizePosterCategory(content.posterCategory)===cat.key;
                   return (
@@ -674,7 +684,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           </div>
         )}
 
-        {/* 현수막(placard): 분할영역 배경 옵션을 템플릿 카테고리 바로 아래로 이동 */}
+        {/* 현수막(placard): 분할영역 배경 옵션을 제작물유형 블록 바로 아래로 이동 */}
         {isPlacard ? (
           <div className="space-y-3 border-t border-gray-100 pt-4">
             <Label className="text-sm font-semibold text-gray-700">분할 영역 배경(우측 패널 톤)</Label>
