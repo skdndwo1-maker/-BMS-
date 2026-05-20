@@ -872,9 +872,14 @@ app.post(
         }
       }
 
-      if (mode === "audit" && (auditName || namingIntent)) {
+      if (mode === "audit") {
         const catBlock = auditCategory ? `${auditCategory}\n\n` : "";
-        requestText = `${catBlock}[검수명]\n${auditName}\n\n${namingIntent}`;
+        const fromClient = String(req.body?.requestText ?? "").trim();
+        const assembled = `${catBlock}[검수명]\n${auditName}\n\n${namingIntent}`.trim();
+        requestText = fromClient || assembled;
+        if (!requestText && catBlock) {
+          requestText = `${catBlock}[검수명]\n(미입력)\n\n[작명 개요]\n(미입력)`;
+        }
       } else if (mode === "generate" && auditCategory) {
         requestText = `${auditCategory}\n\n[생성 요청]\n${requestText}`;
       }

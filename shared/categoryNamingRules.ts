@@ -254,6 +254,17 @@ export function buildAdditionalNamingSuggestionBlock(
 }
 
 export function buildAdditionalNamingSuggestionBlockFromAuditRaw(auditCategoryRaw: string): string {
+  const t = auditCategoryRaw.trim();
+  if (!t) return "";
+  /** etc.는 Personal/Enterprise/AI 파싱 대상이 아님 — NO-GO 보조 생성에도 맥락 블록을 둠 */
+  if (/대카테고리:\s*etc\./i.test(t)) {
+    return [
+      "제안 네이밍 조건:",
+      "- 대카테고리: etc. (표준 위계 카테고리 외·내부·프로모션·AI 무관 작명 등)",
+      "- 서브카테고리별 등록 룰이 없으므로 브랜드 가이드라인 PDF·작명 개요·검수명을 최우선으로 반영한다.",
+      "- [요청 맥락]과 모순되지 않는 범위에서만 제안하고, 검수에 올린 기존 명칭·슬로건과 동일·유사한 표기는 넣지 말 것",
+    ].join("\n");
+  }
   const p = parseBrandHierarchyFromAuditRaw(auditCategoryRaw);
   if (!p) return "";
   return buildAdditionalNamingSuggestionBlock(p.major, p.minor);

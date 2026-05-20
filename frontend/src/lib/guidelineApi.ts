@@ -489,7 +489,7 @@ export type BrandNamingRunResult = {
 /** 고정 PDF 슬롯 + 참고 입력·업로드를 반영해 네이밍 생성 또는 검수 */
 export async function runBrandNaming(opts: {
   mode: BrandNamingMode;
-  /** 생성 모드에서 사용. 검수 모드에서는 서버가 auditName·namingIntent로 조합할 수 있음 */
+  /** 생성 모드: 작명 개요. 검수 모드: 카테고리+검수명+작명 개요 전문(서버 조립 폴백과 동일 구조 권장) */
   requestText: string;
   /** 검수 모드: 위쪽 입력(검수명) */
   auditName?: string;

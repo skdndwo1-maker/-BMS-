@@ -836,9 +836,15 @@ export function BrandNaming() {
         const overviewPromptForThisRun = namingMode === "audit"
           ? buildNamingOverviewForPrompt(auditOverview)
           : buildNamingOverviewForPrompt(generateOverview);
+        const auditRunRequestText =
+          namingMode === "audit"
+            ? `${auditCategoryLine ? `${auditCategoryLine}\n\n` : ""}[검수명]\n${auditName.trim()}\n\n${
+                overviewPromptForThisRun || "[작명 개요]\n(입력 없음)"
+              }`.trim()
+            : "";
         const res = await runBrandNaming({
           mode: namingMode,
-          requestText: namingMode === "generate" ? overviewPromptForThisRun : "",
+          requestText: namingMode === "generate" ? overviewPromptForThisRun : auditRunRequestText,
           auditName: namingMode === "audit" ? auditName : undefined,
           namingIntent: namingMode === "audit" ? overviewPromptForThisRun : undefined,
           auditCategory: auditCategoryLine || undefined,
