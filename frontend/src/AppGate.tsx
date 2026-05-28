@@ -7,7 +7,6 @@ import { BrandLibrary } from "@/components/BrandLibrary";
 import { TemplateGallery } from "@/components/TemplateGallery";
 import { DesignEditor } from "@/components/design/DesignEditor";
 import { AdminReview } from "@/components/AdminReview";
-import { ImportViewer } from "./ImportViewer";
 import { MyDesignsDashboard } from "@/components/MyDesignsDashboard";
 import { SimplyHeart } from "@/components/SimplyHeart";
 
@@ -23,7 +22,6 @@ export default function AppGate() {
       <Route path="/naming" element={<BrandNaming />} />
       <Route path="/simply-heart" element={<SimplyHeart />} />
       <Route path="/library" element={<BrandLibrary />} />
-      <Route path="/import" element={<ImportViewer />} />
       <Route path="/admin/review" element={<AdminReview />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
