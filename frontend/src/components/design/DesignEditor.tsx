@@ -468,6 +468,27 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     }
   }, [template, bootBusy, actualTemplateId, searchParams, setSearchParams, setContentWithHistory]);
 
+  /** document scroll 잠금 — focus/scrollIntoView 후 상태바 아래 회색 띠 방지 */
+  useEffect(() => {
+    if (!template) return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = body.style.overflow;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    window.scrollTo(0, 0);
+    return () => {
+      html.style.overflow = prevHtmlOverflow;
+      body.style.overflow = prevBodyOverflow;
+    };
+  }, [template]);
+
+  useEffect(() => {
+    if (!template || focusTarget == null) return;
+    window.scrollTo(0, 0);
+  }, [template, focusTarget]);
+
   /**
    * 자동 history 도입 이후에는 별도 호출이 불필요. (호환을 위해 noop으로 유지)
    * 텍스트 인라인 편집 시작 시점 등 "burst 시작" 신호로만 사용 가능.
@@ -1139,7 +1160,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
           {/* Right Panel — 전체 높이 고정, 패널만 독립 스크롤 */}
           {!showPreview && (
             <div className="flex w-96 min-h-0 flex-shrink-0 flex-col overflow-hidden border-l border-gray-200 bg-white">
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain" data-content-panel-scroll>
                 <ContentPanel
                   content={content}
                   onContentChange={setContentWithHistory}

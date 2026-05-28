@@ -160,18 +160,36 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const [pictoDialogOpen, setPictoDialogOpen] = useState(false);
   const [illustDialogOpen, setIllustDialogOpen] = useState(false);
 
+  /** 우측 패널 내부만 스크롤 — window/document scrollIntoView 시 하단 회색 띠 유발 방지 */
+  const scrollPanelSection = useCallback((el: HTMLElement | null) => {
+    if (!el) return;
+    const scrollParent = el.closest("[data-content-panel-scroll]") as HTMLElement | null;
+    if (!scrollParent) {
+      el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+      return;
+    }
+    const elRect = el.getBoundingClientRect();
+    const parentRect = scrollParent.getBoundingClientRect();
+    const pad = 8;
+    if (elRect.top >= parentRect.top + pad && elRect.bottom <= parentRect.bottom - pad) return;
+    const nextTop =
+      scrollParent.scrollTop +
+      (elRect.top - parentRect.top) -
+      pad;
+    scrollParent.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
+  }, []);
+
   useEffect(() => {
     if (!focusTarget) return;
-    const scroll = (el: HTMLElement | null) => el?.scrollIntoView({ behavior: "smooth", block: "start" });
-    if (focusTarget === "badge") scroll(refBadge.current);
-    else if (focusTarget === "title") scroll(refTitle.current);
-    else if (focusTarget === "body") scroll(refBody.current);
-    else if (typeof focusTarget === "string" && focusTarget.startsWith("body:")) scroll(refBody.current);
-    else if (typeof focusTarget === "string" && focusTarget.startsWith("subtitle:")) scroll(refTitle.current);
-    else if (focusTarget === "footer") scroll(refFooter.current);
-    else if (focusTarget === "image") scroll(refImage.current);
-    else if (focusTarget === "logo") scroll(refLogo.current);
-  }, [focusTarget]);
+    if (focusTarget === "badge") scrollPanelSection(refBadge.current);
+    else if (focusTarget === "title") scrollPanelSection(refTitle.current);
+    else if (focusTarget === "body") scrollPanelSection(refBody.current);
+    else if (typeof focusTarget === "string" && focusTarget.startsWith("body:")) scrollPanelSection(refBody.current);
+    else if (typeof focusTarget === "string" && focusTarget.startsWith("subtitle:")) scrollPanelSection(refTitle.current);
+    else if (focusTarget === "footer") scrollPanelSection(refFooter.current);
+    else if (focusTarget === "image") scrollPanelSection(refImage.current);
+    else if (focusTarget === "logo") scrollPanelSection(refLogo.current);
+  }, [focusTarget, scrollPanelSection]);
 
   /** 캔버스 등에서 배경 이미지 제거 시 로컬 미리보기와 동기화 */
   useEffect(() => {

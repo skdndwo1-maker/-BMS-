@@ -962,24 +962,21 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   }, [onContentChange]);
 
   useEffect(() => {
+    const focusInline = (el: HTMLTextAreaElement | null | undefined) => {
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      el.select();
+    };
     if (inlineEditTarget?.kind === "title") {
-      titleEditRef.current?.focus();
-      titleEditRef.current?.select();
+      focusInline(titleEditRef.current);
     } else if (inlineEditTarget?.kind === "footer") {
-      footerEditRef.current?.focus();
-      footerEditRef.current?.select();
+      focusInline(footerEditRef.current);
     } else if (inlineEditTarget?.kind === "body") {
-      const el = bodyEditRefs.current[inlineEditTarget.id];
-      el?.focus();
-      el?.select();
+      focusInline(bodyEditRefs.current[inlineEditTarget.id]);
     } else if (inlineEditTarget?.kind === "subtitle") {
-      const el = subtitleEditRefs.current[inlineEditTarget.id];
-      el?.focus();
-      el?.select();
+      focusInline(subtitleEditRefs.current[inlineEditTarget.id]);
     } else if (inlineEditTarget?.kind === "badge") {
-      const el = badgeEditRefs.current[inlineEditTarget.id];
-      el?.focus();
-      el?.select();
+      focusInline(badgeEditRefs.current[inlineEditTarget.id]);
     }
   }, [inlineEditTarget]);
 
