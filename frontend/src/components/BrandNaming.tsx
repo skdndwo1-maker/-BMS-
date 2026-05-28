@@ -1,17 +1,15 @@
-import { Fragment, useState, useRef, useEffect, type ChangeEvent } from "react";
+import { useState, useRef, useEffect, type ChangeEvent } from "react";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 import { GlobalBrandNav } from "@/components/GlobalBrandNav";
 import { registerGlobalNavPersist } from "@/lib/globalNavPersistence";
 import {
   Upload,
   FileText,
-  CheckCircle2,
   Sparkles,
   ArrowUp,
   Download,
   Loader2,
   FileCheck,
-  ScanSearch,
   ShieldCheck,
   Scale,
   BadgeCheck,
@@ -31,497 +29,56 @@ import {
   runBrandNaming,
   syncGuidelineFromFixed,
   normalizeNamingProposal,
-  type BrandNamingProposal,
   type BrandNamingRunResult,
   type GuidelineInfo,
-  type TierPackageEvaluation,
 } from "@/lib/guidelineApi";
 import { GUIDELINE_REFERENCE_OPTIONS } from "@/constants/guidelineReferences";
 import { buildAuditCategoryContext } from "@/constants/namingCategoryRules";
 import { downloadBrandNamingReport, type ExportFormat } from "@/lib/inspectionExport";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  EMPTY_NAMING_OVERVIEW,
+  ETC_TOOLTIP_TEXT,
+  NAMING_AUDIT_CATEGORY_COMPACT_H_PX,
+  NAMING_AUDIT_GAUGE_R,
+  NAMING_AUDIT_INTENT_ROW_H_PX,
+  NAMING_AUDIT_MAJORS,
+  NAMING_AUDIT_SUBS,
+  NAMING_FAIL_TEXT_MD,
+  NAMING_FAIL_TEXT_SM,
+  NAMING_NAV_DRAFT_KEY,
+  NAMING_PASS_BADGE_MD,
+  NAMING_PASS_BADGE_SM,
+  NamingOverviewGrid,
+  NamingResultSectionTitle,
+  ProposalDimensionBars,
+  SECTION_ICON,
+  SECTION_TITLE,
+  ScoreGauge,
+  StepBar,
+  buildAuditCategoryLineForEtc,
+  buildNamingOverviewForPrompt,
+  categoryTabActive,
+  categoryTabBase,
+  categoryTabIdle,
+  generateStyleTabActive,
+  generateStyleTabIdle,
+  namingMinorTabActive,
+  namingMinorTabIdle,
+  passFail,
+  resizeTierLabels,
+  tierPackageToProposal,
+  type AuditStep,
+  type NamingAuditMajor,
+  type NamingOverviewFields,
+} from "./namingSections";
 
-// ───────────────────────────────────────────
-// Types
-// ───────────────────────────────────────────
-type AuditStep = "idle" | "analyzing" | "checking" | "verifying" | "complete";
-
-// ───────────────────────────────────────────
-// Constants
-// ───────────────────────────────────────────
-const AUDIT_STEPS = [
-  { id: "analyzing", label: "분석", icon: ScanSearch },
-  { id: "checking", label: "검토", icon: Scale },
-  { id: "verifying", label: "검증", icon: ShieldCheck },
-  { id: "complete", label: "완료", icon: CheckCircle2 },
-] as const;
-
-const STEP_ORDER: AuditStep[] = ["idle", "analyzing", "checking", "verifying", "complete"];
-
-/** 본문 섹션 타이틀: TemplateGallery / brandPages 정렬 */
-const SECTION_TITLE = "brand-section-title";
-
-/** 검수 — 작명의도 행과 동일 높이(검수명+작명의도 부모 189px·gap-8 기준 flex-[120] 행) */
-const NAMING_AUDIT_INTENT_ROW_H_PX = Math.round(((189 - 8) * 120) / 200);
-/** 대카테고리만 선택된 상태(서브 미표시): 탭 한 줄만 들어갈 최소 높이 */
-const NAMING_AUDIT_CATEGORY_COMPACT_H_PX = 52;
-
-const NAMING_AUDIT_MAJORS = ["Personal", "Enterprise", "AI", "etc."] as const;
-type NamingAuditMajor = (typeof NAMING_AUDIT_MAJORS)[number];
-const NAMING_AUDIT_SUBS: Record<NamingAuditMajor, readonly string[]> = {
-  Personal: ["모바일", "인터넷", "IPTV", "스마트홈", "멤버십", "구독", "채널"],
-  Enterprise: ["Infra", "Works", "AX"],
-  AI: ["Service", "Feature", "Tech"],
-  "etc.": [],
-};
-
-const categoryTabBase =
-  "inline-flex items-center justify-center rounded-full border px-3 py-2 text-[13px] font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20";
-const categoryTabIdle = "border-[rgba(0,0,0,0.08)] bg-white text-[#6B6B6B] hover:border-[rgba(0,0,0,0.12)]";
-const categoryTabActive =
-  "border-black bg-black text-white shadow-[0_4px_14px_-4px_rgba(0,0,0,0.22)] hover:bg-black/90";
-/** 생성 모드 — 생성 방식(일반/단계별): 검수 세부 유형과 동일 코랄 액센트 */
-const generateStyleTabIdle =
-  "h-7 rounded-full border-[rgba(255,127,102,0.4)] bg-white px-2.5 text-[11px] font-medium text-[#5C5C5C] hover:bg-[#FFF7F5] hover:border-[rgba(255,127,102,0.55)]";
-const generateStyleTabActive =
-  "h-7 rounded-full border-[#FF7F66] bg-[#FF7F66] px-2.5 text-[11px] font-medium text-white shadow-[0_4px_12px_-4px_rgba(255,127,102,0.35)] hover:bg-[#FF7F66]/90";
-/** 하위 카테고리(Personal 등 아래 모바일·인터넷…): 디자인 검수 세부 유형과 동일 코랄 */
-const namingMinorTabIdle =
-  "border-[rgba(255,127,102,0.4)] bg-white text-[#5C5C5C] hover:bg-[#FFF7F5] hover:border-[rgba(255,127,102,0.55)]";
-const namingMinorTabActive =
-  "border-[#FF7F66] bg-[#FF7F66] text-white shadow-[0_4px_14px_-4px_rgba(255,127,102,0.45)] hover:bg-[#FF7F66]/90";
-const SECTION_ICON = "h-[26px] w-[26px] shrink-0";
-
-const ETC_TOOLTIP_TEXT = [
-  "브랜드 위계체계에 포함되지 않는 내부 사용,",
-  "프로모션용 서비스, 사업, AI와 무관한",
-  "작명 업무 시 사용",
-].join("\n");
-
-type NamingOverviewKey = "targetUser" | "planningIntent" | "primaryUse" | "namingDirection" | "alternatives" | "misc";
-type NamingOverviewFields = Record<NamingOverviewKey, string>;
-
-const NAMING_OVERVIEW_FIELDS: Array<{ key: NamingOverviewKey; label: string; placeholder?: string }> = [
-  { key: "targetUser", label: "사용대상", placeholder: "예) 개인/기업, 연령대, 내부 구성원 등" },
-  { key: "planningIntent", label: "기획의도", placeholder: "예) 런칭 목적, 해결 과제, 핵심 메시지" },
-  { key: "primaryUse", label: "주요용도", placeholder: "예) 프로모션/기능명/캠페인/패키지 등" },
-  { key: "namingDirection", label: "작명방향", placeholder: "예) 톤&매너, 키워드, 금지어/선호어" },
-  { key: "alternatives", label: "후보대안", placeholder: "예) 이미 생각한 후보/레퍼런스" },
-  { key: "misc", label: "기타사항", placeholder: "예) 일정, 사용 채널, 표기 제약 등" },
-];
-
-const EMPTY_NAMING_OVERVIEW: NamingOverviewFields = {
-  targetUser: "",
-  planningIntent: "",
-  primaryUse: "",
-  namingDirection: "",
-  alternatives: "",
-  misc: "",
-};
-
-function buildNamingOverviewForPrompt(fields: NamingOverviewFields): string {
-  const rows = NAMING_OVERVIEW_FIELDS.map(({ key, label }) => {
-    const v = (fields[key] ?? "").trim();
-    if (!v) return null;
-    return `- ${label}: ${v}`;
-  }).filter(Boolean) as string[];
-
-  if (rows.length === 0) return "";
-  return ["[작명 개요]", ...rows].join("\n").trim();
-}
-
-function buildAuditCategoryLineForEtc(): string {
-  return [
-    "브랜드 계층 컨텍스트:",
-    "- 대카테고리: etc.",
-    "- 서브카테고리: (없음)",
-    "- (등록된 네이밍 룰이 없습니다. 가이드 PDF와 참고 자료를 우선하세요.)",
-    "",
-    "[etc. 전용 지시 — 필수]",
-    "- 브랜드 위계체계에 포함되지 않는 내부 사용/프로모션/AI 무관 작명 업무입니다.",
-    "- 브랜드 가이드라인 PDF를 최우선 참조하십시오.",
-    "- 아래 [작명 개요]의 항목별 내용을 각각 분리해 분석하고, 결론 도출에 반영하십시오.",
-    "- 다른 카테고리보다 [작명 개요]의 가중치를 높게 두고 추론하십시오.",
-  ].join("\n").trim();
-}
-
-// ───────────────────────────────────────────
-// Sub-components
-// ───────────────────────────────────────────
-
-/** 스텝 바 — 스텝은 고정 폭, 연결선만 flex-1로 동일 분배(검증~완료 간만 넓어지는 현상 방지) */
-function StepBar({ currentStep }: { currentStep: AuditStep }) {
-  const currentIdx = STEP_ORDER.indexOf(currentStep);
-  return (
-    <div className="border-b border-[rgba(0,0,0,0.06)] bg-[#FAFAF8]">
-      <div className="max-w-[1280px] mx-auto px-[24px] py-[16px]">
-        <div className="flex w-full items-center">
-          {AUDIT_STEPS.map((step, index) => {
-            const StepIcon = step.icon;
-            const isActive = index <= currentIdx - 1;
-            const isCurrent = index === currentIdx - 1;
-            return (
-              <Fragment key={step.id}>
-                <div className="flex w-[72px] shrink-0 flex-col items-center gap-[8px] sm:w-[88px]">
-                  <div
-                    className={`flex h-[40px] w-[40px] items-center justify-center rounded-full transition-all
-                    ${isActive || isCurrent ? "bg-[#FF7F66] text-white" : "bg-gray-100 text-gray-400"}
-                    ${isCurrent ? "ring-4 ring-[#FF7F66]/20" : ""}`}
-                  >
-                    {isCurrent && currentStep !== "complete" ? (
-                      <Loader2 className="h-[20px] w-[20px] animate-spin" />
-                    ) : (
-                      <StepIcon className="h-[20px] w-[20px]" />
-                    )}
-                  </div>
-                  <span
-                    className={`text-center text-[12px] font-medium ${isActive || isCurrent ? "text-gray-900" : "text-gray-400"}`}
-                  >
-                    {step.label}
-                  </span>
-                </div>
-                {index < AUDIT_STEPS.length - 1 ? (
-                  <div
-                    className={`mx-1 h-[2px] min-w-[8px] flex-1 transition-all sm:mx-2 ${index <= currentIdx - 1 ? "bg-[#FF7F66]" : "bg-gray-200"}`}
-                  />
-                ) : null}
-              </Fragment>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function NamingOverviewGrid({
-  value,
-  onChange,
-}: {
-  value: NamingOverviewFields;
-  onChange: (next: NamingOverviewFields) => void;
-}) {
-  return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-      {NAMING_OVERVIEW_FIELDS.map((f) => {
-        const v = value[f.key] ?? "";
-        return (
-          <div key={f.key} className="brand-naming-section p-3">
-            <div className="mb-2">
-              <span className="brand-pill--accent">{f.label}</span>
-            </div>
-            <textarea
-              value={v}
-              onChange={(e) => onChange({ ...value, [f.key]: e.target.value })}
-              placeholder={f.placeholder}
-              rows={3}
-              className="h-[72px] min-h-[72px] w-full resize-none rounded-[10px] border border-gray-200 px-3 py-2 text-[14px] font-normal leading-relaxed outline-none transition-all placeholder:text-gray-300 focus:border-[#FF7F66] focus:ring-2 focus:ring-[#FF7F66]/20"
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/** 검수 결과 상단 점수 서클 (r·scoreSize 기준 동기 확대) */
-const NAMING_AUDIT_GAUGE_R = 84;
-
-/** 단계별 생성: 기본 단계 라벨(요금제·가격대 라인업) */
-const DEFAULT_TIER_LABELS = ["최고가", "고가", "중가", "저가", "최저가", "라이트"];
-
-function resizeTierLabels(count: number, prev: string[]): string[] {
-  const next = prev.slice(0, count);
-  while (next.length < count) {
-    next.push(DEFAULT_TIER_LABELS[next.length] ?? `단계 ${next.length + 1}`);
-  }
-  return next;
-}
-
-/** 점수 게이지 (큰 버전). scoreSize: 중앙 점수 숫자(px), 기본 48 */
-function ScoreGauge({ score, r = 85, scoreSize = 48 }: { score: number; r?: number; scoreSize?: number }) {
-  const size = (r + 16) * 2;
-  const circ = 2 * Math.PI * r;
-  const subSize = Math.round(scoreSize * 0.33);
-  return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg className="h-full w-full -rotate-90" viewBox={`0 0 ${r * 2 + 32} ${r * 2 + 32}`}>
-        <circle cx={r + 16} cy={r + 16} r={r} stroke="#E8E4DF" strokeWidth="16" fill="none" />
-        <circle
-          cx={r + 16}
-          cy={r + 16}
-          r={r}
-          stroke="#FF7F66"
-          strokeWidth="16"
-          fill="none"
-          strokeDasharray={circ}
-          strokeDashoffset={circ * (1 - score / 100)}
-          strokeLinecap="round"
-          className="transition-all duration-1000"
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="leading-none font-bold text-black" style={{ fontSize: scoreSize }}>
-          {score}
-        </span>
-        <span className="text-gray-500" style={{ fontSize: subSize }}>
-          / 100
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/** 평가·결과 블록 제목 (레퍼런스: Overview ●) */
-function NamingResultSectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mb-1 flex items-center gap-2.5">
-      <span className="h-2 w-2 shrink-0 rounded-full bg-[#FF7F66]" aria-hidden />
-      <h2 className="text-[19px] font-bold leading-tight tracking-tight text-[#1a1a1a]">{children}</h2>
-    </div>
-  );
-}
-
-/** 종합: 창의 30% · 대중 30% · 직관 20% · 확장 20% (계층·적법 미포함) */
-function weightedProposalOverall(p: BrandNamingProposal): number {
-  const c = (n: unknown) => Math.min(100, Math.max(0, Math.round(Number(n) || 0)));
-  const o = c(p.originalityDimensionScore);
-  const pa = c(p.publicAppealScore);
-  const pr = c(p.pronunciationScore);
-  const sc = c(p.scalabilityScore);
-  const raw = o * 0.3 + pa * 0.3 + pr * 0.2 + sc * 0.2;
-  return Math.min(100, Math.max(0, Math.round(raw)));
-}
-
-/** 1~2: Pass/Fail · 3~6: 표시 순서 계층→적법→창의→대중→직관→확장, 종합은 창의·대중·직관·확장만 가중 */
-const GENERATE_EVAL_BOXES: {
-  dim: keyof BrandNamingProposal["proposalDetailLogic"];
-  label: string;
-  score: (p: BrandNamingProposal) => number;
-  overallWeightPct?: number;
-}[] = [
-  { dim: "hierarchy", label: "브랜드 계층 정렬", score: (p) => p.hierarchyScore },
-  { dim: "legality", label: "적법성", score: (p) => p.legalityScore },
-  { dim: "originality", label: "창의성", score: (p) => p.originalityDimensionScore, overallWeightPct: 30 },
-  { dim: "publicAppeal", label: "대중성", score: (p) => p.publicAppealScore, overallWeightPct: 30 },
-  { dim: "pronunciationLanguage", label: "직관성", score: (p) => p.pronunciationScore, overallWeightPct: 20 },
-  { dim: "scalability", label: "확장성", score: (p) => p.scalabilityScore, overallWeightPct: 20 },
-];
-
-function passFail(score: number): "PASS" | "FAIL" {
-  const v = Number.isFinite(score) ? score : 0;
-  return v >= 70 ? "PASS" : "FAIL";
-}
-
-/** PASS: 카키 배경 + 흰 글씨 / FAIL: 검붉은 글씨 (UI 공통) */
-const NAMING_PASS_BADGE_SM =
-  "inline-flex items-center justify-center rounded-md bg-[#7A6B4B] px-1.5 py-0.5 text-[9px] font-bold text-white shadow-sm sm:text-[10px]";
-const NAMING_FAIL_TEXT_SM = "text-[9px] font-bold text-[#7A1A1A] sm:text-[10px]";
-const NAMING_PASS_BADGE_MD = "inline-flex items-center rounded-md bg-[#7A6B4B] px-2 py-0.5 text-[11px] font-bold text-white shadow-sm sm:text-[12px]";
-const NAMING_FAIL_TEXT_MD = "text-[12px] font-bold text-[#7A1A1A]";
-
-function tierPackageToProposal(tp: TierPackageEvaluation): BrandNamingProposal {
-  return {
-    name: "(단계별 패키지 전체)",
-    rationale: "",
-    hierarchyScore: tp.hierarchyScore,
-    originalityDimensionScore: tp.originalityDimensionScore,
-    pronunciationScore: tp.pronunciationScore,
-    legalityScore: tp.legalityScore,
-    publicAppealScore: tp.publicAppealScore ?? 50,
-    scalabilityScore: tp.scalabilityScore ?? 50,
-    proposalDetailLogic: tp.proposalDetailLogic,
-  };
-}
-
-/** 생성 모드 평가 점수 바 — 대안 1~4 카드 공통: 고정 높이, 트랙·채움 색 통일 */
-const NAMING_EVAL_PROGRESS_HEIGHT_PX = 8;
-
-const NAMING_NAV_DRAFT_KEY = "brandAxis:namingNavDraft";
-
-const NAMING_TIER_LEGAL_TRACK = "bg-[#92b8b1]/14";
-const NAMING_TIER_LEGAL_FILL = "bg-[#92b8b1]";
-
-function NamingEvalProgressBar({
-  percent,
-  variant = "coral",
-}: {
-  percent: number;
-  variant?: "coral" | "tierLegality";
-}) {
-  const v = Number.isFinite(percent) ? Math.min(100, Math.max(0, Math.round(percent))) : 0;
-  const track = variant === "tierLegality" ? NAMING_TIER_LEGAL_TRACK : "bg-[#FF7F66]/12";
-  const fill = variant === "tierLegality" ? NAMING_TIER_LEGAL_FILL : "bg-[#FF7F66]";
-  return (
-    <div
-      className={`naming-eval-progress w-full min-w-0 shrink-0 overflow-hidden rounded-full ${track}`}
-      style={{ height: NAMING_EVAL_PROGRESS_HEIGHT_PX }}
-      role="progressbar"
-      aria-valuenow={v}
-      aria-valuemin={0}
-      aria-valuemax={100}
-    >
-      <div
-        className={`h-full min-h-0 rounded-full transition-[width] duration-150 ease-out ${fill}`}
-        style={{ width: `${v}%` }}
-      />
-    </div>
-  );
-}
-
-function ProposalDimensionBars({ proposal }: { proposal: BrandNamingProposal }) {
-  const [detailOpen, setDetailOpen] = useState<null | keyof BrandNamingProposal["proposalDetailLogic"]>(null);
-  const dl = proposal.proposalDetailLogic ?? {
-    hierarchy: "",
-    originality: "",
-    pronunciationLanguage: "",
-    legality: "",
-    publicAppeal: "",
-    scalability: "",
-  };
-  const overall = weightedProposalOverall(proposal);
-
-  return (
-    <>
-      <div className="mt-4 rounded-[22px] border border-[rgba(0,0,0,0.05)] bg-[#FAFAF8] p-4 sm:p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-stretch sm:gap-5">
-          <div className="flex shrink-0 flex-col items-center justify-center rounded-[20px] border border-[rgba(0,0,0,0.06)] bg-white px-5 py-5 text-center shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] sm:w-[min(100%,128px)]">
-            <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-[#FF7F66]/12">
-              <Sparkles className="h-5 w-5 text-[#FF7F66]" />
-            </div>
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">종합</span>
-            <span className="mt-0.5 text-[32px] font-bold leading-none tabular-nums text-black sm:text-[36px]">
-              {overall}
-            </span>
-            <span className="mt-0.5 text-[10px] text-gray-400">/ 100</span>
-            <span className="mt-2 max-w-[8.5rem] text-center text-[9px] leading-snug text-gray-500">
-              창의30%·대중30%
-              <br />
-              직관20%·확장20%
-            </span>
-          </div>
-          <div className="flex min-w-0 flex-1 flex-col gap-3">
-            <div>
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Pass / Fail</p>
-              <div className="grid grid-cols-2 gap-3 [grid-template-columns:minmax(0,1fr)_minmax(0,1fr)]">
-                {GENERATE_EVAL_BOXES.slice(0, 2).map(({ dim, label, score }) => {
-                  const raw = score(proposal);
-                  const n = Number(raw);
-                  const v = Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : 0;
-                  const passfail = passFail(v);
-                  return (
-                    <div
-                      key={dim}
-                      className="relative flex min-h-[88px] min-w-0 flex-col justify-center rounded-[18px] border border-[rgba(0,0,0,0.06)] bg-white px-3 pb-2 pt-2.5 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]"
-                    >
-                      <div className="mb-1 flex items-center justify-between gap-1">
-                        <span className="text-[11px] font-medium text-gray-700">{label}</span>
-                      </div>
-                      <NamingEvalProgressBar variant="tierLegality" percent={passfail === "PASS" ? 100 : 0} />
-                      <div className="mt-1.5 flex w-full min-w-0 items-center justify-between gap-2">
-                        <span
-                          className={passfail === "PASS" ? NAMING_PASS_BADGE_MD : NAMING_FAIL_TEXT_MD}
-                        >
-                          {passfail}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 shrink-0 rounded-full px-2.5 text-[12px] font-medium text-gray-500 hover:bg-black/[0.04] hover:text-gray-900"
-                          onClick={() => setDetailOpen(dim)}
-                        >
-                          상세보기
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div>
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
-                종합 가중 (창의 30% · 대중 30% · 직관 20% · 확장 20%) — 계층·적법은 미반영
-              </p>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 [grid-template-columns:minmax(0,1fr)_minmax(0,1fr)] sm:[grid-template-columns:minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                {GENERATE_EVAL_BOXES.slice(2, 6).map(({ dim, label, score, overallWeightPct }) => {
-                  const raw = score(proposal);
-                  const n = Number(raw);
-                  const v = Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : 0;
-                  return (
-                    <div
-                      key={dim}
-                      className="relative flex min-h-[88px] min-w-0 flex-col justify-center rounded-[18px] border border-[rgba(0,0,0,0.06)] bg-white px-3 pb-2 pt-2.5 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)]"
-                    >
-                      <div className="mb-1 flex items-center justify-between gap-1">
-                        <span className="text-[11px] font-medium text-gray-700">
-                          {label}
-                          {overallWeightPct != null ? (
-                            <span className="ml-1 text-[9px] font-normal text-gray-400">({overallWeightPct}%)</span>
-                          ) : null}
-                        </span>
-                        <span className="text-[12px] font-bold tabular-nums text-[#FF7F66]">{v}</span>
-                      </div>
-                      <NamingEvalProgressBar percent={v} />
-                      <div className="mt-1.5 flex w-full min-w-0 items-center justify-end">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 shrink-0 rounded-full px-2.5 text-[12px] font-medium text-gray-500 hover:bg-black/[0.04] hover:text-gray-900"
-                          onClick={() => setDetailOpen(dim)}
-                        >
-                          상세보기
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {detailOpen ? (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/40"
-            aria-label="닫기"
-            onClick={() => setDetailOpen(null)}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="relative z-10 flex max-h-[min(80vh,560px)] w-full max-w-lg flex-col overflow-hidden rounded-[22px] border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_8px_40px_-8px_rgba(0,0,0,0.15),0_4px_16px_-6px_rgba(0,0,0,0.08)]"
-          >
-            <div className="flex shrink-0 items-center justify-between border-b border-[rgba(0,0,0,0.05)] bg-[#FAFAF8] px-5 py-3.5">
-              <h3 className="text-sm font-semibold text-gray-900">
-                {GENERATE_EVAL_BOXES.find((b) => b.dim === detailOpen)?.label ?? "상세"} — 채점 근거
-              </h3>
-              <button
-                type="button"
-                className="rounded-full p-1.5 text-gray-500 transition-colors hover:bg-white hover:text-gray-900"
-                aria-label="닫기"
-                onClick={() => setDetailOpen(null)}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap p-5 text-[13px] leading-relaxed text-gray-700">
-              {dl[detailOpen]?.trim() ? dl[detailOpen] : "상세 근거가 비어 있습니다."}
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </>
-  );
-}
-
-// ───────────────────────────────────────────
-// Main Component
-// ───────────────────────────────────────────
+/**
+ * 브랜드 네이밍 생성·검수 메인 컴포넌트.
+ *
+ * 결과 패널·점수 카드·진행 바·검수 모달 등 시각 요소는 `./brandNaming/` 서브 모듈에 분리되어 있고
+ * 여기서는 상태 관리, 입력 폼, API 호출, 화면 조립만 담당합니다.
+ */
 export function BrandNaming() {
   const [auditName, setAuditName] = useState("");
   const [auditOverview, setAuditOverview] = useState<NamingOverviewFields>(EMPTY_NAMING_OVERVIEW);
