@@ -432,7 +432,7 @@ export type BrandNamingRunResult = {
   pronunciationScore?: number;
   /** 검수: 직관성(종합 20%) */
   pronunciationLanguageScore?: number;
-  /** 검수: 적법성(Pass/Fail·종합 미포함) */
+  /** 검수: 적법성(Pass/Fail·종합 미포함 — 법적 적법성 + 사회적 이슈·민감도) */
   legalityScore?: number;
   /** 검수·생성: 대중성(종합 30%) */
   publicAppealScore?: number;

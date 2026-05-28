@@ -1,5 +1,5 @@
 /**
- * 국가법령정보센터 Open API 연동 (적법성·브랜드 네이밍 맥락 보강)
+ * 국가법령정보센터 Open API 연동 (적법성 [법적 적법성]·브랜드 네이밍 맥락 보강)
  * - 신청·명세: https://open.law.go.kr/
  * - 검색 엔드포인트: DRF lawSearch (JSON)
  */
@@ -310,8 +310,8 @@ export async function fetchLawsForBrandNamingLegality(opts: {
   });
 
   const parts: string[] = [
-    "[국가법령정보센터 open.law.go.kr — 적법성 평가용 법령 검색]",
-    "Gemini는 아래 검색 결과를 참고하여 legalityScore·legalDetail·적법성 관련 서술을 작성하세요.",
+    "[국가법령정보센터 open.law.go.kr — 적법성 [법적 적법성] 평가용 법령 검색]",
+    "Gemini는 아래 검색 결과를 참고하여 legalityScore·legalDetail·detailLogicLegality의 **[법적 적법성]** 서술을 작성하세요. **[사회적 이슈·민감도]**는 Gemini 추론으로 별도 점검합니다.",
     ""
   ];
 

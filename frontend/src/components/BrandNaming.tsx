@@ -1508,7 +1508,7 @@ export function BrandNaming() {
                   <div className="min-w-0">
                     <NamingResultSectionTitle>종합 적합성 점수</NamingResultSectionTitle>
                     <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-gray-500">
-                      항목 순서: 계층 → 적법 → 창의 → 대중 → 직관 → 확장. 종합 점수는 창의성 30%·대중성 30%·직관성 20%·확장성 20% 가중합이며, 브랜드 계층 정렬·적법성은 Pass/Fail만(종합 미포함, 70점 미만 NO-GO)입니다.
+                      항목 순서: 계층 → 적법 → 창의 → 대중 → 직관 → 확장. 종합 점수는 창의성 30%·대중성 30%·직관성 20%·확장성 20% 가중합이며, 브랜드 계층 정렬·적법성(법적 적법성 + 사회적 이슈·민감도)은 Pass/Fail만(종합 미포함, 70점 미만 NO-GO)입니다.
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:pt-1">
@@ -2035,7 +2035,7 @@ export function BrandNaming() {
                 };
                 const blocks = [
                   { t: "1. 브랜드 계층 정렬 (Pass/Fail · 종합 미포함 · 70점 미만 NO-GO)", c: dl.hierarchy },
-                  { t: "2. 적법성 (Pass/Fail · 종합 미포함 · 70점 미만 NO-GO) — 국가법령정보 연동 시 출처 명시", c: dl.legality },
+                  { t: "2. 적법성 (Pass/Fail · 종합 미포함 · 70점 미만 NO-GO) — [법적 적법성](국가법령정보 연동 시 출처 명시) + [사회적 이슈·민감도](Gemini 추론)", c: dl.legality },
                   { t: "3. 창의성 (종합 30%) — Gemini 추론만 사용", c: dl.originality },
                   { t: "4. 대중성 (종합 30%) — 사회·문화적 수용", c: dl.publicAppeal },
                   { t: "5. 직관성 (종합 20%)", c: dl.pronunciationLanguage },
@@ -2058,7 +2058,7 @@ export function BrandNaming() {
                       </section>
                     ))}
                     <div className="border-t border-gray-200 pt-4">
-                      <p className="mb-2 text-[11px] font-semibold text-gray-900">법령·공식 참고 (적법성 등)</p>
+                      <p className="mb-2 text-[11px] font-semibold text-gray-900">법령·공식 참고 ([법적 적법성])</p>
                       <div className="flex flex-col gap-2 text-[12px]">
                         <a
                           href="https://www.law.go.kr/"

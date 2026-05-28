@@ -194,7 +194,7 @@ function formatNamingAudit(p: { out: AnyRec; inp: AnyRec; guidelineId: string | 
 
   lines.push("### 점수 상세 (순서: 계층→적법→창의→대중→직관→확장)");
   lines.push(`- 브랜드 위계: ${numStr(o.hierarchyScore)}`);
-  lines.push(`- 법적 검토: ${numStr(o.legalityScore)}`);
+  lines.push(`- 적법성(법적+사회적): ${numStr(o.legalityScore)}`);
   lines.push(`- 독창성: ${numStr(o.originalityDimensionScore)}`);
   lines.push(`- 대중성: ${numStr(o.publicAppealScore)}`);
   lines.push(`- 직관(발음): ${numStr(o.pronunciationScore)}`);
@@ -239,8 +239,8 @@ function formatNamingAudit(p: { out: AnyRec; inp: AnyRec; guidelineId: string | 
   lines.push(`- 실무 사용 가능 여부: ${text(trademark.recommendation)}`);
   lines.push("");
 
-  lines.push("### 법적 검토");
-  lines.push(`- 상표법 기준: ${text(detail.legality)}`);
+  lines.push("### 적법성 (법적 적법성 + 사회적 이슈·민감도)");
+  lines.push(`- 상표법·사회적 민감도: ${text(detail.legality)}`);
   lines.push(`- 법적 제한/제재 사례: `);
   lines.push(`- 저작권법: ${text(copyright.verdict)}`);
   lines.push(`- 활용 방향: `);
@@ -266,7 +266,7 @@ function formatNamingAudit(p: { out: AnyRec; inp: AnyRec; guidelineId: string | 
   lines.push(`- 요금제 명칭 원칙: B2C 모바일 종속 요금제 작명 룰을 따라 일관된 시리즈를 구성한다.`);
   lines.push(`- 발음 원칙: 한국어와 영어 발음이 모두 자연스럽고 단순해야 한다.`);
   lines.push(`- 상표 원칙: 동일·유사 상표 충돌을 회피하고 등록 가능성을 우선한다.`);
-  lines.push(`- 종합 산정: 창의·대중·직관·확장 가중합(30/30/20/20). 브랜드 위계·법적 검토는 Pass/Fail·NO-GO만.`);
+  lines.push(`- 종합 산정: 창의·대중·직관·확장 가중합(30/30/20/20). 브랜드 위계·적법성(법적+사회적)은 Pass/Fail·NO-GO만.`);
 
   return trimTrailingBlankLines(lines).join("\n");
 }
@@ -363,7 +363,7 @@ function formatNamingGenerate(p: { out: AnyRec; inp: AnyRec; guidelineId: string
       lines.push(`#### ${e.name}`);
       lines.push(`- 핵심 의미: ${e.rationale}`);
       lines.push(`- 브랜드 위계: ${text(e.detail.hierarchy)}`);
-      lines.push(`- 법적 검토: ${text(e.detail.legality)}`);
+      lines.push(`- 적법성(법적+사회적): ${text(e.detail.legality)}`);
       lines.push(`- 독창성: ${text(e.detail.originality)}`);
       lines.push(`- 대중성: ${text(e.detail.publicAppeal)}`);
       lines.push(`- 직관(발음): ${text(e.detail.pronunciationLanguage)}`);

@@ -3,7 +3,8 @@
  * - 국가법령정보: https://open.law.go.kr/ — `server/lawApi.ts` (`LAW_API_OC` / `LAW_GO_OC`)
  *
  * 창의성 평가는 외부 상표 API와 연동하지 않으며, Gemini 추론만 사용합니다.
- * 적법성 맥락 보강에만 국가법령정보 API를 선택적으로 호출합니다.
+ * 적법성(법적 적법성) 맥락 보강에만 국가법령정보 API를 선택적으로 호출합니다.
+ * 사회적 이슈·민감도는 Gemini 추론으로 평가합니다.
  */
 
 import { fetchLawsForBrandNamingLegality } from "./lawApi.js";
