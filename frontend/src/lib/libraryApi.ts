@@ -137,6 +137,31 @@ export async function listLibraryAssets(
   return (data ?? []) as LibraryAssetRow[];
 }
 
+/** Express API(service role)로 library_assets 조회 — RLS·로그인과 무관하게 동작 */
+export async function fetchLibraryAssetsFromApi(args?: {
+  category?: LibraryCategory;
+  query?: string;
+}): Promise<LibraryAssetRow[]> {
+  const params = new URLSearchParams();
+  if (args?.category) params.set("category", args.category);
+  if (args?.query?.trim()) params.set("q", args.query.trim());
+  const qs = params.toString();
+
+  const r = await fetch(apiUrl(`/api/library/assets${qs ? `?${qs}` : ""}`));
+  const out = (await r.json().catch(() => ({}))) as {
+    ok?: boolean;
+    assets?: LibraryAssetRow[];
+    message?: string;
+    error?: string;
+  };
+
+  if (!r.ok || !out.ok || !Array.isArray(out.assets)) {
+    throw new Error(out.message || out.error || `라이브러리 목록 조회 실패 (${r.status})`);
+  }
+
+  return out.assets;
+}
+
 export async function searchLibraryAssets(
   sb: SupabaseClient,
   query: string,
@@ -164,14 +189,9 @@ export async function uploadLibraryAsset(
   metadata: UploadLibraryAssetMetadata,
   onProgress?: (pct: number) => void,
 ): Promise<LibraryAssetRow> {
-  try {
-    return await uploadLibraryAssetDirect(sb, file, metadata, onProgress);
-  } catch (directErr) {
-    if (!shouldRetryLibraryUploadViaApi(directErr)) throw directErr;
-    const apiResult = await tryUploadLibraryAssetViaApi(sb, file, metadata, onProgress);
-    if (apiResult === "fallback") throw directErr;
-    return apiResult;
-  }
+  const apiResult = await tryUploadLibraryAssetViaApi(sb, file, metadata, onProgress);
+  if (apiResult !== "fallback") return apiResult;
+  return uploadLibraryAssetDirect(sb, file, metadata, onProgress);
 }
 
 async function resolveSupabaseAccessToken(sb: SupabaseClient): Promise<string | null> {
@@ -188,11 +208,6 @@ async function resolveSupabaseAccessToken(sb: SupabaseClient): Promise<string | 
   return sessionAgain.session?.access_token ?? null;
 }
 
-function shouldRetryLibraryUploadViaApi(e: unknown): boolean {
-  const msg = e instanceof Error ? e.message : String(e);
-  return /policy|permission|denied|403|row-level security|not authorized|admin_users|Storage\/DB 권한/i.test(msg);
-}
-
 async function tryUploadLibraryAssetViaApi(
   sb: SupabaseClient,
   file: File,
@@ -200,7 +215,9 @@ async function tryUploadLibraryAssetViaApi(
   onProgress?: (pct: number) => void,
 ): Promise<LibraryAssetRow | "fallback"> {
   const token = await resolveSupabaseAccessToken(sb);
-  if (!token) return "fallback";
+  if (!token) {
+    throw new Error("로그인 후 업로드할 수 있습니다.");
+  }
 
   onProgress?.(5);
   const form = new FormData();
@@ -230,7 +247,7 @@ async function tryUploadLibraryAssetViaApi(
     }
 
     if (r.status === 401 || out.error === "not_logged_in") {
-      return "fallback";
+      throw new Error("로그인 후 업로드할 수 있습니다.");
     }
 
     if (r.status === 403 || out.error === "forbidden") {
@@ -306,20 +323,37 @@ async function uploadLibraryAssetDirect(
   return data as LibraryAssetRow;
 }
 
-export function getLibraryPublicUrl(sb: SupabaseClient, filePath: string): string {
-  return sb.storage.from(LIBRARY_BUCKET).getPublicUrl(filePath).data.publicUrl;
+export function getLibraryPublicUrlFromEnv(filePath: string): string | null {
+  const urlRaw = (import.meta as { env?: { VITE_SUPABASE_URL?: string } }).env?.VITE_SUPABASE_URL;
+  const base = (urlRaw ?? "").trim().replace(/\/rest\/v1\/?$/i, "").replace(/\/$/, "");
+  if (!base || !filePath) return null;
+  const encoded = filePath
+    .split("/")
+    .map((seg) => encodeURIComponent(seg))
+    .join("/");
+  return `${base}/storage/v1/object/public/${LIBRARY_BUCKET}/${encoded}`;
+}
+
+export function getLibraryPublicUrl(sb: SupabaseClient | null, filePath: string): string {
+  if (sb) {
+    return sb.storage.from(LIBRARY_BUCKET).getPublicUrl(filePath).data.publicUrl;
+  }
+  return getLibraryPublicUrlFromEnv(filePath) ?? filePath;
 }
 
 export async function getLibraryDownloadUrl(
-  sb: SupabaseClient,
+  sb: SupabaseClient | null,
   filePath: string,
   expiresIn = 3600
 ): Promise<string> {
+  const publicUrl = getLibraryPublicUrl(sb, filePath);
+  if (!sb) return publicUrl;
+
   const { data, error } = await sb.storage
     .from(LIBRARY_BUCKET)
     .createSignedUrl(filePath, expiresIn, { download: true });
   if (error) {
-    return getLibraryPublicUrl(sb, filePath);
+    return publicUrl;
   }
   return data.signedUrl;
 }

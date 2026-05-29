@@ -2,12 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import {
+  fetchLibraryAssetsFromApi,
   getLibraryDownloadUrl,
   incrementLibraryDownload,
   isCurrentUserAdmin,
-  listLibraryAssets,
   rowToLibraryAsset,
-  searchLibraryAssets,
   uploadLibraryAsset,
   type LibraryAsset,
   type LibraryCategory,
@@ -38,10 +37,9 @@ export type UseLibraryAssetsResult = {
 /**
  * 브랜드 라이브러리 에셋 CRUD 훅.
  *
- * - fetchAssets: 카테고리·검색어로 목록 조회 (둘 다 비우면 전체)
- * - searchAssets: name·description ilike 검색
- * - uploadAsset: Storage 업로드 + library_assets insert (관리자 전용)
- * - incrementDownload: 다운로드 카운트 +1 (로컬 상태도 즉시 반영)
+ * - fetchAssets: API(service role)로 library_assets 조회 — 로그인·RLS 무관
+ * - uploadAsset: 관리자 전용 (API 업로드 우선)
+ * - incrementDownload: 다운로드 카운트 +1
  */
 export function useLibraryAssets(): UseLibraryAssetsResult {
   const sb = useMemo<SupabaseClient | null>(() => {
@@ -52,8 +50,6 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
     }
   }, []);
 
-  const isReady = sb !== null;
-
   const [assets, setAssets] = useState<LibraryAsset[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [uploading, setUploading] = useState<boolean>(false);
@@ -63,26 +59,35 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const lastFetchArgsRef = useRef<FetchAssetsArgs | undefined>(undefined);
 
-  // 요청 경합 방지: 마지막 요청만 결과 반영
   const reqIdRef = useRef(0);
+
+  const refreshAuthState = useCallback(async () => {
+    if (!sb) {
+      setIsAuthenticated(false);
+      setIsAdmin(false);
+      return;
+    }
+    await sb.auth.refreshSession().catch(() => {});
+    const { data: userData } = await sb.auth.getUser();
+    setIsAuthenticated(Boolean(userData.user));
+    const admin = await isCurrentUserAdmin(sb);
+    setIsAdmin(admin);
+  }, [sb]);
 
   const fetchAssets = useCallback(
     async (args?: FetchAssetsArgs): Promise<void> => {
-      if (!sb) return;
       lastFetchArgsRef.current = args;
       const reqId = ++reqIdRef.current;
       setLoading(true);
       setError(null);
       try {
-        // 세션이 있으면 갱신해서 토큰 만료로 빈 결과 받는 걸 막는다
-        await sb.auth.refreshSession().catch(() => {});
-        const { data: userData } = await sb.auth.getUser();
-        if (reqId === reqIdRef.current) setIsAuthenticated(Boolean(userData.user));
+        await refreshAuthState();
 
-        // library_assets 테이블 row만 노출. Storage 파일 자동 병합은 사용하지 않음.
-        const rows = args?.query?.trim()
-          ? await searchLibraryAssets(sb, args.query, { category: args.category })
-          : await listLibraryAssets(sb, { category: args?.category });
+        const rows = await fetchLibraryAssetsFromApi({
+          category: args?.category,
+          query: args?.query,
+        });
+
         if (reqId === reqIdRef.current) {
           setAssets(rows.map(rowToLibraryAsset));
         }
@@ -96,7 +101,7 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
         if (reqId === reqIdRef.current) setLoading(false);
       }
     },
-    [sb],
+    [refreshAuthState],
   );
 
   const searchAssets = useCallback(
@@ -109,8 +114,9 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
   const uploadAsset = useCallback(
     async (file: File, metadata: UploadLibraryAssetMetadata): Promise<LibraryAsset | null> => {
       if (!sb) {
-        setError(new Error("Supabase 클라이언트가 초기화되지 않았습니다."));
-        return null;
+        const err = new Error("Supabase 설정이 필요합니다. 로그인 후 업로드를 시도해 주세요.");
+        setError(err);
+        throw err;
       }
       setUploading(true);
       setUploadProgress(0);
@@ -118,7 +124,7 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
       try {
         const row = await uploadLibraryAsset(sb, file, metadata, (pct) => setUploadProgress(pct));
         const asset = rowToLibraryAsset(row);
-        setAssets((prev) => [asset, ...prev]);
+        await fetchAssets(lastFetchArgsRef.current);
         return asset;
       } catch (e) {
         const err = e instanceof Error ? e : new Error(String(e));
@@ -129,15 +135,15 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
         setUploadProgress(0);
       }
     },
-    [sb],
+    [sb, fetchAssets],
   );
 
   const incrementDownload = useCallback(
     async (id: string): Promise<void> => {
-      if (!sb) return;
       setAssets((prev) =>
         prev.map((a) => (a.id === id ? { ...a, downloads: a.downloads + 1 } : a)),
       );
+      if (!sb) return;
       try {
         await incrementLibraryDownload(sb, id);
       } catch (e) {
@@ -149,7 +155,6 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
 
   const getDownloadUrl = useCallback(
     async (filePath: string): Promise<string> => {
-      if (!sb) throw new Error("Supabase 클라이언트가 초기화되지 않았습니다.");
       return getLibraryDownloadUrl(sb, filePath, 3600);
     },
     [sb],
@@ -157,16 +162,12 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
 
   useEffect(() => {
     if (!sb) return;
-    const refreshAdmin = () => {
-      void isCurrentUserAdmin(sb).then(setIsAdmin);
-    };
-    refreshAdmin();
     const { data: sub } = sb.auth.onAuthStateChange(() => {
-      refreshAdmin();
+      void refreshAuthState();
       void fetchAssets(lastFetchArgsRef.current);
     });
     return () => sub.subscription.unsubscribe();
-  }, [sb, fetchAssets]);
+  }, [sb, refreshAuthState, fetchAssets]);
 
   return {
     assets,
@@ -176,7 +177,7 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
     error,
     isAdmin,
     isAuthenticated,
-    isReady,
+    isReady: true,
     fetchAssets,
     searchAssets,
     uploadAsset,

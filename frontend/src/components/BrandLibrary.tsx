@@ -133,6 +133,7 @@ export function BrandLibrary() {
     loading,
     uploading,
     uploadProgress,
+    error: fetchError,
     isAdmin,
     fetchAssets,
     uploadAsset,
@@ -246,7 +247,6 @@ export function BrandLibrary() {
   });
 
   const publicUrlFor = (asset: LibraryAsset): string | null => {
-    if (!sb) return null;
     return getLibraryPublicUrl(sb, asset.thumbnailPath || asset.filePath);
   };
 
@@ -373,6 +373,27 @@ export function BrandLibrary() {
         </aside>
 
         <main className="flex min-w-0 flex-1 flex-col bg-[#F5F3F0]">
+          {fetchError && (
+            <div className="border-b border-red-200 bg-red-50 px-5 py-3 sm:px-8">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-red-800">
+                  라이브러리를 불러오지 못했습니다: {fetchError.message}
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-red-300 bg-white text-red-700 hover:bg-red-100"
+                  onClick={() => {
+                    const category = selectedCategory === "all" ? undefined : selectedCategory;
+                    void fetchAssets({ category, query: debouncedQuery || undefined });
+                  }}
+                >
+                  다시 시도
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="border-b border-[rgba(0,0,0,0.05)] bg-[#F5F3F0] px-5 py-5 sm:px-8 sm:py-6">
             <div className="brand-surface mb-5 flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
               <div className="flex min-w-0 items-center gap-4">
@@ -675,14 +696,18 @@ export function BrandLibrary() {
                   <Search className="h-10 w-10 text-gray-300" />
                 </div>
                 <h3 className="mb-2 text-lg font-semibold text-gray-900">
-                  {assets.length === 0
-                    ? "아직 등록된 에셋이 없습니다"
-                    : favoritesOnly
-                      ? "즐겨찾기 에셋이 없습니다"
-                      : "검색 결과가 없습니다"}
+                  {fetchError
+                    ? "에셋 목록을 불러올 수 없습니다"
+                    : assets.length === 0
+                      ? "아직 등록된 에셋이 없습니다"
+                      : favoritesOnly
+                        ? "즐겨찾기 에셋이 없습니다"
+                        : "검색 결과가 없습니다"}
                 </h3>
                 <p className="max-w-md text-center text-[14px] text-gray-500">
-                  {assets.length === 0
+                  {fetchError
+                    ? "서버 연결을 확인한 뒤 위의 다시 시도 버튼을 눌러 주세요."
+                    : assets.length === 0
                     ? selectedCategory === "all"
                       ? isAdmin
                         ? "카테고리를 선택한 뒤 우하단 업로드 버튼으로 자료를 추가할 수 있습니다."

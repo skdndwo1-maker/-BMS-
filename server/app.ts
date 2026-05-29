@@ -55,6 +55,7 @@ import {
 import { normalizeRunForRag } from "./ragNormalize.js";
 import { requireAdmin } from "./adminAuth.js";
 import { handleLibraryUpload } from "./libraryUpload.js";
+import { handleLibraryList } from "./libraryAssets.js";
 import { getSupabaseAnonClient, getSupabaseServiceClient, isSupabaseInvalidApiKeyError } from "./supabase.js";
 
 const app = express();
@@ -416,6 +417,11 @@ app.get("/api/admin/me", async (req, res) => {
     return;
   }
   res.json({ ok: true, isAdmin: true, userId: auth.userId ?? null });
+});
+
+/** Brand Library: library_assets 목록 (service role — 로그인·RLS 무관) */
+app.get("/api/library/assets", (req, res) => {
+  void handleLibraryList(req, res);
 });
 
 /** Brand Library: 관리자 에셋 업로드 (JWT + admin_users → service role Storage/DB) */
