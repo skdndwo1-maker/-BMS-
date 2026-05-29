@@ -26,6 +26,7 @@ export type UseLibraryAssetsResult = {
   uploadProgress: number;
   error: Error | null;
   isAdmin: boolean;
+  isAuthenticated: boolean | null;
   isReady: boolean;
   fetchAssets: (args?: FetchAssetsArgs) => Promise<void>;
   searchAssets: (query: string, category?: LibraryCategory) => Promise<void>;
@@ -59,6 +60,8 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [error, setError] = useState<Error | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const lastFetchArgsRef = useRef<FetchAssetsArgs | undefined>(undefined);
 
   // 요청 경합 방지: 마지막 요청만 결과 반영
   const reqIdRef = useRef(0);
@@ -66,10 +69,17 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
   const fetchAssets = useCallback(
     async (args?: FetchAssetsArgs): Promise<void> => {
       if (!sb) return;
+      lastFetchArgsRef.current = args;
       const reqId = ++reqIdRef.current;
       setLoading(true);
       setError(null);
       try {
+        // 세션이 있으면 갱신해서 토큰 만료로 빈 결과 받는 걸 막는다
+        await sb.auth.refreshSession().catch(() => {});
+        const { data: userData } = await sb.auth.getUser();
+        if (reqId === reqIdRef.current) setIsAuthenticated(Boolean(userData.user));
+
+        // library_assets 테이블 row만 노출. Storage 파일 자동 병합은 사용하지 않음.
         const rows = args?.query?.trim()
           ? await searchLibraryAssets(sb, args.query, { category: args.category })
           : await listLibraryAssets(sb, { category: args?.category });
@@ -153,9 +163,10 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
     refreshAdmin();
     const { data: sub } = sb.auth.onAuthStateChange(() => {
       refreshAdmin();
+      void fetchAssets(lastFetchArgsRef.current);
     });
     return () => sub.subscription.unsubscribe();
-  }, [sb]);
+  }, [sb, fetchAssets]);
 
   return {
     assets,
@@ -164,6 +175,7 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
     uploadProgress,
     error,
     isAdmin,
+    isAuthenticated,
     isReady,
     fetchAssets,
     searchAssets,

@@ -164,9 +164,33 @@ export async function uploadLibraryAsset(
   metadata: UploadLibraryAssetMetadata,
   onProgress?: (pct: number) => void,
 ): Promise<LibraryAssetRow> {
-  const apiResult = await tryUploadLibraryAssetViaApi(sb, file, metadata, onProgress);
-  if (apiResult !== "fallback") return apiResult;
-  return uploadLibraryAssetDirect(sb, file, metadata, onProgress);
+  try {
+    return await uploadLibraryAssetDirect(sb, file, metadata, onProgress);
+  } catch (directErr) {
+    if (!shouldRetryLibraryUploadViaApi(directErr)) throw directErr;
+    const apiResult = await tryUploadLibraryAssetViaApi(sb, file, metadata, onProgress);
+    if (apiResult === "fallback") throw directErr;
+    return apiResult;
+  }
+}
+
+async function resolveSupabaseAccessToken(sb: SupabaseClient): Promise<string | null> {
+  const { data: userData, error: userErr } = await sb.auth.getUser();
+  if (userErr || !userData.user) return null;
+
+  const { data: sessionData } = await sb.auth.getSession();
+  if (sessionData.session?.access_token) return sessionData.session.access_token;
+
+  const { data: refreshed, error: refreshErr } = await sb.auth.refreshSession();
+  if (!refreshErr && refreshed.session?.access_token) return refreshed.session.access_token;
+
+  const { data: sessionAgain } = await sb.auth.getSession();
+  return sessionAgain.session?.access_token ?? null;
+}
+
+function shouldRetryLibraryUploadViaApi(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /policy|permission|denied|403|row-level security|not authorized|admin_users|Storage\/DB 권한/i.test(msg);
 }
 
 async function tryUploadLibraryAssetViaApi(
@@ -175,11 +199,8 @@ async function tryUploadLibraryAssetViaApi(
   metadata: UploadLibraryAssetMetadata,
   onProgress?: (pct: number) => void,
 ): Promise<LibraryAssetRow | "fallback"> {
-  const { data: sessionData } = await sb.auth.getSession();
-  const token = sessionData.session?.access_token;
-  if (!token) {
-    throw new Error("로그인 후 업로드할 수 있습니다.");
-  }
+  const token = await resolveSupabaseAccessToken(sb);
+  if (!token) return "fallback";
 
   onProgress?.(5);
   const form = new FormData();
@@ -208,24 +229,23 @@ async function tryUploadLibraryAssetViaApi(
       return out.asset;
     }
 
-    const msg =
-      out.message ||
-      (out.error === "forbidden"
-        ? await getLibraryAdminHint(sb)
-        : out.error === "not_logged_in"
-          ? "로그인 후 업로드할 수 있습니다."
-          : `업로드 실패 (${r.status})`);
+    if (r.status === 401 || out.error === "not_logged_in") {
+      return "fallback";
+    }
+
+    if (r.status === 403 || out.error === "forbidden") {
+      throw new Error(out.message || (await getLibraryAdminHint(sb)));
+    }
 
     if (r.status === 404 || r.status === 502 || r.status === 503) {
       return "fallback";
     }
 
-    throw new Error(msg);
+    throw new Error(out.message || `업로드 실패 (${r.status})`);
   } catch (e) {
-    if (e instanceof Error && (e.message.startsWith("업로드") || e.message.includes("admin_users"))) {
+    if (e instanceof Error && (e.message.includes("admin_users") || e.message.includes("user_id:"))) {
       throw e;
     }
-    if (e instanceof Error && e.message.includes("로그인")) throw e;
     if (e instanceof TypeError || (e instanceof Error && /fetch|network/i.test(e.message))) {
       return "fallback";
     }
@@ -239,6 +259,11 @@ async function uploadLibraryAssetDirect(
   metadata: UploadLibraryAssetMetadata,
   onProgress?: (pct: number) => void,
 ): Promise<LibraryAssetRow> {
+  const { data: userData, error: userErr } = await sb.auth.getUser();
+  if (userErr || !userData.user) {
+    throw new Error("로그인 후 업로드할 수 있습니다.");
+  }
+
   const filePath = buildLibraryFilePath(metadata.category, file.name);
   onProgress?.(10);
 
@@ -303,6 +328,7 @@ export async function incrementLibraryDownload(
   sb: SupabaseClient,
   id: string
 ): Promise<void> {
+  if (!id) return;
   const { error } = await sb.rpc("library_increment_downloads", { p_id: id });
   if (error) {
     console.warn("library_increment_downloads:", error.message);
@@ -376,6 +402,7 @@ export async function deleteLibraryAsset(
   if (rmErr && !/not\s*found/i.test(rmErr.message)) {
     throw rmErr;
   }
+  if (!args.id) return;
   const { error: dbErr } = await sb.from("library_assets").delete().eq("id", args.id);
   if (dbErr) throw dbErr;
 }

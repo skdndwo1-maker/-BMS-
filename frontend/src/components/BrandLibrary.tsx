@@ -675,7 +675,11 @@ export function BrandLibrary() {
                   <Search className="h-10 w-10 text-gray-300" />
                 </div>
                 <h3 className="mb-2 text-lg font-semibold text-gray-900">
-                  {assets.length === 0 ? "아직 등록된 에셋이 없습니다" : "검색 결과가 없습니다"}
+                  {assets.length === 0
+                    ? "아직 등록된 에셋이 없습니다"
+                    : favoritesOnly
+                      ? "즐겨찾기 에셋이 없습니다"
+                      : "검색 결과가 없습니다"}
                 </h3>
                 <p className="max-w-md text-center text-[14px] text-gray-500">
                   {assets.length === 0
@@ -686,7 +690,9 @@ export function BrandLibrary() {
                       : isAdmin
                         ? `우하단 업로드 버튼으로 ${selectedCategoryMeta?.label ?? ""} 자료를 추가할 수 있습니다.`
                         : "관리자가 자료를 추가하면 이곳에 표시됩니다."
-                    : "다른 검색어를 시도하거나 카테고리를 변경해 보세요."}
+                    : favoritesOnly
+                      ? "즐겨찾기만 보기가 켜져 있습니다. 필터를 끄거나 즐겨찾기 에셋을 등록해 주세요."
+                      : "다른 검색어를 시도하거나 카테고리를 변경해 보세요."}
                 </p>
               </div>
             )}
