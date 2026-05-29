@@ -26,9 +26,9 @@ import { GlobalBrandNav } from "@/components/GlobalBrandNav";
 import { registerGlobalNavPersist } from "@/lib/globalNavPersistence";
 import {
   deleteLibraryAsset,
+  formatLibraryUploadError,
   getLibraryPublicUrl,
   humanFileSize,
-  LIBRARY_CATEGORIES,
   LIBRARY_CATEGORY_LABELS,
   type LibraryAsset,
   type LibraryCategory,
@@ -304,7 +304,7 @@ export function BrandLibrary() {
       toast.success(`'${metadata.name}' 업로드 완료`);
       setUploadOpen(false);
     } catch (e) {
-      toast.error(`업로드 실패: ${e instanceof Error ? e.message : String(e)}`);
+      toast.error(formatLibraryUploadError(e, sb));
       throw e;
     }
   };
@@ -325,51 +325,31 @@ export function BrandLibrary() {
                 const Icon = category.icon;
                 const isActive = selectedCategory === category.id;
                 const count = categoryCounts[category.id] ?? 0;
-                const canUploadCategory = isAdmin && category.id !== "all";
                 return (
-                  <div key={category.id} className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCategory(category.id)}
-                      className={`flex min-w-0 flex-1 items-center justify-between rounded-full px-3 py-2.5 transition-all ${
-                        isActive
-                          ? "bg-black font-medium text-white shadow-[0_4px_14px_-4px_rgba(0,0,0,0.25)]"
-                          : "text-gray-600 hover:bg-white/70 hover:text-gray-900"
-                      }`}
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <Icon className="h-4 w-4 shrink-0 opacity-90" />
-                        <span className="truncate text-[13px]">{category.label}</span>
-                      </div>
-                      {count > 0 && (
-                        <span
-                          className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                            isActive ? "bg-white/20 text-white" : "bg-[#FF7F66]/14 text-[#c14d38]"
-                          }`}
-                        >
-                          {count}
-                        </span>
-                      )}
-                    </button>
-                    {canUploadCategory && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (category.id === "all") return;
-                          openUploadDialog(category.id, true);
-                        }}
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                          isActive
-                            ? "border-white/30 bg-white/15 text-white hover:bg-white/25"
-                            : "border-[rgba(0,0,0,0.08)] bg-white text-gray-600 hover:border-[#FF7F66]/40 hover:text-[#FF7F66]"
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => setSelectedCategory(category.id)}
+                    className={`flex w-full items-center justify-between rounded-full px-3 py-2.5 transition-all ${
+                      isActive
+                        ? "bg-black font-medium text-white shadow-[0_4px_14px_-4px_rgba(0,0,0,0.25)]"
+                        : "text-gray-600 hover:bg-white/70 hover:text-gray-900"
+                    }`}
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Icon className="h-4 w-4 shrink-0 opacity-90" />
+                      <span className="truncate text-[13px]">{category.label}</span>
+                    </div>
+                    {count > 0 && (
+                      <span
+                        className={`ml-2 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                          isActive ? "bg-white/20 text-white" : "bg-[#FF7F66]/14 text-[#c14d38]"
                         }`}
-                        title={`${category.label} 업로드`}
-                        aria-label={`${category.label} 업로드`}
                       >
-                        <Upload className="h-3.5 w-3.5" />
-                      </button>
+                        {count}
+                      </span>
                     )}
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -424,23 +404,6 @@ export function BrandLibrary() {
                   <Star className={`h-4 w-4 ${favoritesOnly ? "fill-white" : ""}`} />
                   즐겨찾기만
                 </button>
-                {isAdmin && (
-                  <Button
-                    type="button"
-                    onClick={() =>
-                      openUploadDialog(
-                        selectedLibraryCategory ?? "logo",
-                        selectedLibraryCategory !== null,
-                      )
-                    }
-                    className="brand-btn-primary h-9 rounded-full px-4 text-[13px]"
-                  >
-                    <Upload className="mr-1.5 h-4 w-4" />
-                    {selectedLibraryCategory
-                      ? `${selectedCategoryMeta?.label ?? ""} 업로드`
-                      : "에셋 업로드"}
-                  </Button>
-                )}
               </div>
             </div>
 
@@ -496,51 +459,6 @@ export function BrandLibrary() {
                 </div>
               </div>
             </div>
-
-            {isAdmin && selectedLibraryCategory && (
-              <div className="brand-surface mb-4 flex flex-col gap-3 border border-[#FF7F66]/20 bg-gradient-to-r from-[#FFF8F6] to-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900">
-                    {selectedCategoryMeta?.label} 카테고리에 에셋 추가
-                  </p>
-                  <p className="mt-0.5 text-[12px] leading-relaxed text-gray-500">
-                    업로드하면 Supabase Storage와 라이브러리 목록에 자동 등록됩니다.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  className="brand-btn-primary h-10 shrink-0 rounded-full px-5"
-                  onClick={() => openUploadDialog(selectedLibraryCategory, true)}
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  {selectedCategoryMeta?.label} 업로드
-                </Button>
-              </div>
-            )}
-
-            {isAdmin && selectedCategory === "all" && (
-              <div className="brand-surface mb-4 p-4 sm:p-5">
-                <p className="mb-3 text-sm font-semibold text-gray-900">카테고리별 업로드</p>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {LIBRARY_CATEGORIES.map((cat) => {
-                    const meta = categories.find((c) => c.id === cat);
-                    const Icon = meta?.icon ?? Package;
-                    return (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => openUploadDialog(cat, true)}
-                        className="flex items-center gap-2 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5 text-left text-[12px] font-medium text-gray-700 transition-colors hover:border-[#FF7F66]/40 hover:bg-[#FFF8F6] hover:text-[#c14d38]"
-                      >
-                        <Icon className="h-4 w-4 shrink-0 opacity-80" />
-                        <span className="truncate">{LIBRARY_CATEGORY_LABELS[cat]}</span>
-                        <Upload className="ml-auto h-3.5 w-3.5 shrink-0 opacity-60" />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </div>
 
           <div className="flex-1 overflow-y-auto px-5 py-6 sm:px-8 sm:py-8">
@@ -761,33 +679,15 @@ export function BrandLibrary() {
                 </h3>
                 <p className="max-w-md text-center text-[14px] text-gray-500">
                   {assets.length === 0
-                    ? isAdmin
-                      ? selectedCategory === "all"
-                        ? "좌측 카테고리 옆 업로드 버튼 또는 상단 '에셋 업로드'로 첫 자료를 추가해 주세요."
-                        : `좌측 ${categories.find((c) => c.id === selectedCategory)?.label ?? ""} 옆 업로드 버튼으로 자료를 추가할 수 있습니다.`
-                      : "관리자가 자료를 추가하면 이곳에 표시됩니다."
+                    ? selectedCategory === "all"
+                      ? isAdmin
+                        ? "카테고리를 선택한 뒤 우하단 업로드 버튼으로 자료를 추가할 수 있습니다."
+                        : "관리자가 자료를 추가하면 이곳에 표시됩니다."
+                      : isAdmin
+                        ? `우하단 업로드 버튼으로 ${selectedCategoryMeta?.label ?? ""} 자료를 추가할 수 있습니다.`
+                        : "관리자가 자료를 추가하면 이곳에 표시됩니다."
                     : "다른 검색어를 시도하거나 카테고리를 변경해 보세요."}
                 </p>
-                {isAdmin && selectedCategory !== "all" && assets.length === 0 && (
-                  <Button
-                    type="button"
-                    className="brand-btn-primary mt-4 rounded-full"
-                    onClick={() => openUploadDialog(selectedCategory, true)}
-                  >
-                    <Upload className="mr-2 h-4 w-4" />
-                    {selectedCategoryMeta?.label} 업로드
-                  </Button>
-                )}
-                {isAdmin && selectedCategory === "all" && assets.length === 0 && (
-                  <Button
-                    type="button"
-                    className="brand-btn-primary mt-4 rounded-full"
-                    onClick={() => openUploadDialog("logo", true)}
-                  >
-                    <Upload className="mr-2 h-4 w-4" />
-                    에셋 업로드
-                  </Button>
-                )}
               </div>
             )}
           </div>
@@ -940,21 +840,18 @@ export function BrandLibrary() {
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={() =>
-          openUploadDialog(
-            selectedLibraryCategory ?? "logo",
-            selectedLibraryCategory !== null,
-          )
-        }
-        className="fixed bottom-6 right-6 z-40 flex h-14 items-center gap-2 rounded-full bg-[#FF7F66] px-5 text-white shadow-[0_8px_28px_-6px_rgba(255,127,102,0.65)] transition-all hover:scale-[1.03] hover:bg-[#e86f58] active:scale-[0.98] sm:bottom-8 sm:right-8"
-        title={selectedLibraryCategory ? `${selectedCategoryMeta?.label} 업로드` : "에셋 업로드"}
-        aria-label="에셋 업로드"
-      >
-        <Upload className="h-5 w-5 shrink-0" />
-        <span className="text-[14px] font-semibold">업로드</span>
-      </button>
+      {selectedLibraryCategory && (
+        <button
+          type="button"
+          onClick={() => openUploadDialog(selectedLibraryCategory, true)}
+          className="fixed bottom-6 right-6 z-40 flex h-14 items-center gap-2 rounded-full bg-[#FF7F66] px-5 text-white shadow-[0_8px_28px_-6px_rgba(255,127,102,0.65)] transition-all hover:scale-[1.03] hover:bg-[#e86f58] active:scale-[0.98] sm:bottom-8 sm:right-8"
+          title={`${selectedCategoryMeta?.label} 업로드`}
+          aria-label={`${selectedCategoryMeta?.label} 업로드`}
+        >
+          <Upload className="h-5 w-5 shrink-0" />
+          <span className="text-[14px] font-semibold">업로드</span>
+        </button>
+      )}
 
       <LibraryUploadDialog
         open={uploadOpen}

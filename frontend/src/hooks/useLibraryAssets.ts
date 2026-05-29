@@ -147,7 +147,14 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
 
   useEffect(() => {
     if (!sb) return;
-    void isCurrentUserAdmin(sb).then(setIsAdmin);
+    const refreshAdmin = () => {
+      void isCurrentUserAdmin(sb).then(setIsAdmin);
+    };
+    refreshAdmin();
+    const { data: sub } = sb.auth.onAuthStateChange(() => {
+      refreshAdmin();
+    });
+    return () => sub.subscription.unsubscribe();
   }, [sb]);
 
   return {

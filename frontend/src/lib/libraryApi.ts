@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { apiUrl } from "@/lib/apiUrl";
 
 export const LIBRARY_BUCKET = "brand-library";
 
@@ -163,10 +164,81 @@ export async function uploadLibraryAsset(
   metadata: UploadLibraryAssetMetadata,
   onProgress?: (pct: number) => void,
 ): Promise<LibraryAssetRow> {
-  if (!(await isCurrentUserAdmin(sb))) {
-    throw new Error("관리자만 업로드할 수 있습니다.");
+  const apiResult = await tryUploadLibraryAssetViaApi(sb, file, metadata, onProgress);
+  if (apiResult !== "fallback") return apiResult;
+  return uploadLibraryAssetDirect(sb, file, metadata, onProgress);
+}
+
+async function tryUploadLibraryAssetViaApi(
+  sb: SupabaseClient,
+  file: File,
+  metadata: UploadLibraryAssetMetadata,
+  onProgress?: (pct: number) => void,
+): Promise<LibraryAssetRow | "fallback"> {
+  const { data: sessionData } = await sb.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) {
+    throw new Error("로그인 후 업로드할 수 있습니다.");
   }
 
+  onProgress?.(5);
+  const form = new FormData();
+  form.append("file", file);
+  form.append("category", metadata.category);
+  form.append("name", metadata.name.trim());
+  if (metadata.description?.trim()) form.append("description", metadata.description.trim());
+  if (metadata.tags?.length) form.append("tags", JSON.stringify(metadata.tags));
+
+  try {
+    onProgress?.(15);
+    const r = await fetch(apiUrl("/api/library/upload"), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    const out = (await r.json().catch(() => ({}))) as {
+      ok?: boolean;
+      asset?: LibraryAssetRow;
+      message?: string;
+      error?: string;
+    };
+
+    if (r.ok && out.ok && out.asset) {
+      onProgress?.(100);
+      return out.asset;
+    }
+
+    const msg =
+      out.message ||
+      (out.error === "forbidden"
+        ? await getLibraryAdminHint(sb)
+        : out.error === "not_logged_in"
+          ? "로그인 후 업로드할 수 있습니다."
+          : `업로드 실패 (${r.status})`);
+
+    if (r.status === 404 || r.status === 502 || r.status === 503) {
+      return "fallback";
+    }
+
+    throw new Error(msg);
+  } catch (e) {
+    if (e instanceof Error && (e.message.startsWith("업로드") || e.message.includes("admin_users"))) {
+      throw e;
+    }
+    if (e instanceof Error && e.message.includes("로그인")) throw e;
+    if (e instanceof TypeError || (e instanceof Error && /fetch|network/i.test(e.message))) {
+      return "fallback";
+    }
+    throw e instanceof Error ? e : new Error(String(e));
+  }
+}
+
+async function uploadLibraryAssetDirect(
+  sb: SupabaseClient,
+  file: File,
+  metadata: UploadLibraryAssetMetadata,
+  onProgress?: (pct: number) => void,
+): Promise<LibraryAssetRow> {
   const filePath = buildLibraryFilePath(metadata.category, file.name);
   onProgress?.(10);
 
@@ -174,7 +246,9 @@ export async function uploadLibraryAsset(
     upsert: false,
     contentType: file.type || undefined,
   });
-  if (upErr) throw upErr;
+  if (upErr) {
+    throw new Error(formatLibraryStorageError(upErr.message));
+  }
   onProgress?.(65);
 
   const thumbnailPath = file.type.startsWith("image/") ? filePath : "";
@@ -200,7 +274,7 @@ export async function uploadLibraryAsset(
 
   if (dbErr) {
     await sb.storage.from(LIBRARY_BUCKET).remove([filePath]);
-    throw dbErr;
+    throw new Error(formatLibraryStorageError(dbErr.message));
   }
 
   onProgress?.(100);
@@ -239,6 +313,25 @@ export async function isCurrentUserAdmin(sb: SupabaseClient): Promise<boolean> {
   try {
     const { data: u, error } = await sb.auth.getUser();
     if (error || !u.user?.id) return false;
+
+    const { data: rpcData, error: rpcErr } = await sb.rpc("is_current_user_admin");
+    if (!rpcErr && typeof rpcData === "boolean") return rpcData;
+
+    const { data: sessionData } = await sb.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (token) {
+      try {
+        const r = await fetch(apiUrl("/api/admin/me"), {
+          method: "GET",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const out = (await r.json().catch(() => ({}))) as { isAdmin?: boolean };
+        if (r.ok && typeof out.isAdmin === "boolean") return out.isAdmin;
+      } catch {
+        /* fallback below */
+      }
+    }
+
     const { data, error: e2 } = await sb
       .from("admin_users")
       .select("user_id")
@@ -249,6 +342,30 @@ export async function isCurrentUserAdmin(sb: SupabaseClient): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export async function getLibraryAdminHint(sb: SupabaseClient): Promise<string> {
+  const { data: u } = await sb.auth.getUser();
+  const uid = u.user?.id ?? "알 수 없음";
+  const email = u.user?.email ? `, ${u.user.email}` : "";
+  return `업로드 권한이 없습니다. Supabase SQL Editor에서 admin_users에 등록해 주세요. (user_id: ${uid}${email})`;
+}
+
+function formatLibraryStorageError(message: string): string {
+  if (/policy|permission|denied|403|not authorized|row-level security/i.test(message)) {
+    return `Storage/DB 권한 오류: admin_users 등록 및 brand-library 버킷·RLS 마이그레이션을 확인해 주세요. (${message})`;
+  }
+  return message;
+}
+
+export function formatLibraryUploadError(e: unknown, sb?: SupabaseClient | null): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/admin_users|forbidden|관리자|permission|policy|row-level security/i.test(msg)) {
+    return msg.includes("user_id:") ? msg : "업로드 권한이 없습니다. Supabase admin_users 테이블에 본인 계정을 등록해 주세요.";
+  }
+  if (/not_logged_in|로그인/.test(msg)) return "로그인 후 업로드할 수 있습니다.";
+  if (sb && /Storage\/DB 권한/.test(msg)) return msg;
+  return msg;
 }
 
 export async function deleteLibraryAsset(

@@ -54,6 +54,7 @@ import {
 } from "./rag.js";
 import { normalizeRunForRag } from "./ragNormalize.js";
 import { requireAdmin } from "./adminAuth.js";
+import { handleLibraryUpload } from "./libraryUpload.js";
 import { getSupabaseAnonClient, getSupabaseServiceClient, isSupabaseInvalidApiKeyError } from "./supabase.js";
 
 const app = express();
@@ -255,6 +256,11 @@ const uploadNaming = multer({
   limits: { fileSize: 25 * 1024 * 1024 }
 });
 
+const uploadLibrary = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+});
+
 async function supplementaryReferenceToSummary(f: Express.Multer.File): Promise<string> {
   const ext =
     f.mimetype === "application/pdf"
@@ -410,6 +416,11 @@ app.get("/api/admin/me", async (req, res) => {
     return;
   }
   res.json({ ok: true, isAdmin: true, userId: auth.userId ?? null });
+});
+
+/** Brand Library: 관리자 에셋 업로드 (JWT + admin_users → service role Storage/DB) */
+app.post("/api/library/upload", uploadLibrary.single("file"), (req, res) => {
+  void handleLibraryUpload(req, res);
 });
 
 /** 국가법령정보센터 Open API 연동 상태. `?probe=1`이면 상표법 검색 1회로 실제 호출 성공 여부 확인(OC·IP 등록 필요) */
