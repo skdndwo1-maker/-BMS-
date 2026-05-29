@@ -195,17 +195,24 @@ export async function uploadLibraryAsset(
 }
 
 async function resolveSupabaseAccessToken(sb: SupabaseClient): Promise<string | null> {
-  const { data: userData, error: userErr } = await sb.auth.getUser();
-  if (userErr || !userData.user) return null;
-
   const { data: sessionData } = await sb.auth.getSession();
   if (sessionData.session?.access_token) return sessionData.session.access_token;
 
   const { data: refreshed, error: refreshErr } = await sb.auth.refreshSession();
   if (!refreshErr && refreshed.session?.access_token) return refreshed.session.access_token;
 
+  const { data: userData, error: userErr } = await sb.auth.getUser();
+  if (userErr || !userData.user) return null;
+
   const { data: sessionAgain } = await sb.auth.getSession();
   return sessionAgain.session?.access_token ?? null;
+}
+
+/** API 실패 시 브라우저 Supabase 직접 업로드로 넘길지 */
+async function shouldFallbackLibraryUploadDirect(sb: SupabaseClient): Promise<boolean> {
+  const { data: userData, error: userErr } = await sb.auth.getUser();
+  if (userErr || !userData.user) return false;
+  return isCurrentUserAdmin(sb);
 }
 
 async function tryUploadLibraryAssetViaApi(
@@ -216,6 +223,7 @@ async function tryUploadLibraryAssetViaApi(
 ): Promise<LibraryAssetRow | "fallback"> {
   const token = await resolveSupabaseAccessToken(sb);
   if (!token) {
+    if (await shouldFallbackLibraryUploadDirect(sb)) return "fallback";
     throw new Error("로그인 후 업로드할 수 있습니다.");
   }
 
@@ -247,6 +255,7 @@ async function tryUploadLibraryAssetViaApi(
     }
 
     if (r.status === 401 || out.error === "not_logged_in") {
+      if (await shouldFallbackLibraryUploadDirect(sb)) return "fallback";
       throw new Error("로그인 후 업로드할 수 있습니다.");
     }
 
@@ -254,8 +263,8 @@ async function tryUploadLibraryAssetViaApi(
       throw new Error(out.message || (await getLibraryAdminHint(sb)));
     }
 
-    if (r.status === 404 || r.status === 502 || r.status === 503) {
-      return "fallback";
+    if (r.status === 404 || r.status === 502 || r.status === 503 || r.status === 500) {
+      if (await shouldFallbackLibraryUploadDirect(sb)) return "fallback";
     }
 
     throw new Error(out.message || `업로드 실패 (${r.status})`);
@@ -263,7 +272,10 @@ async function tryUploadLibraryAssetViaApi(
     if (e instanceof Error && (e.message.includes("admin_users") || e.message.includes("user_id:"))) {
       throw e;
     }
-    if (e instanceof TypeError || (e instanceof Error && /fetch|network/i.test(e.message))) {
+    if (
+      (e instanceof TypeError || (e instanceof Error && /fetch|network/i.test(e.message))) &&
+      (await shouldFallbackLibraryUploadDirect(sb))
+    ) {
       return "fallback";
     }
     throw e instanceof Error ? e : new Error(String(e));
@@ -279,6 +291,9 @@ async function uploadLibraryAssetDirect(
   const { data: userData, error: userErr } = await sb.auth.getUser();
   if (userErr || !userData.user) {
     throw new Error("로그인 후 업로드할 수 있습니다.");
+  }
+  if (!(await isCurrentUserAdmin(sb))) {
+    throw new Error(await getLibraryAdminHint(sb));
   }
 
   const filePath = buildLibraryFilePath(metadata.category, file.name);

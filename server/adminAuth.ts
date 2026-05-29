@@ -1,5 +1,5 @@
 import type { Request } from "express";
-import { getSupabaseAnonClient, getSupabaseServiceClient } from "./supabase.js";
+import { getSupabaseServiceClient } from "./supabase.js";
 
 type AdminOk = { ok: true; userId?: string };
 type AdminFail = { ok: false; status: number; error: string };
@@ -29,8 +29,9 @@ export async function requireAdmin(req: Request): Promise<AdminOk | AdminFail> {
   const token = getBearerToken(req);
   if (token) {
     try {
-      const sbAnon = getSupabaseAnonClient();
-      const { data, error } = await sbAnon.auth.getUser(token);
+      // service role로 JWT 검증 — SUPABASE_ANON_KEY 불일치(publishable key 등)에도 동작
+      const sb = getSupabaseServiceClient();
+      const { data, error } = await sb.auth.getUser(token);
       if (error) return { ok: false, status: 401, error: "not_logged_in" };
       const uid = data.user?.id;
       if (!uid) return { ok: false, status: 401, error: "not_logged_in" };
