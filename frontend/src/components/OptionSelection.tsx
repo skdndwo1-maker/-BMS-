@@ -30,8 +30,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { postOptionsChat, type OptionsChatMessage } from "@/lib/optionsChatApi";
-import { apiUrl } from "@/lib/apiUrl";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { APP_DISPLAY_NAME } from "@/constants/appBranding";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 
@@ -235,33 +235,7 @@ export function OptionSelection() {
     el.scrollTo({ left: target, behavior: "smooth" });
   };
 
-  const [canOpenAdmin, setCanOpenAdmin] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const sb = getSupabaseClient();
-        const { data } = await sb.auth.getSession();
-        const token = data.session?.access_token;
-        if (!token) {
-          if (!cancelled) setCanOpenAdmin(false);
-          return;
-        }
-        const r = await fetch(apiUrl("/api/admin/me"), {
-          method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const out = (await r.json().catch(() => ({}))) as { isAdmin?: boolean };
-        if (!cancelled) setCanOpenAdmin(Boolean(out?.isAdmin));
-      } catch {
-        if (!cancelled) setCanOpenAdmin(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { isAdmin: canOpenAdmin, isReady: adminCheckReady } = useIsAdmin();
 
   const [chatMessages, setChatMessages] = useState<
     Array<{ id: string; role: "user" | "assistant"; content: string }>
@@ -399,11 +373,13 @@ export function OptionSelection() {
                 if (!canOpenAdmin) return;
                 navigate("/admin/review");
               }}
-              disabled={!canOpenAdmin}
+              disabled={!adminCheckReady || !canOpenAdmin}
               title={
-                canOpenAdmin
-                  ? "관리자 모드로 이동"
-                  : "권한이 없습니다. 관리자 검토 페이지에서 Admin Key를 입력한 사용자만 접근할 수 있습니다."
+                !adminCheckReady
+                  ? "관리자 권한 확인 중…"
+                  : canOpenAdmin
+                    ? "관리자 검토 · 데이터 선별"
+                    : "admin_users에 등록된 관리자 계정만 접근할 수 있습니다."
               }
               style={{
                 display: "inline-flex",
@@ -411,13 +387,13 @@ export function OptionSelection() {
                 gap: "8px",
                 fontSize: "13px",
                 fontWeight: 600,
-                color: canOpenAdmin ? "#FFFFFF" : PALETTE.mutedSoft,
-                cursor: canOpenAdmin ? "pointer" : "not-allowed",
-                background: canOpenAdmin ? PALETTE.black : "rgba(0,0,0,0.06)",
+                color: adminCheckReady && canOpenAdmin ? "#FFFFFF" : PALETTE.mutedSoft,
+                cursor: adminCheckReady && canOpenAdmin ? "pointer" : "not-allowed",
+                background: adminCheckReady && canOpenAdmin ? PALETTE.black : "rgba(0,0,0,0.06)",
                 border: "none",
                 borderRadius: "999px",
                 padding: "8px 16px 8px 10px",
-                boxShadow: canOpenAdmin ? "0 4px 14px -4px rgba(0,0,0,0.25)" : "none",
+                boxShadow: adminCheckReady && canOpenAdmin ? "0 4px 14px -4px rgba(0,0,0,0.25)" : "none",
                 transition: "transform 0.15s, box-shadow 0.15s",
               }}
             >
@@ -425,7 +401,7 @@ export function OptionSelection() {
                 style={{
                   width: "16px",
                   height: "16px",
-                  color: canOpenAdmin ? "#FFFFFF" : PALETTE.mutedSoft,
+                  color: adminCheckReady && canOpenAdmin ? "#FFFFFF" : PALETTE.mutedSoft,
                   flexShrink: 0,
                 }}
               />

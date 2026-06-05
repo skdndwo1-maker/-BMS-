@@ -871,7 +871,7 @@ export function BrandLibrary() {
         </div>
       )}
 
-      {selectedLibraryCategory && (
+      {isAdmin && selectedLibraryCategory && (
         <button
           type="button"
           onClick={() => openUploadDialog(selectedLibraryCategory, true)}

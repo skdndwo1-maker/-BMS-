@@ -1,48 +1,73 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { approveRun, listRuns, rejectRun, type AdminRunRow } from "@/lib/adminApi";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { toast } from "sonner";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
+import { Loader2 } from "lucide-react";
 
 export function AdminReview() {
   const navigate = useNavigate();
-  const [adminKey, setAdminKey] = useState(() => sessionStorage.getItem("bms_admin_key") || "");
+  const { isAdmin, isReady } = useIsAdmin();
   const [reviewer, setReviewer] = useState(() => sessionStorage.getItem("bms_admin_reviewer") || "");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<"pending_review" | "approved" | "rejected">("pending_review");
   const [rows, setRows] = useState<AdminRunRow[]>([]);
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
 
-  const canLoad = adminKey.trim().length > 0;
   const title = useMemo(() => {
     if (status === "pending_review") return "승인 대기";
     if (status === "approved") return "승인됨";
     return "거부됨";
   }, [status]);
 
-  const load = async () => {
-    if (!canLoad) return;
+  const load = useCallback(async () => {
+    if (!isAdmin) return;
     setLoading(true);
     try {
-      sessionStorage.setItem("bms_admin_key", adminKey.trim());
       sessionStorage.setItem("bms_admin_reviewer", reviewer.trim());
-      const r = await listRuns(adminKey.trim(), status, 80);
+      const r = await listRuns("", status, 80);
       setRows(r);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAdmin, reviewer, status]);
 
   useEffect(() => {
+    if (!isReady || !isAdmin) return;
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [isReady, isAdmin, status, load]);
+
+  if (!isReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center brand-app-shell">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" aria-label="권한 확인 중" />
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen brand-app-shell px-6 py-8">
+        <div className="mx-auto max-w-lg space-y-4 text-center">
+          <AxisBrandTitle subtitle="관리자 검토" />
+          <p className="text-sm text-gray-600">
+            이 페이지는 Supabase <code className="text-xs">admin_users</code>에 등록된 관리자만 접근할 수
+            있습니다.
+          </p>
+          <Button type="button" className="rounded-full bg-black text-white" onClick={() => navigate("/options")}>
+            옵션으로
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen brand-app-shell px-6 py-8">
@@ -50,40 +75,47 @@ export function AdminReview() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <AxisBrandTitle subtitle="관리자 검토" />
-            <p className="mt-2 text-sm text-gray-500">Supabase에 저장된 검수/생성 결과를 승인/거부합니다.</p>
+            <p className="mt-2 text-sm text-gray-500">
+              Supabase에 저장된 검수·생성 결과를 선별해 승인하거나 거부합니다.
+            </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" className="rounded-full border-[rgba(0,0,0,0.1)]" onClick={() => navigate("/options")}>
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-full border-[rgba(0,0,0,0.1)]"
+              onClick={() => navigate("/options")}
+            >
               옵션으로
             </Button>
-            <Button type="button" className="rounded-full bg-black text-white hover:bg-zinc-900" onClick={() => void load()} disabled={!canLoad || loading}>
+            <Button
+              type="button"
+              className="rounded-full bg-black text-white hover:bg-zinc-900"
+              onClick={() => void load()}
+              disabled={loading}
+            >
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               새로고침
             </Button>
           </div>
         </div>
 
         <Card className="border-gray-200">
-          <div className="px-6 pt-6 pb-2 flex flex-col gap-2">
-            <CardTitle className="text-lg font-semibold tracking-tight">접근 키</CardTitle>
+          <div className="flex flex-col gap-2 px-6 pt-6 pb-2">
+            <CardTitle className="text-lg font-semibold tracking-tight">검토 설정</CardTitle>
             <CardDescription className="text-sm text-gray-500">
-              이 페이지는 서버의 `ADMIN_API_KEY`와 일치하는 키를 입력해야 동작합니다. (브라우저에만 저장됨)
+              로그인한 관리자 계정으로 인증되었습니다. 검토자 이름은 승인·거부 기록에 함께 저장됩니다.
             </CardDescription>
           </div>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 min-[900px]:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-sm text-gray-700">Admin Key</Label>
-                <Input
-                  type="password"
-                  value={adminKey}
-                  onChange={(e) => setAdminKey(e.target.value)}
-                  placeholder="x-admin-key"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm text-gray-700">Reviewer(선택)</Label>
-                <Input value={reviewer} onChange={(e) => setReviewer(e.target.value)} placeholder="홍길동" />
-              </div>
+            <div className="max-w-sm space-y-2">
+              <Label className="text-sm text-gray-700">Reviewer(선택)</Label>
+              <Input
+                value={reviewer}
+                onChange={(e) => setReviewer(e.target.value)}
+                placeholder="홍길동"
+                onBlur={() => sessionStorage.setItem("bms_admin_reviewer", reviewer.trim())}
+              />
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -143,7 +175,7 @@ export function AdminReview() {
                           onClick={async () => {
                             try {
                               setLoading(true);
-                              await approveRun(adminKey.trim(), r.id, reviewer.trim() || undefined);
+                              await approveRun("", r.id, reviewer.trim() || undefined);
                               toast.success("승인 완료");
                               await load();
                             } catch (e) {
@@ -152,7 +184,7 @@ export function AdminReview() {
                               setLoading(false);
                             }
                           }}
-                          disabled={loading || !canLoad}
+                          disabled={loading}
                         >
                           승인
                         </Button>
@@ -168,7 +200,12 @@ export function AdminReview() {
                           onClick={async () => {
                             try {
                               setLoading(true);
-                              await rejectRun(adminKey.trim(), r.id, (rejectReason[r.id] ?? "").trim(), reviewer.trim() || undefined);
+                              await rejectRun(
+                                "",
+                                r.id,
+                                (rejectReason[r.id] ?? "").trim(),
+                                reviewer.trim() || undefined,
+                              );
                               toast.success("거부 완료");
                               await load();
                             } catch (e) {
@@ -177,7 +214,7 @@ export function AdminReview() {
                               setLoading(false);
                             }
                           }}
-                          disabled={loading || !canLoad}
+                          disabled={loading}
                         >
                           거부
                         </Button>
@@ -211,4 +248,3 @@ export function AdminReview() {
     </div>
   );
 }
-

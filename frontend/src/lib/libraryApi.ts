@@ -189,9 +189,23 @@ export async function uploadLibraryAsset(
   metadata: UploadLibraryAssetMetadata,
   onProgress?: (pct: number) => void,
 ): Promise<LibraryAssetRow> {
-  const apiResult = await tryUploadLibraryAssetViaApi(sb, file, metadata, onProgress);
-  if (apiResult !== "fallback") return apiResult;
-  return uploadLibraryAssetDirect(sb, file, metadata, onProgress);
+  await sb.auth.refreshSession().catch(() => {});
+  const { data: userData, error: userErr } = await sb.auth.getUser();
+  if (userErr || !userData.user) {
+    throw new Error("로그인 후 업로드할 수 있습니다.");
+  }
+  if (!(await isCurrentUserAdmin(sb))) {
+    throw new Error(await getLibraryAdminHint(sb));
+  }
+
+  onProgress?.(2);
+  try {
+    return await uploadLibraryAssetDirect(sb, file, metadata, onProgress);
+  } catch (directErr) {
+    const apiResult = await tryUploadLibraryAssetViaApi(sb, file, metadata, onProgress);
+    if (apiResult !== "fallback") return apiResult;
+    throw directErr instanceof Error ? directErr : new Error(String(directErr));
+  }
 }
 
 async function resolveSupabaseAccessToken(sb: SupabaseClient): Promise<string | null> {
@@ -435,10 +449,11 @@ function formatLibraryStorageError(message: string): string {
 
 export function formatLibraryUploadError(e: unknown, sb?: SupabaseClient | null): string {
   const msg = e instanceof Error ? e.message : String(e);
-  if (/admin_users|forbidden|관리자|permission|policy|row-level security/i.test(msg)) {
+  if (/admin_users|forbidden|관리자|permission|policy|row-level security|user_id:/i.test(msg)) {
     return msg.includes("user_id:") ? msg : "업로드 권한이 없습니다. Supabase admin_users 테이블에 본인 계정을 등록해 주세요.";
   }
-  if (/not_logged_in|로그인/.test(msg)) return "로그인 후 업로드할 수 있습니다.";
+  if (/VITE_SUPABASE|Supabase 설정/i.test(msg)) return msg;
+  if (/not_logged_in|로그인 후 업로드/i.test(msg)) return "로그인 후 업로드할 수 있습니다.";
   if (sb && /Storage\/DB 권한/.test(msg)) return msg;
   return msg;
 }

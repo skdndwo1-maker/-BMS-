@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import {
   fetchLibraryAssetsFromApi,
+  getLibraryAdminHint,
   getLibraryDownloadUrl,
   incrementLibraryDownload,
-  isCurrentUserAdmin,
   rowToLibraryAsset,
   uploadLibraryAsset,
   type LibraryAsset,
@@ -38,7 +39,7 @@ export type UseLibraryAssetsResult = {
  * 브랜드 라이브러리 에셋 CRUD 훅.
  *
  * - fetchAssets: API(service role)로 library_assets 조회 — 로그인·RLS 무관
- * - uploadAsset: 관리자 전용 (API 업로드 우선)
+ * - uploadAsset: admin_users 관리자 전용 (브라우저 직접 업로드 우선)
  * - incrementDownload: 다운로드 카운트 +1
  */
 export function useLibraryAssets(): UseLibraryAssetsResult {
@@ -50,12 +51,13 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
     }
   }, []);
 
+  const { isAdmin, isReady: adminReady, refresh: refreshAdmin } = useIsAdmin();
+
   const [assets, setAssets] = useState<LibraryAsset[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [uploading, setUploading] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [error, setError] = useState<Error | null>(null);
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const lastFetchArgsRef = useRef<FetchAssetsArgs | undefined>(undefined);
 
@@ -64,15 +66,12 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
   const refreshAuthState = useCallback(async () => {
     if (!sb) {
       setIsAuthenticated(false);
-      setIsAdmin(false);
       return;
     }
-    await sb.auth.refreshSession().catch(() => {});
+    await refreshAdmin();
     const { data: userData } = await sb.auth.getUser();
     setIsAuthenticated(Boolean(userData.user));
-    const admin = await isCurrentUserAdmin(sb);
-    setIsAdmin(admin);
-  }, [sb]);
+  }, [sb, refreshAdmin]);
 
   const fetchAssets = useCallback(
     async (args?: FetchAssetsArgs): Promise<void> => {
@@ -114,7 +113,12 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
   const uploadAsset = useCallback(
     async (file: File, metadata: UploadLibraryAssetMetadata): Promise<LibraryAsset | null> => {
       if (!sb) {
-        const err = new Error("Supabase 설정이 필요합니다. 로그인 후 업로드를 시도해 주세요.");
+        const err = new Error("Supabase 설정이 필요합니다. VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY를 확인해 주세요.");
+        setError(err);
+        throw err;
+      }
+      if (!isAdmin) {
+        const err = new Error(await getLibraryAdminHint(sb));
         setError(err);
         throw err;
       }
@@ -135,7 +139,7 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
         setUploadProgress(0);
       }
     },
-    [sb, fetchAssets],
+    [sb, isAdmin, fetchAssets],
   );
 
   const incrementDownload = useCallback(
@@ -177,7 +181,7 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
     error,
     isAdmin,
     isAuthenticated,
-    isReady: true,
+    isReady: adminReady,
     fetchAssets,
     searchAssets,
     uploadAsset,

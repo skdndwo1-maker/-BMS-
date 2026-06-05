@@ -24,11 +24,12 @@ async function adminFetch(adminKey: string, path: string, init?: RequestInit) {
       return null;
     }
   })();
+  await sb?.auth.refreshSession().catch(() => {});
   const sessionRes = sb ? await sb.auth.getSession() : { data: { session: null as any } };
   const token = sessionRes.data.session?.access_token as string | undefined;
 
   if (!token && !adminKey.trim()) {
-    throw new Error("not_logged_in");
+    throw new Error("로그인 후 관리자 기능을 사용할 수 있습니다.");
   }
   const r = await fetch(apiUrl(path), {
     ...init,
@@ -38,9 +39,20 @@ async function adminFetch(adminKey: string, path: string, init?: RequestInit) {
       ...(init?.headers ?? {}),
     },
   });
-  const payload = (await r.json().catch(() => ({}))) as any;
+  const payload = (await r.json().catch(() => ({}))) as {
+    ok?: boolean;
+    error?: string;
+    message?: string;
+    runs?: AdminRunRow[];
+  };
   if (!r.ok || payload?.ok === false) {
-    throw new Error(payload?.error ?? `요청 실패 (${r.status})`);
+    if (r.status === 403 || payload?.error === "forbidden") {
+      throw new Error("관리자 권한이 없습니다. admin_users에 본인 계정을 등록해 주세요.");
+    }
+    if (r.status === 401 || payload?.error === "not_logged_in") {
+      throw new Error("로그인 후 관리자 기능을 사용할 수 있습니다.");
+    }
+    throw new Error(payload?.message || payload?.error || `요청 실패 (${r.status})`);
   }
   return payload;
 }
