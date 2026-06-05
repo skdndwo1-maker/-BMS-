@@ -45,8 +45,15 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
 
     let mounted = true;
 
-    const { data: sub } = sb.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: sub } = sb.auth.onAuthStateChange((event, nextSession) => {
       if (!mounted) return;
+      // 진단용: 세션 복원/로그인/로그아웃 시점과 사용자 식별자를 콘솔에 남긴다.
+      // (Auth session missing 류 문제를 추적할 때 브라우저 콘솔에서 바로 확인 가능)
+      console.info(
+        "[auth]",
+        event,
+        nextSession?.user?.email ?? nextSession?.user?.id ?? "no-session",
+      );
       setSession(nextSession);
       setIsAuthReady(true);
     });

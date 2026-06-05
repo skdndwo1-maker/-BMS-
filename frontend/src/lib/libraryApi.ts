@@ -214,9 +214,9 @@ async function resolveSupabaseAccessToken(sb: SupabaseClient): Promise<string | 
 
 /** API 실패 시 브라우저 Supabase 직접 업로드로 넘길지 */
 async function shouldFallbackLibraryUploadDirect(sb: SupabaseClient): Promise<boolean> {
-  const { data: userData, error: userErr } = await sb.auth.getUser();
-  if (userErr || !userData.user) return false;
-  return isCurrentUserAdmin(sb);
+  const userId = await readAuthedUserId(sb);
+  if (!userId) return false;
+  return isCurrentUserAdmin(sb, { userId });
 }
 
 async function tryUploadLibraryAssetViaApi(
@@ -292,11 +292,11 @@ async function uploadLibraryAssetDirect(
   metadata: UploadLibraryAssetMetadata,
   onProgress?: (pct: number) => void,
 ): Promise<LibraryAssetRow> {
-  const { data: userData, error: userErr } = await sb.auth.getUser();
-  if (userErr || !userData.user) {
+  const uploaderId = await readAuthedUserId(sb);
+  if (!uploaderId) {
     throw new Error("로그인 후 업로드할 수 있습니다.");
   }
-  if (!(await isCurrentUserAdmin(sb))) {
+  if (!(await isCurrentUserAdmin(sb, { userId: uploaderId }))) {
     throw new Error(await getLibraryAdminHint(sb));
   }
 
@@ -447,9 +447,9 @@ export async function isCurrentUserAdmin(
 }
 
 export async function getLibraryAdminHint(sb: SupabaseClient): Promise<string> {
-  const { data: u } = await sb.auth.getUser();
-  const uid = u.user?.id ?? "알 수 없음";
-  const email = u.user?.email ? `, ${u.user.email}` : "";
+  const { data } = await sb.auth.getSession();
+  const uid = data.session?.user?.id ?? "알 수 없음";
+  const email = data.session?.user?.email ? `, ${data.session.user.email}` : "";
   return `업로드 권한이 없습니다. Supabase SQL Editor에서 admin_users에 등록해 주세요. (user_id: ${uid}${email})`;
 }
 

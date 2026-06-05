@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseClient, isSessionPersistedToDisk } from "@/lib/supabaseClient";
 import { APP_DISPLAY_NAME } from "@/constants/appBranding";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 
@@ -63,8 +63,12 @@ export function LoginScreen() {
       });
       if (error) throw error;
       if (!data.session?.user) throw new Error("로그인에 실패했습니다.");
-      const { data: persisted } = await sb.auth.getSession();
-      if (!persisted.session?.user) throw new Error("로그인 세션을 저장하지 못했습니다. 브라우저 저장소를 확인해 주세요.");
+      // 메모리뿐 아니라 localStorage에 실제로 세션이 기록됐는지 검증한다.
+      if (!isSessionPersistedToDisk()) {
+        throw new Error(
+          "브라우저가 로그인 세션 저장을 막고 있습니다. 시크릿 모드 해제, 사이트 쿠키/저장소 허용, 광고/추적 차단 확장 프로그램 해제 후 다시 시도해 주세요.",
+        );
+      }
       toast.success("로그인 완료");
       navigate("/options");
     } catch (err) {
