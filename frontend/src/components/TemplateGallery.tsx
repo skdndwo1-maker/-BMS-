@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { templates as designTemplates, templateCategories } from "@/design/templates";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 import { GlobalBrandNav } from "@/components/GlobalBrandNav";
-import { InspectionSectionTitle } from "@/components/InspectionSectionTitle";
 
 type MediaType = "online" | "offline";
 
@@ -187,15 +186,12 @@ export function TemplateGallery() {
               display: "flex",
               flexWrap: "wrap",
               alignItems: "center",
-              justifyContent: "space-between",
+              justifyContent: "flex-end",
               gap: 12,
               marginBottom: 16,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-              <InspectionSectionTitle>제작물유형</InspectionSectionTitle>
-            </div>
-            <div className="flex shrink-0 items-center gap-2 sm:ml-auto" role="group" aria-label="브랜드 디자인 모드">
+            <div className="flex shrink-0 items-center gap-2" role="group" aria-label="브랜드 디자인 모드">
               <Button
                 type="button"
                 size="sm"
