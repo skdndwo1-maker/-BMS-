@@ -2,8 +2,6 @@ import {
   useState,
   useRef,
   useEffect,
-  useCallback,
-  useLayoutEffect,
   type ChangeEvent,
   type FormEvent,
   type CSSProperties,
@@ -15,8 +13,6 @@ import {
   Library,
   Send,
   ArrowRight,
-  ChevronLeft,
-  ChevronRight,
   Sparkles,
   Crown,
   Gem,
@@ -125,22 +121,6 @@ const mainOptions = [
   },
 ];
 
-/** 브랜딩 카드 캐러셀: 뷰포트 너비에 맞춰 카드 폭을 3등분(채팅 영역과 동일 열 폭) */
-const BRANDING_CARDS_PER_PAGE = 3;
-const BRANDING_OPTION_CARD_GAP = 16;
-const BRANDING_CARD_MIN_WIDTH_PX = 140;
-
-function brandingCardWidthFromViewport(viewportW: number): number {
-  if (viewportW <= 0) return 300;
-  const n = BRANDING_CARDS_PER_PAGE;
-  const inner = viewportW - (n - 1) * BRANDING_OPTION_CARD_GAP;
-  return Math.max(BRANDING_CARD_MIN_WIDTH_PX, Math.floor(inner / n));
-}
-
-function brandingPageScrollStepPx(cardW: number): number {
-  return BRANDING_CARDS_PER_PAGE * (cardW + BRANDING_OPTION_CARD_GAP);
-}
-
 const quickSuggestions = [
   "A2 이벤트 포스터 만들기",
   "배너가 브랜드 가이드에 맞는지 확인",
@@ -167,73 +147,6 @@ export function OptionSelection() {
   const [hoveredOptionId, setHoveredOptionId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-
-  const brandingScrollRef = useRef<HTMLDivElement>(null);
-  const [brandingScroll, setBrandingScroll] = useState({ canLeft: false, canRight: false, overflow: false });
-  const [brandingViewportW, setBrandingViewportW] = useState(0);
-
-  const brandingCardW = brandingCardWidthFromViewport(brandingViewportW);
-
-  const updateBrandingScroll = useCallback(() => {
-    const el = brandingScrollRef.current;
-    if (!el) return;
-    const { scrollLeft, scrollWidth, clientWidth } = el;
-    const overflow = scrollWidth > clientWidth + 1;
-    setBrandingScroll({
-      overflow,
-      canLeft: overflow && scrollLeft > 2,
-      canRight: overflow && scrollLeft < scrollWidth - clientWidth - 2,
-    });
-  }, []);
-
-  useEffect(() => {
-    const el = brandingScrollRef.current;
-    if (!el) return;
-    const measure = () => {
-      setBrandingViewportW(el.clientWidth);
-      updateBrandingScroll();
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    el.addEventListener("scroll", updateBrandingScroll, { passive: true });
-    return () => {
-      ro.disconnect();
-      el.removeEventListener("scroll", updateBrandingScroll);
-    };
-  }, [updateBrandingScroll]);
-
-  useLayoutEffect(() => {
-    let cancelled = false;
-    const tick = () => {
-      if (cancelled) return;
-      const el = brandingScrollRef.current;
-      if (el) setBrandingViewportW(el.clientWidth);
-      updateBrandingScroll();
-    };
-    const r1 = requestAnimationFrame(() => {
-      requestAnimationFrame(tick);
-    });
-    const t = window.setTimeout(tick, 150);
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(r1);
-      window.clearTimeout(t);
-    };
-  }, [updateBrandingScroll]);
-
-  const scrollBrandingBy = (dir: -1 | 1) => {
-    const el = brandingScrollRef.current;
-    if (!el) return;
-    const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
-    const V = el.clientWidth;
-    const cardW = brandingCardWidthFromViewport(V);
-    const step =
-      V > 0 ? brandingPageScrollStepPx(cardW) : V;
-    const delta = dir * step;
-    const target = Math.min(maxScroll, Math.max(0, el.scrollLeft + delta));
-    el.scrollTo({ left: target, behavior: "smooth" });
-  };
 
   const { isAdmin: canOpenAdmin, isReady: adminCheckReady } = useIsAdmin();
 
@@ -318,9 +231,6 @@ export function OptionSelection() {
     }
     navigate("/", { replace: true });
   };
-
-  const canBrandingLeft = brandingScroll.overflow && brandingScroll.canLeft;
-  const canBrandingRight = brandingScroll.overflow && brandingScroll.canRight;
 
   return (
     <div
@@ -514,102 +424,49 @@ export function OptionSelection() {
 
           <div
             style={{
-              display: "flex",
-              flexDirection: "row",
-              flexWrap: "nowrap",
-              alignItems: "center",
-              justifyContent: "flex-start",
-              gap: "10px",
+              display: "grid",
+              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+              gap: "16px",
               width: "100%",
               minWidth: 0,
               marginBottom: "4px",
-              paddingLeft: 0,
-              paddingRight: 0,
-              boxSizing: "border-box",
             }}
           >
-            <button
-              type="button"
-              aria-label="이전 카드"
-              aria-disabled={!canBrandingLeft}
-              onClick={() => {
-                if (canBrandingLeft) scrollBrandingBy(-1);
-              }}
-              style={{
-                display: "inline-flex",
-                flexShrink: 0,
-                width: "38px",
-                height: "38px",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: "999px",
-                border: canBrandingLeft ? "1px solid rgba(0,0,0,0.08)" : "1px solid rgba(0,0,0,0.06)",
-                background: canBrandingLeft ? PALETTE.card : "#EBE9E4",
-                color: canBrandingLeft ? PALETTE.muted : "#A8A8A8",
-                cursor: canBrandingLeft ? "pointer" : "default",
-                boxShadow: canBrandingLeft ? "0 2px 8px -4px rgba(0,0,0,0.08)" : "none",
-                transition: "background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s",
-              }}
-            >
-              <ChevronLeft style={{ width: "18px", height: "18px" }} aria-hidden />
-            </button>
-
-            <div
-              ref={brandingScrollRef}
-              className="min-w-0 flex-1 shrink overflow-x-auto overflow-y-hidden scroll-smooth overscroll-x-contain touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-              style={{
-                scrollSnapType: "x mandatory",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "row",
-                  flexWrap: "nowrap",
-                  gap: BRANDING_OPTION_CARD_GAP,
-                  width: "max-content",
-                  paddingBottom: "8px",
-                  paddingTop: "4px",
-                }}
-              >
-                {mainOptions.map((option) => {
-                  const Icon = option.icon;
-                  const isHovered = hoveredOptionId === option.id;
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => handleOptionClick(option.route)}
-                      onMouseEnter={() => setHoveredOptionId(option.id)}
-                      onMouseLeave={() => setHoveredOptionId(null)}
-                      className={isHovered ? "option-card-breathe" : undefined}
-                      style={{
-                        position: "relative",
-                        textAlign: "left",
-                        background: isHovered ? PALETTE.coral : PALETTE.card,
-                        border: isHovered
-                          ? "1px solid rgba(255, 255, 255, 0.3)"
-                          : `1px solid ${PALETTE.borderSubtle}`,
-                        borderRadius: "24px",
-                        padding: "18px 18px 16px",
-                        cursor: "pointer",
-                        transition:
-                          "background 0.28s ease, border-color 0.25s, box-shadow 0.22s, transform 0.22s, color 0.2s",
-                        display: "flex",
-                        flexDirection: "column",
-                        minHeight: "168px",
-                        width: brandingCardW,
-                        minWidth: brandingCardW,
-                        maxWidth: brandingCardW,
-                        flexShrink: 0,
-                        outline: "none",
-                        boxShadow: isHovered ? undefined : PALETTE.shadow,
-                        transform: isHovered ? "translateY(-2px)" : "translateY(0)",
-                        overflow: "hidden",
-                        boxSizing: "border-box",
-                        scrollSnapAlign: "start",
-                      }}
-                    >
+            {mainOptions.map((option) => {
+              const Icon = option.icon;
+              const isHovered = hoveredOptionId === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => handleOptionClick(option.route)}
+                  onMouseEnter={() => setHoveredOptionId(option.id)}
+                  onMouseLeave={() => setHoveredOptionId(null)}
+                  className={isHovered ? "option-card-breathe" : undefined}
+                  style={{
+                    position: "relative",
+                    textAlign: "left",
+                    background: isHovered ? PALETTE.coral : PALETTE.card,
+                    border: isHovered
+                      ? "1px solid rgba(255, 255, 255, 0.3)"
+                      : `1px solid ${PALETTE.borderSubtle}`,
+                    borderRadius: "24px",
+                    padding: "18px 16px 16px",
+                    cursor: "pointer",
+                    transition:
+                      "background 0.28s ease, border-color 0.25s, box-shadow 0.22s, transform 0.22s, color 0.2s",
+                    display: "flex",
+                    flexDirection: "column",
+                    minHeight: "168px",
+                    minWidth: 0,
+                    width: "100%",
+                    outline: "none",
+                    boxShadow: isHovered ? undefined : PALETTE.shadow,
+                    transform: isHovered ? "translateY(-2px)" : "translateY(0)",
+                    overflow: "hidden",
+                    boxSizing: "border-box",
+                  }}
+                >
                   <span
                     style={{
                       textAlign: "left",
@@ -675,12 +532,13 @@ export function OptionSelection() {
                   <h2
                     style={{
                       color: isHovered ? "#FFFFFF" : PALETTE.ink,
-                      fontSize: "16px",
+                      fontSize: "15px",
                       fontWeight: 700,
                       margin: "0 0 8px 0",
                       lineHeight: 1.35,
                       letterSpacing: "-0.02em",
                       wordBreak: "keep-all",
+                      overflowWrap: "normal",
                       transition: "color 0.2s",
                     }}
                   >
@@ -689,9 +547,10 @@ export function OptionSelection() {
                   <p
                     style={{
                       color: isHovered ? "rgba(255, 255, 255, 0.9)" : PALETTE.muted,
-                      fontSize: "12.5px",
-                      lineHeight: 1.6,
+                      fontSize: "12px",
+                      lineHeight: 1.55,
                       wordBreak: "keep-all",
+                      overflowWrap: "normal",
                       flexGrow: 1,
                       transition: "color 0.2s",
                     }}
@@ -722,37 +581,9 @@ export function OptionSelection() {
                     />
                   </div>
                   </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              aria-label="다음 카드"
-              aria-disabled={!canBrandingRight}
-              onClick={() => {
-                if (canBrandingRight) scrollBrandingBy(1);
-              }}
-              style={{
-                display: "inline-flex",
-                flexShrink: 0,
-                width: "38px",
-                height: "38px",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: "999px",
-                border: canBrandingRight ? "1px solid rgba(0,0,0,0.08)" : "1px solid rgba(0,0,0,0.06)",
-                background: canBrandingRight ? PALETTE.card : "#EBE9E4",
-                color: canBrandingRight ? PALETTE.muted : "#A8A8A8",
-                cursor: canBrandingRight ? "pointer" : "default",
-                boxShadow: canBrandingRight ? "0 2px 8px -4px rgba(0,0,0,0.08)" : "none",
-                transition: "background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s",
-              }}
-            >
-              <ChevronRight style={{ width: "18px", height: "18px" }} aria-hidden />
-            </button>
+                </button>
+              );
+            })}
           </div>
         </div>
 
