@@ -400,11 +400,12 @@ export async function incrementLibraryDownload(
 
 export async function isCurrentUserAdmin(sb: SupabaseClient): Promise<boolean> {
   try {
+    await sb.auth.refreshSession().catch(() => {});
     const { data: u, error } = await sb.auth.getUser();
     if (error || !u.user?.id) return false;
 
     const { data: rpcData, error: rpcErr } = await sb.rpc("is_current_user_admin");
-    if (!rpcErr && typeof rpcData === "boolean") return rpcData;
+    if (!rpcErr && rpcData === true) return true;
 
     const { data: sessionData } = await sb.auth.getSession();
     const token = sessionData.session?.access_token;
@@ -415,7 +416,7 @@ export async function isCurrentUserAdmin(sb: SupabaseClient): Promise<boolean> {
           headers: { Authorization: `Bearer ${token}` },
         });
         const out = (await r.json().catch(() => ({}))) as { isAdmin?: boolean };
-        if (r.ok && typeof out.isAdmin === "boolean") return out.isAdmin;
+        if (r.ok && out.isAdmin === true) return true;
       } catch {
         /* fallback below */
       }
