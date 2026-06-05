@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DesignContent } from "@/design/types";
+import { waitForAuthSession } from "@/lib/supabaseClient";
 
 export type DesignRow = {
   id: string;
@@ -18,11 +19,11 @@ export type DesignListItem = Pick<
 >;
 
 export async function requireAuthedUserId(sb: SupabaseClient): Promise<string> {
-  const { data, error } = await sb.auth.getUser();
-  if (error) throw error;
-  const uid = data.user?.id;
-  if (!uid) throw new Error("not_logged_in");
-  return uid;
+  // 페이지 마운트 직후엔 localStorage 세션 복원(INITIAL_SESSION)이 끝나기 전일 수 있어
+  // getSession()이 일시적으로 null을 반환한다. 복원이 끝날 때까지 기다린 뒤 판단한다.
+  const { userId } = await waitForAuthSession(sb);
+  if (!userId) throw new Error("not_logged_in");
+  return userId;
 }
 
 export async function listDesignsForUser(

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { apiUrl } from "@/lib/apiUrl";
+import { readAccessToken, readAuthedUserId } from "@/lib/supabaseClient";
 
 export const LIBRARY_BUCKET = "brand-library";
 
@@ -189,9 +190,8 @@ export async function uploadLibraryAsset(
   metadata: UploadLibraryAssetMetadata,
   onProgress?: (pct: number) => void,
 ): Promise<LibraryAssetRow> {
-  await sb.auth.refreshSession().catch(() => {});
-  const { data: userData, error: userErr } = await sb.auth.getUser();
-  if (userErr || !userData.user) {
+  const userId = await readAuthedUserId(sb);
+  if (!userId) {
     throw new Error("로그인 후 업로드할 수 있습니다.");
   }
   if (!(await isCurrentUserAdmin(sb))) {
@@ -209,17 +209,7 @@ export async function uploadLibraryAsset(
 }
 
 async function resolveSupabaseAccessToken(sb: SupabaseClient): Promise<string | null> {
-  const { data: sessionData } = await sb.auth.getSession();
-  if (sessionData.session?.access_token) return sessionData.session.access_token;
-
-  const { data: refreshed, error: refreshErr } = await sb.auth.refreshSession();
-  if (!refreshErr && refreshed.session?.access_token) return refreshed.session.access_token;
-
-  const { data: userData, error: userErr } = await sb.auth.getUser();
-  if (userErr || !userData.user) return null;
-
-  const { data: sessionAgain } = await sb.auth.getSession();
-  return sessionAgain.session?.access_token ?? null;
+  return readAccessToken(sb);
 }
 
 /** API 실패 시 브라우저 Supabase 직접 업로드로 넘길지 */
@@ -398,17 +388,37 @@ export async function incrementLibraryDownload(
   }
 }
 
-export async function isCurrentUserAdmin(sb: SupabaseClient): Promise<boolean> {
+export async function isCurrentUserAdmin(
+  sb: SupabaseClient,
+  opts?: { userId?: string; accessToken?: string | null; email?: string | null },
+): Promise<boolean> {
   try {
-    await sb.auth.refreshSession().catch(() => {});
-    const { data: u, error } = await sb.auth.getUser();
-    if (error || !u.user?.id) return false;
+    const userId = opts?.userId ?? (await readAuthedUserId(sb));
+    const email = opts?.email?.trim().toLowerCase() ?? null;
+    if (!userId && !email) return false;
+
+    if (userId) {
+      const { data: rowById, error: idErr } = await sb
+        .from("admin_users")
+        .select("user_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (!idErr && rowById?.user_id) return true;
+    }
+
+    if (email) {
+      const { data: rowByEmail, error: emailErr } = await sb
+        .from("admin_users")
+        .select("user_id")
+        .ilike("email", email)
+        .maybeSingle();
+      if (!emailErr && rowByEmail?.user_id) return true;
+    }
 
     const { data: rpcData, error: rpcErr } = await sb.rpc("is_current_user_admin");
     if (!rpcErr && rpcData === true) return true;
 
-    const { data: sessionData } = await sb.auth.getSession();
-    const token = sessionData.session?.access_token;
+    const token = opts?.accessToken ?? (await readAccessToken(sb));
     if (token) {
       try {
         const r = await fetch(apiUrl("/api/admin/me"), {
@@ -418,18 +428,20 @@ export async function isCurrentUserAdmin(sb: SupabaseClient): Promise<boolean> {
         const out = (await r.json().catch(() => ({}))) as { isAdmin?: boolean };
         if (r.ok && out.isAdmin === true) return true;
       } catch {
-        /* fallback below */
+        /* all paths exhausted */
       }
     }
 
-    const { data, error: e2 } = await sb
-      .from("admin_users")
-      .select("user_id")
-      .eq("user_id", u.user.id)
-      .maybeSingle();
-    if (e2) return false;
-    return Boolean(data?.user_id);
-  } catch {
+    if (userId || email) {
+      console.warn(
+        "[isCurrentUserAdmin] not admin",
+        userId ?? email,
+        rpcErr?.message ?? "",
+      );
+    }
+    return false;
+  } catch (e) {
+    console.warn("[isCurrentUserAdmin]", e);
     return false;
   }
 }

@@ -13,12 +13,15 @@ import "@fontsource/geist/700.css";
 import "@fontsource/geist/800.css";
 import "./index.css";
 import App from "./AppGate.tsx";
+import { AuthSessionProvider } from "@/contexts/AuthSessionContext";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
-      <Toaster position="top-center" richColors />
+      <AuthSessionProvider>
+        <App />
+        <Toaster position="top-center" richColors />
+      </AuthSessionProvider>
     </BrowserRouter>
   </StrictMode>
 );

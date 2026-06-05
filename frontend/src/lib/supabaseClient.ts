@@ -32,3 +32,52 @@ export function getSupabaseClient(): SupabaseClient {
   return cached;
 }
 
+/** localStorage 세션만 읽음. 수동 refreshSession()은 토큰 회전으로 세션을 끊을 수 있어 사용하지 않음. */
+export async function readAuthedUserId(sb: SupabaseClient): Promise<string | null> {
+  const { data } = await sb.auth.getSession();
+  return data.session?.user?.id ?? null;
+}
+
+export async function readAccessToken(sb: SupabaseClient): Promise<string | null> {
+  const { data } = await sb.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
+/** Supabase auth storage 복원(INITIAL_SESSION)까지 대기 */
+export async function waitForAuthSession(
+  sb: SupabaseClient,
+): Promise<{ userId: string | null; accessToken: string | null }> {
+  const { data: cached } = await sb.auth.getSession();
+  if (cached.session?.user?.id) {
+    return {
+      userId: cached.session.user.id,
+      accessToken: cached.session.access_token ?? null,
+    };
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (session: { user?: { id: string }; access_token?: string } | null) => {
+      if (settled) return;
+      settled = true;
+      resolve({
+        userId: session?.user?.id ?? null,
+        accessToken: session?.access_token ?? null,
+      });
+    };
+
+    const { data: sub } = sb.auth.onAuthStateChange((event, session) => {
+      if (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "SIGNED_OUT") {
+        sub.subscription.unsubscribe();
+        finish(session);
+      }
+    });
+
+    window.setTimeout(() => {
+      if (settled) return;
+      sub.subscription.unsubscribe();
+      void sb.auth.getSession().then(({ data }) => finish(data.session));
+    }, 4000);
+  });
+}
+

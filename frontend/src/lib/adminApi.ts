@@ -1,5 +1,5 @@
 import { apiUrl } from "./apiUrl";
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseClient, readAccessToken } from "@/lib/supabaseClient";
 
 export type AdminRunRow = {
   id: string;
@@ -24,9 +24,7 @@ async function adminFetch(adminKey: string, path: string, init?: RequestInit) {
       return null;
     }
   })();
-  await sb?.auth.refreshSession().catch(() => {});
-  const sessionRes = sb ? await sb.auth.getSession() : { data: { session: null as any } };
-  const token = sessionRes.data.session?.access_token as string | undefined;
+  const token = sb ? await readAccessToken(sb) : null;
 
   if (!token && !adminKey.trim()) {
     throw new Error("로그인 후 관리자 기능을 사용할 수 있습니다.");

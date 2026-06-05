@@ -1,65 +1,59 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuthSession } from "@/contexts/AuthSessionContext";
 import { isCurrentUserAdmin } from "@/lib/libraryApi";
 
 export type UseIsAdminResult = {
   isAdmin: boolean;
-  /** null = 아직 확인 중 */
+  /** false = 아직 확인 중 */
   isReady: boolean;
   refresh: () => Promise<void>;
 };
 
 /**
  * Supabase 로그인 + admin_users 등록 여부.
- * RPC → /api/admin/me → admin_users SELECT 순으로 확인.
+ * AuthSessionProvider의 세션을 사용해 타이밍 이슈를 방지한다.
  */
 export function useIsAdmin(): UseIsAdminResult {
-  const sb = useMemo<SupabaseClient | null>(() => {
-    try {
-      return getSupabaseClient();
-    } catch {
-      return null;
-    }
-  }, []);
-
+  const { sb, session, user, isAuthReady } = useAuthSession();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const reqIdRef = useRef(0);
 
-  const refresh = useCallback(async () => {
-    if (!sb) {
-      setIsAdmin(false);
-      setIsReady(true);
+  const checkAdmin = useCallback(async () => {
+    const reqId = ++reqIdRef.current;
+
+    if (!isAuthReady) {
+      setIsReady(false);
       return;
     }
-    await sb.auth.refreshSession().catch(() => {});
-    const admin = await isCurrentUserAdmin(sb);
+
+    if (!sb || !user?.id) {
+      if (reqId === reqIdRef.current) {
+        setIsAdmin(false);
+        setIsReady(true);
+      }
+      return;
+    }
+
+    setIsReady(false);
+    const admin = await isCurrentUserAdmin(sb, {
+      userId: user.id,
+      accessToken: session?.access_token ?? null,
+      email: user.email ?? null,
+    });
+
+    if (reqId !== reqIdRef.current) return;
     setIsAdmin(admin);
     setIsReady(true);
-  }, [sb]);
+  }, [sb, session?.access_token, user?.id, user?.email, isAuthReady]);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      if (!sb) {
-        if (!cancelled) {
-          setIsAdmin(false);
-          setIsReady(true);
-        }
-        return;
-      }
-      await refresh();
-    })();
+    void checkAdmin();
+  }, [checkAdmin]);
 
-    if (!sb) return;
-    const { data: sub } = sb.auth.onAuthStateChange(() => {
-      void refresh();
-    });
-    return () => {
-      cancelled = true;
-      sub.subscription.unsubscribe();
-    };
-  }, [sb, refresh]);
+  const refresh = useCallback(async () => {
+    await checkAdmin();
+  }, [checkAdmin]);
 
   return { isAdmin, isReady, refresh };
 }

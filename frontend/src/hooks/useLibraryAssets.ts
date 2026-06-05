@@ -69,8 +69,8 @@ export function useLibraryAssets(): UseLibraryAssetsResult {
       return;
     }
     await refreshAdmin();
-    const { data: userData } = await sb.auth.getUser();
-    setIsAuthenticated(Boolean(userData.user));
+    const { data } = await sb.auth.getSession();
+    setIsAuthenticated(Boolean(data.session?.user));
   }, [sb, refreshAdmin]);
 
   const fetchAssets = useCallback(

@@ -63,6 +63,8 @@ export function LoginScreen() {
       });
       if (error) throw error;
       if (!data.session?.user) throw new Error("로그인에 실패했습니다.");
+      const { data: persisted } = await sb.auth.getSession();
+      if (!persisted.session?.user) throw new Error("로그인 세션을 저장하지 못했습니다. 브라우저 저장소를 확인해 주세요.");
       toast.success("로그인 완료");
       navigate("/options");
     } catch (err) {
