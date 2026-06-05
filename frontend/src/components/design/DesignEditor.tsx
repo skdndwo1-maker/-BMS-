@@ -42,7 +42,6 @@ import {
   type DesignListItem,
 } from "@/lib/designsApi";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
-import { GlobalBrandNav } from "@/components/GlobalBrandNav";
 import { registerGlobalNavPersist } from "@/lib/globalNavPersistence";
 import { InspectionSectionTitle } from "@/components/InspectionSectionTitle";
 
@@ -912,7 +911,6 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
               </Button>
             </div>
           </div>
-          <GlobalBrandNav className="border-t border-b-0 bg-white" innerClassName="w-full px-4 sm:px-6" />
           <div className="flex flex-col gap-2 border-t border-gray-100 bg-white px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div className="flex min-w-0 items-center gap-2">
               <InspectionSectionTitle>제작물유형</InspectionSectionTitle>
