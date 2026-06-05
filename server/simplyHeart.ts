@@ -8,6 +8,14 @@ import { FIXED_GUIDELINE_SOURCES, SIMPLY_HEART_FIXED_GUIDE_IDS } from "./fixedGu
 import type { GuidelineRecord } from "./store.js";
 import { loadMeta, resolveStoredPath } from "./store.js";
 import { excerptGuidelineForInspection } from "./gemini.js";
+import {
+  formatGeminiFailureMessage,
+  geminiApiKeyCandidates,
+  isPrepaymentCreditsDepletedError,
+  rethrowIfInvalidApiKey,
+  shouldTryNextTextModel,
+  textModelCandidates,
+} from "./gemini/shared.js";
 
 const CORE_GUIDES: readonly { id: string; title: string; cap?: number }[] = [
   {
@@ -21,49 +29,6 @@ const CORE_GUIDES: readonly { id: string; title: string; cap?: number }[] = [
     cap: 45_000,
   },
 ] as const;
-
-function getKey(): string | undefined {
-  return process.env.GEMINI_API_KEY?.trim();
-}
-
-function textModelCandidates(): string[] {
-  const primary = process.env.GEMINI_MODEL?.trim() || "gemini-3.1-pro-preview";
-  const pool = [primary, "gemini-3.1-pro-preview", "gemini-2.5-pro", "gemini-2.5-flash"].filter((x): x is string =>
-    Boolean(x)
-  );
-  return [...new Set(pool)];
-}
-
-function isInvalidOrExpiredApiKeyError(e: unknown): boolean {
-  const msg = e instanceof Error ? e.message : String(e);
-  if (/API[_ ]KEY[_ ]INVALID|API key expired|renew the API key|invalid API key/i.test(msg)) return true;
-  if (e && typeof e === "object" && "status" in e) {
-    const s = (e as { status?: number }).status;
-    if (s === 400 && /API key|API_KEY_INVALID|expired/i.test(msg)) return true;
-  }
-  return false;
-}
-
-function rethrowIfInvalidApiKey(e: unknown): void {
-  if (isInvalidOrExpiredApiKeyError(e)) {
-    throw new Error(
-      "[Gemini API 키] 만료되었거나 잘못되었습니다. https://aistudio.google.com/apikey 에서 새 키를 발급하고 .env의 GEMINI_API_KEY를 교체한 뒤 서버를 재시작하세요."
-    );
-  }
-}
-
-function shouldTryNextTextModel(e: unknown): boolean {
-  if (isInvalidOrExpiredApiKeyError(e)) return false;
-  if (e && typeof e === "object" && "status" in e) {
-    const s = (e as { status?: number }).status;
-    if (s === 429 || s === 503 || s === 404) return true;
-  }
-  const msg = e instanceof Error ? e.message : String(e);
-  return (
-    /429|Too Many Requests|quota|RESOURCE_EXHAUSTED|overloaded|rate limit/i.test(msg) ||
-    /404|NOT_FOUND|no longer available|not found for API version|is not supported/i.test(msg)
-  );
-}
 
 export async function extractPdfTextFromBase64(base64: string): Promise<string> {
   const buf = Buffer.from(base64, "base64");
@@ -275,8 +240,8 @@ export async function runSimplyHeartStep(opts: {
   imageParts?: SimplyHeartImagePart[];
   prior: Partial<Record<"1" | "2" | "3", string>>;
 }): Promise<{ text: string; model: string }> {
-  const key = getKey();
-  if (!key) throw new Error("GEMINI_API_KEY가 설정되어 있지 않습니다.");
+  const apiKeys = geminiApiKeyCandidates();
+  if (apiKeys.length === 0) throw new Error("GEMINI_API_KEY가 설정되어 있지 않습니다.");
 
   const guidelineContext = (await buildGuidelineContext()).slice(0, 100_000);
   const systemInstruction = `${sharedRules()}
@@ -289,7 +254,6 @@ ${guidelineContext}`;
     (opts.imageParts?.length ?? 0) > 0 &&
     opts.imageParts!.some((p) => /^image\/(png|jpeg|jpg|webp)$/i.test(p.mimeType));
 
-  const genAI = new GoogleGenerativeAI(key);
   let lastErr: unknown;
 
   const preamble =
@@ -297,36 +261,43 @@ ${guidelineContext}`;
       ? "첨부 이미지(시안·배너 등)의 **가독성·메시지 계층·브랜드 정합성**을 텍스트와 함께 분석하세요. 이미지에서 읽은 텍스트를 인용할 때는 따옴표로 구분하세요.\n\n"
       : "";
 
-  for (const mid of textModelCandidates()) {
-    try {
-      const model = genAI.getGenerativeModel({
-        model: mid,
-        systemInstruction,
-      });
+  for (const apiKey of apiKeys) {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    for (const mid of textModelCandidates()) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: mid,
+          systemInstruction,
+        });
 
-      const parts: Array<
-        { text: string; inlineData?: never } | { text?: never; inlineData: { mimeType: string; data: string } }
-      > = [{ text: `${preamble}${userTextBlock}` }];
-      for (const im of opts.imageParts ?? []) {
-        if (!/^image\/(png|jpeg|jpg|webp)$/i.test(im.mimeType)) continue;
-        const data = im.data.replace(/^data:image\/\w+;base64,/, "");
-        parts.push({ inlineData: { mimeType: im.mimeType.split(";")[0], data } });
-      }
+        const parts: Array<
+          { text: string; inlineData?: never } | { text?: never; inlineData: { mimeType: string; data: string } }
+        > = [{ text: `${preamble}${userTextBlock}` }];
+        for (const im of opts.imageParts ?? []) {
+          if (!/^image\/(png|jpeg|jpg|webp)$/i.test(im.mimeType)) continue;
+          const data = im.data.replace(/^data:image\/\w+;base64,/, "");
+          parts.push({ inlineData: { mimeType: im.mimeType.split(";")[0], data } });
+        }
 
-      const result = await model.generateContent(parts);
-      const text = result.response.text();
-      if (text?.trim()) return { text: text.trim(), model: mid };
-      return { text: "(빈 응답)", model: mid };
-    } catch (e) {
-      rethrowIfInvalidApiKey(e);
-      lastErr = e;
-      if (shouldTryNextTextModel(e)) {
-        console.warn(`[simply-heart] model=${mid} retry`, e instanceof Error ? e.message : e);
-        continue;
+        const result = await model.generateContent(parts);
+        const text = result.response.text();
+        if (text?.trim()) return { text: text.trim(), model: mid };
+        return { text: "(빈 응답)", model: mid };
+      } catch (e) {
+        rethrowIfInvalidApiKey(e);
+        lastErr = e;
+        if (isPrepaymentCreditsDepletedError(e)) {
+          console.warn("[simply-heart] prepayment credits depleted for current API key");
+          break;
+        }
+        if (shouldTryNextTextModel(e)) {
+          console.warn(`[simply-heart] model=${mid} retry`, e instanceof Error ? e.message : e);
+          continue;
+        }
+        throw e;
       }
-      throw e;
     }
   }
   const label = opts.step === 0 ? "통합 분석" : `단계 ${opts.step}`;
-  throw new Error(`Simply Heart ${label} 실패: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`);
+  throw new Error(`Simply Heart ${label} 실패: ${formatGeminiFailureMessage(lastErr)}`);
 }

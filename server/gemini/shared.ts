@@ -33,20 +33,36 @@ export async function parsePdfBufferToText(buf: Buffer): Promise<string> {
   }
 }
 
+function isDeprecatedTextModel(id: string): boolean {
+  return /^gemini-1\.[05]/i.test(id);
+}
+
 /**
  * 텍스트/멀티모달 분석용 모델 후보 (앞에서부터 시도).
  * - 기본: gemini-3.1-pro-preview (고성능). 404·쿼터 시 아래 순으로 폴백.
- * - gemini-2.0-flash 등 구형 ID는 신규 키에서 404가 나는 경우가 많아 기본 후보에서 제외.
+ * - gemini-1.5-flash 등 구형 ID는 무시(404·과금 이슈 다발).
  */
 export function textModelCandidates(): string[] {
-  const primary = process.env.GEMINI_MODEL?.trim() || "gemini-3.1-pro-preview";
+  const rawPrimary = process.env.GEMINI_MODEL?.trim();
+  const primary =
+    rawPrimary && !isDeprecatedTextModel(rawPrimary) ? rawPrimary : "gemini-3.1-pro-preview";
   const pool = [
     primary,
     "gemini-3.1-pro-preview",
     "gemini-2.5-pro",
     "gemini-2.5-flash",
-  ].filter((x): x is string => Boolean(x));
+    "gemini-2.0-flash-lite",
+  ].filter((x): x is string => Boolean(x) && !isDeprecatedTextModel(x));
   return [...new Set(pool)];
+}
+
+/** 주 키 + (선택) GEMINI_API_KEY_FALLBACK — 선불 크레딧 소진 시 백업 키로 재시도 */
+export function geminiApiKeyCandidates(): string[] {
+  const keys = [
+    process.env.GEMINI_API_KEY?.trim(),
+    process.env.GEMINI_API_KEY_FALLBACK?.trim(),
+  ].filter((x): x is string => Boolean(x));
+  return [...new Set(keys)];
 }
 
 /** 이미지 생성·편집 REST 호출 시 모델 후보 (앞에서부터 시도). GEMINI_IMAGE_MODEL이 있으면 최우선. */
@@ -90,10 +106,34 @@ export function rethrowIfInvalidApiKey(e: unknown): void {
 }
 
 export function getKey(): string | undefined {
-  return process.env.GEMINI_API_KEY?.trim();
+  return geminiApiKeyCandidates()[0];
 }
 
 /** 브랜드 네이밍 등 Gemini 연동 가능 여부(루트 .env의 GEMINI_API_KEY) */
 export function hasGeminiApiKey(): boolean {
-  return Boolean(getKey());
+  return geminiApiKeyCandidates().length > 0;
+}
+
+export function isPrepaymentCreditsDepletedError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /prepayment credits are depleted|billing.*depleted|크레딧.*소진/i.test(msg);
+}
+
+/** 사용자-facing Gemini 실패 메시지 (한국어) */
+export function formatGeminiFailureMessage(e: unknown): string {
+  if (isPrepaymentCreditsDepletedError(e)) {
+    return (
+      "Gemini API 선불 크레딧이 소진되었습니다. " +
+      "https://aistudio.google.com/apikey 에서 결제·크레딧을 충전하거나 새 API 키를 발급해 " +
+      ".env의 GEMINI_API_KEY(또는 GEMINI_API_KEY_FALLBACK)에 넣은 뒤 서버를 재시작해 주세요."
+    );
+  }
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/429|Too Many Requests|quota|RESOURCE_EXHAUSTED|rate limit/i.test(msg)) {
+    return (
+      "Gemini API 사용 한도에 도달했습니다. 잠시 후 다시 시도하거나 " +
+      "AI Studio에서 할당량·결제 상태를 확인해 주세요."
+    );
+  }
+  return msg;
 }
