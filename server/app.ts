@@ -25,7 +25,11 @@ import {
   summarizeGuidelineFile,
   type DesignEditorTextSuggestionTarget
 } from "./gemini.js";
-import { copyFixedGuidelineToSlot, FIXED_GUIDELINE_SOURCES } from "./fixedGuidelines.js";
+import {
+  copyFixedGuidelineToSlot,
+  ensureFixedGuidelineSlot,
+  FIXED_GUIDELINE_SOURCES
+} from "./fixedGuidelines.js";
 import { extractPdfTextFromBase64, runSimplyHeartStep } from "./simplyHeart.js";
 import { buildExternalNamingReferences } from "./namingExternalContext.js";
 import { resolveLawApiOc, searchLawsJson } from "./lawApi.js";
@@ -102,6 +106,14 @@ app.use(express.json({ limit: "50mb" }));
 
 ensureDataDirs();
 
+for (const id of ["uplus-brand-guideline", "uplus-vi-guideline"] as const) {
+  try {
+    ensureFixedGuidelineSlot(id);
+  } catch {
+    /* 디자인 에디터 검수·교정용 PDF 슬롯 — 실패해도 서버 기동은 계속 */
+  }
+}
+
 /** 검수·에이전트 채팅용: 선택된 참조 가이드라인 슬롯의 본문(요약/발췌) */
 async function buildPrimaryGuidelineBlock(guidelineId: string, queryText?: string): Promise<string> {
   let g = getGuideline(guidelineId);
@@ -159,13 +171,15 @@ async function buildMandatoryViPdfContextForDesignEditor(
   guidelineId: string,
   queryText?: string
 ): Promise<{ ok: true; block: string } | { ok: false; error: string; status: number }> {
-  const g = getGuideline(guidelineId);
+  const g = ensureFixedGuidelineSlot(guidelineId);
   if (!g) {
+    const known = FIXED_GUIDELINE_SOURCES[guidelineId];
     return {
       ok: false,
       status: 400,
-      error:
-        "VI 가이드라인 PDF가 등록되어 있지 않습니다. 브랜드 검수 화면에서 PDF 가이드를 동기화·업로드한 뒤 다시 시도해 주세요."
+      error: known
+        ? `VI 가이드라인 PDF("${known.displayName}")를 서버에서 불러오지 못했습니다. 레포에 고정 PDF가 포함되어 있는지 확인해 주세요.`
+        : "VI 가이드라인 PDF가 등록되어 있지 않습니다. 브랜드 검수 화면에서 PDF 가이드를 동기화·업로드한 뒤 다시 시도해 주세요."
     };
   }
   if (g.mimeType !== "application/pdf") {
@@ -1329,7 +1343,10 @@ app.post("/api/design-editor/correct-canvas", async (req, res) => {
     });
 
     if (!out) {
-      res.status(503).json({ error: "correction_failed" });
+      res.status(503).json({
+        error:
+          "교정 이미지 생성에 실패했습니다. GEMINI_API_KEY와 GEMINI_IMAGE_MODEL(또는 gemini-3.1-flash-image-preview 등 이미지 모델) 설정을 확인해 주세요."
+      });
       return;
     }
 

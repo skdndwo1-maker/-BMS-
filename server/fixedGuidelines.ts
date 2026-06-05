@@ -83,3 +83,22 @@ export function copyFixedGuidelineToSlot(id: string): GuidelineRecord {
   setGuideline(record);
   return record;
 }
+
+/** 슬롯이 비어 있거나 파일이 없으면 레포 고정 PDF로 자동 동기화 (Railway 등 fresh deploy 대응) */
+export function ensureFixedGuidelineSlot(id: string): GuidelineRecord | null {
+  let g = getGuideline(id);
+  const fileMissing =
+    !g?.storedRelativePath || !existsSync(resolveStoredPath(g.storedRelativePath));
+  const notPdf = g != null && g.mimeType !== "application/pdf";
+  if ((fileMissing || notPdf) && FIXED_GUIDELINE_SOURCES[id]) {
+    try {
+      g = copyFixedGuidelineToSlot(id);
+    } catch (e) {
+      console.error(
+        `[guideline] ensureFixedGuidelineSlot(${id}):`,
+        e instanceof Error ? e.message : String(e)
+      );
+    }
+  }
+  return g ?? null;
+}
