@@ -10,9 +10,11 @@ import {
   Signpost,
   Presentation,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { templates as designTemplates, templateCategories } from "@/design/templates";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 import { GlobalBrandNav } from "@/components/GlobalBrandNav";
+import { InspectionSectionTitle } from "@/components/InspectionSectionTitle";
 
 type MediaType = "online" | "offline";
 
@@ -180,6 +182,40 @@ export function TemplateGallery() {
             boxShadow: PAL.shadow,
           }}
         >
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              marginBottom: 16,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+              <InspectionSectionTitle>제작물유형</InspectionSectionTitle>
+            </div>
+            <div className="flex shrink-0 items-center gap-2 sm:ml-auto" role="group" aria-label="브랜드 디자인 모드">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 rounded-full border-transparent bg-black px-4 text-white shadow-[0_4px_12px_-4px_rgba(0,0,0,0.25)] hover:bg-black/90"
+              >
+                디자인 제작
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 rounded-full border-[rgba(0,0,0,0.1)] bg-white text-[#6B6B6B]"
+                onClick={() => navigate("/inspection")}
+              >
+                디자인 검수
+              </Button>
+            </div>
+          </div>
+
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
               {(["online", "offline"] as const).map((m) => {
