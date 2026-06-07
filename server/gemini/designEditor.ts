@@ -630,9 +630,8 @@ ${direction}`;
       const raw = (await model.generateContent(prompt)).response.text();
       const parsed = JSON.parse(raw) as unknown;
       const alternatives = parseAssetAlternatives(parsed);
-      if (alternatives.length >= 3) return { alternatives: alternatives.slice(0, 3) };
-      if (alternatives.length > 0) {
-        console.warn("[gemini] asset generation returned fewer than 3 alternatives", alternatives.length);
+      if (alternatives.length >= 1) {
+        return { alternatives: alternatives.slice(0, 3) };
       }
     } catch (e) {
       rethrowIfInvalidApiKey(e);

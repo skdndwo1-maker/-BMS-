@@ -33,7 +33,6 @@ import {
   AiAssetAlternativesDialog,
   type AiAssetAlternative,
 } from "@/components/design/AiAssetAlternativesDialog";
-import { MyGeneratedAssetsPanel } from "@/components/design/MyGeneratedAssetsPanel";
 import { generateDesignAsset } from "@/lib/designEditorApi";
 import {
   deleteUserGeneratedAsset,
@@ -197,6 +196,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const [myIllustAssets, setMyIllustAssets] = useState<UserGeneratedAsset[]>([]);
   const [myPictoAssets, setMyPictoAssets] = useState<UserGeneratedAsset[]>([]);
   const [myAssetsLoading, setMyAssetsLoading] = useState(false);
+  const [myAssetsSaveError, setMyAssetsSaveError] = useState<string | null>(null);
 
   /** 우측 패널 내부만 스크롤 — window/document scrollIntoView 시 하단 회색 띠 유발 방지 */
   const scrollPanelSection = useCallback((el: HTMLElement | null) => {
@@ -389,7 +389,10 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
       direction: string;
       illustrationStyle?: "2d" | "3d";
     }) => {
-      if (!sb || !user) return;
+      if (!sb || !user) {
+        setMyAssetsSaveError("로그인해야 「내가 생성한 Asset」에 저장됩니다. (캔버스 추가는 완료됨)");
+        return;
+      }
       try {
         await saveUserGeneratedAssetForCurrentUser(sb, {
           assetType: args.assetType,
@@ -398,8 +401,15 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           generationDirection: args.direction,
           illustrationStyle: args.illustrationStyle ?? null,
         });
+        setMyAssetsSaveError(null);
         await refreshMyGeneratedAssets();
       } catch (e) {
+        const raw = e instanceof Error ? e.message : "";
+        const msg =
+          raw === "not_logged_in"
+            ? "로그인 세션이 만료되었습니다. 다시 로그인해 주세요."
+            : raw || "에셋 저장에 실패했습니다.";
+        setMyAssetsSaveError(msg);
         console.warn("[myGeneratedAssets] save failed", e);
       }
     },
@@ -723,15 +733,10 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
             </Button>
           </div>
           {illustAiError ? <p className="text-[10px] text-red-500">{illustAiError}</p> : null}
+          {illustAiBusy ? (
+            <p className="text-[10px] text-gray-500">AI 생성 중… 1~2분 걸릴 수 있습니다.</p>
+          ) : null}
         </div>
-        <MyGeneratedAssetsPanel
-          assetType="illustration"
-          items={myIllustAssets}
-          loading={myAssetsLoading}
-          loggedIn={Boolean(user)}
-          onUse={(item) => appendGeneratedAsset("illustration", item.name, item.src)}
-          onDelete={(id) => void handleDeleteMyGeneratedAsset(id)}
-        />
       </div>
 
       {/* 픽토그램 (RCS에서는 옵션 제거) */}
@@ -765,16 +770,17 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               AI 생성
             </Button>
             {pictoAiError ? <p className="text-[10px] text-red-500">{pictoAiError}</p> : null}
+            {pictoAiBusy ? (
+              <p className="text-[10px] text-gray-500">AI 생성 중… 1~2분 걸릴 수 있습니다.</p>
+            ) : null}
           </div>
-          <MyGeneratedAssetsPanel
-            assetType="pictogram"
-            items={myPictoAssets}
-            loading={myAssetsLoading}
-            loggedIn={Boolean(user)}
-            onUse={(item) => appendGeneratedAsset("pictogram", item.name, item.src)}
-            onDelete={(id) => void handleDeleteMyGeneratedAsset(id)}
-          />
         </div>
+      ) : null}
+
+      {myAssetsSaveError ? (
+        <p className="text-[10px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-2.5 py-2">
+          {myAssetsSaveError}
+        </p>
       ) : null}
 
       {/* 업로드된 에셋 목록 */}
@@ -826,12 +832,20 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         />
         <AssetPresetPickerDialog
           open={illustDialogOpen}
-          onOpenChange={setIllustDialogOpen}
+          onOpenChange={(open) => {
+            setIllustDialogOpen(open);
+            if (open) void refreshMyGeneratedAssets();
+          }}
           title="일러스트 선택"
           presets={ILLUSTRATION_PRESETS}
           presets3d={ILLUSTRATION_3D_PRESETS}
           filterPresets={filterAssetPresets}
           layout="illu"
+          myGeneratedItems={myIllustAssets}
+          myGeneratedLoading={myAssetsLoading}
+          loggedIn={Boolean(user)}
+          saveError={myAssetsSaveError}
+          onDeleteMyGenerated={(id) => void handleDeleteMyGeneratedAsset(id)}
           onPick={(p) => {
             const layer = createAssetLayer(p.src, "illustration", p.name);
             onContentChange({ ...content, assetLayers: [...assetLayers, layer] });
@@ -841,11 +855,19 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         />
         <AssetPresetPickerDialog
           open={pictoDialogOpen}
-          onOpenChange={setPictoDialogOpen}
+          onOpenChange={(open) => {
+            setPictoDialogOpen(open);
+            if (open) void refreshMyGeneratedAssets();
+          }}
           title="픽토그램 선택"
           presets={PICTOGRAM_PRESETS}
           filterPresets={filterAssetPresets}
           layout="picto"
+          myGeneratedItems={myPictoAssets}
+          myGeneratedLoading={myAssetsLoading}
+          loggedIn={Boolean(user)}
+          saveError={myAssetsSaveError}
+          onDeleteMyGenerated={(id) => void handleDeleteMyGeneratedAsset(id)}
           onPick={(p) => {
             const layer = createAssetLayer(p.src, "pictogram", p.name);
             onContentChange({ ...content, assetLayers: [...assetLayers, layer] });
@@ -1688,12 +1710,43 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
       />
       {aiAlternativesDialog}
       <AssetPresetPickerDialog
+        open={illustDialogOpen}
+        onOpenChange={(open) => {
+          setIllustDialogOpen(open);
+          if (open) void refreshMyGeneratedAssets();
+        }}
+        title="일러스트 선택"
+        presets={ILLUSTRATION_PRESETS}
+        presets3d={ILLUSTRATION_3D_PRESETS}
+        filterPresets={filterAssetPresets}
+        layout="illu"
+        myGeneratedItems={myIllustAssets}
+        myGeneratedLoading={myAssetsLoading}
+        loggedIn={Boolean(user)}
+        saveError={myAssetsSaveError}
+        onDeleteMyGenerated={(id) => void handleDeleteMyGeneratedAsset(id)}
+        onPick={(p) => {
+          const layer = createAssetLayer(p.src, "illustration", p.name);
+          onContentChange({ ...content, assetLayers: [...assetLayers, layer] });
+          setIllustDialogOpen(false);
+        }}
+        onDropFiles={(files) => onAssetDrop(files, "illustration")}
+      />
+      <AssetPresetPickerDialog
         open={pictoDialogOpen}
-        onOpenChange={setPictoDialogOpen}
+        onOpenChange={(open) => {
+          setPictoDialogOpen(open);
+          if (open) void refreshMyGeneratedAssets();
+        }}
         title="픽토그램 선택"
         presets={PICTOGRAM_PRESETS}
         filterPresets={filterAssetPresets}
         layout="picto"
+        myGeneratedItems={myPictoAssets}
+        myGeneratedLoading={myAssetsLoading}
+        loggedIn={Boolean(user)}
+        saveError={myAssetsSaveError}
+        onDeleteMyGenerated={(id) => void handleDeleteMyGeneratedAsset(id)}
         onPick={(p) => {
           const layer = createAssetLayer(p.src, "pictogram", p.name);
           onContentChange({ ...content, assetLayers: [...assetLayers, layer] });

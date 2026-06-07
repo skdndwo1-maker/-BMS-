@@ -50,7 +50,7 @@ export function AiAssetAlternativesDialog({
         <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
           <div>
             <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-            <p className="text-[11px] text-gray-500 mt-0.5">AI가 제안한 {typeLabel} 대안 3개 중 선택하세요</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">AI가 제안한 {typeLabel} 대안 중 선택하세요</p>
           </div>
           <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => onOpenChange(false)}>
             닫기
