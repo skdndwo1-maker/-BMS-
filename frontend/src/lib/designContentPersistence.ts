@@ -2,8 +2,6 @@ import type { AssetLayer, DesignContent } from "@/design/types";
 
 const MEDIA_FILE_KEYS = ["image", "logo", "ciImage", "biImage", "sloganImage", "partnerLogo"] as const;
 
-type MediaFileKey = (typeof MEDIA_FILE_KEYS)[number];
-
 export function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
