@@ -519,6 +519,21 @@ function runGeminiImageGenerateWithMultiParts(parts: GeminiImageUserPart[]): Pro
   })();
 }
 
+/** 텍스트 프롬프트만으로 브랜드용 이미지 1장 생성 */
+export async function generateImageFromTextPrompt(
+  prompt: string
+): Promise<{ mimeType: string; base64: string; caption: string } | null> {
+  const json = await runGeminiImageGenerateWithMultiParts([{ text: prompt }]);
+  if (!json) return null;
+  const extracted = extractTextAndImageFromGeminiResponse(json);
+  if (!extracted) return null;
+  return {
+    mimeType: extracted.mimeType,
+    base64: extracted.base64,
+    caption: extracted.text || "이미지가 생성되었습니다.",
+  };
+}
+
 function sanitizeRevisionDirectiveText(raw: string): string {
   let s = raw.trim();
   s = s.replace(/^```[\w]*\s*\n?/m, "").replace(/\n?```\s*$/m, "");

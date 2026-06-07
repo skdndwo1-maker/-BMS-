@@ -30,6 +30,7 @@ export {
   runDesignEditorTextSuggestion,
   runDesignEditorCanvasVisualCorrection,
   runDesignEditorAssetGeneration,
+  runDesignEditorImageGeneration,
   type DesignEditorViolationRow,
   type DesignEditorTextSuggestionTarget,
   type DesignEditorAssetKind,

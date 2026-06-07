@@ -21,6 +21,7 @@ import {
   runDesignEditorCanvasVisualCorrection,
   runDesignEditorTextSuggestion,
   runDesignEditorAssetGeneration,
+  runDesignEditorImageGeneration,
   runInspectionWithGemini,
   runOptionsPageChat,
   summarizeGuidelineFile,
@@ -1304,7 +1305,9 @@ app.post("/api/design-editor/suggest-text", async (req, res) => {
 app.post("/api/design-editor/generate-asset", async (req, res) => {
   try {
     const direction = typeof req.body?.direction === "string" ? req.body.direction.trim() : "";
-    const assetKind = req.body?.assetKind === "pictogram" ? "pictogram" : "illustration";
+    const assetKindRaw = req.body?.assetKind;
+    const assetKind =
+      assetKindRaw === "pictogram" ? "pictogram" : assetKindRaw === "image" ? "image" : "illustration";
     const illustrationStyle = req.body?.illustrationStyle === "3d" ? "3d" : "2d";
     const templateLabel = String(req.body?.templateLabel ?? "template");
     const creativeTopic =
@@ -1319,16 +1322,28 @@ app.post("/api/design-editor/generate-asset", async (req, res) => {
       return;
     }
 
-    const out = await runDesignEditorAssetGeneration({
-      assetKind,
-      illustrationStyle: assetKind === "illustration" ? illustrationStyle : undefined,
-      direction,
-      templateLabel,
-      creativeTopic: creativeTopic || undefined,
-    });
+    const out =
+      assetKind === "image"
+        ? await runDesignEditorImageGeneration({
+            direction,
+            templateLabel,
+            creativeTopic: creativeTopic || undefined,
+          })
+        : await runDesignEditorAssetGeneration({
+            assetKind,
+            illustrationStyle: assetKind === "illustration" ? illustrationStyle : undefined,
+            direction,
+            templateLabel,
+            creativeTopic: creativeTopic || undefined,
+          });
 
     if (!out || out.alternatives.length === 0) {
-      res.status(503).json({ error: "에셋 생성에 실패했습니다. 생성방향을 조금 더 구체적으로 입력해 보세요." });
+      res.status(503).json({
+        error:
+          assetKind === "image"
+            ? "이미지 생성에 실패했습니다. GEMINI_IMAGE_MODEL 설정과 생성방향을 확인해 주세요."
+            : "에셋 생성에 실패했습니다. 생성방향을 조금 더 구체적으로 입력해 보세요.",
+      });
       return;
     }
 
@@ -1349,7 +1364,10 @@ app.post("/api/design-editor/generate-asset", async (req, res) => {
       },
       inputText: direction,
       outputText: out.alternatives.map((a) => a.name).join(", "),
-      model: process.env.GEMINI_MODEL?.trim() || null,
+      model:
+        assetKind === "image"
+          ? process.env.GEMINI_IMAGE_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || null
+          : process.env.GEMINI_MODEL?.trim() || null,
     });
 
     res.json({ ok: true, alternatives: out.alternatives });

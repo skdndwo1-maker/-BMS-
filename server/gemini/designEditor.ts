@@ -6,7 +6,7 @@ import {
   shouldTryNextTextModel,
   textModelCandidates,
 } from "./shared.js";
-import { generateRevisedBrandingImage } from "./inspection.js";
+import { generateImageFromTextPrompt, generateRevisedBrandingImage } from "./inspection.js";
 
 /** 브랜드 제작(디자인 에디터) 캔버스 — 위반 항목별 수정 힌트 포함 */
 const designEditorInspectionSchema = {
@@ -641,5 +641,64 @@ ${direction}`;
     }
   }
   console.warn("[gemini] asset generation failed", lastErr);
+  return null;
+}
+
+const IMAGE_VARIANT_HINTS = [
+  "와이드 구도, 넓은 여백, 주 피사체 좌측·중앙 배치",
+  "클로즈업 구도, 선명한 포커스, 중앙 배치",
+  "대각선·역동적 구도, 그라데이션·소프트 배경",
+] as const;
+
+/**
+ * 디자인 에디터: 사용자 생성방향에 맞는 브랜드 마케팅 이미지 생성 (PNG/JPEG)
+ */
+export async function runDesignEditorImageGeneration(opts: {
+  direction: string;
+  templateLabel?: string;
+  creativeTopic?: string;
+}): Promise<{ alternatives: Array<{ name: string; mimeType: string; base64: string }> } | null> {
+  const direction = opts.direction.trim();
+  if (!direction || !getKey()) return null;
+
+  const alternatives: Array<{ name: string; mimeType: string; base64: string }> = [];
+
+  for (let i = 0; i < IMAGE_VARIANT_HINTS.length; i++) {
+    const variantHint = IMAGE_VARIANT_HINTS[i];
+    const prompt = `역할: LG U+ 브랜드 마케팅·디자인 템플릿용 고품질 히어로/배경 이미지 생성 전문가.
+
+작업: 아래 [생성방향]에 맞는 **마케팅 이미지 1장**을 생성하세요. (대안 ${i + 1}/3 — ${variantHint})
+
+[브랜드 스타일]
+- LG U+ 마젠타 포인트 #F43182, 파스텔 핑크·보라 보조
+- 깔끔하고 현대적인 한국 통신·IT 브랜드 톤
+- 과도한 텍스트·워터마크·로고 삽입 금지 (이미지는 비주얼만)
+- 실사·일러스트 혼합 가능, 캠페인 배너·포스터에 어울리는 품질
+
+템플릿: ${opts.templateLabel ?? "template"}
+${opts.creativeTopic?.trim() ? `\n[제작 주제]\n${opts.creativeTopic.trim()}\n` : ""}
+[생성방향]
+${direction}
+
+[구도 가이드]
+${variantHint}`;
+
+    try {
+      const result = await generateImageFromTextPrompt(prompt);
+      if (result) {
+        alternatives.push({
+          name: `대안${i + 1}`,
+          mimeType: result.mimeType,
+          base64: result.base64,
+        });
+      }
+    } catch (e) {
+      console.warn(`[gemini] image generation variant ${i + 1} failed`, e);
+    }
+  }
+
+  if (alternatives.length >= 1) {
+    return { alternatives: alternatives.slice(0, 3) };
+  }
   return null;
 }

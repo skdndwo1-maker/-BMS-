@@ -2,7 +2,13 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import type { AssetType } from "@/design/types";
 
-export type AiAssetAlternative = { name: string; src: string; svg: string };
+export type AiAssetAlternative = {
+  name: string;
+  src: string;
+  svg?: string;
+  mimeType?: string;
+  imageBase64?: string;
+};
 
 type Props = {
   open: boolean;
@@ -34,7 +40,9 @@ export function AiAssetAlternativesDialog({
 
   if (!open || alternatives.length === 0) return null;
 
-  const typeLabel = assetType === "pictogram" ? "픽토그램" : "일러스트";
+  const typeLabel =
+    assetType === "pictogram" ? "픽토그램" : assetType === "image" ? "이미지" : "일러스트";
+  const isImage = assetType === "image";
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -68,8 +76,16 @@ export function AiAssetAlternativesDialog({
                 }}
                 className="group flex flex-col items-center gap-2 rounded-xl border border-gray-200 bg-white p-3 hover:border-[#FF7F66] hover:bg-[#FF7F66]/5 transition-colors"
               >
-                <span className="flex h-20 w-full items-center justify-center rounded-lg bg-gray-50">
-                  <img src={item.src} alt={item.name} className="h-14 w-full object-contain" />
+                <span
+                  className={`flex w-full items-center justify-center rounded-lg bg-gray-50 ${
+                    isImage ? "h-28 overflow-hidden" : "h-20"
+                  }`}
+                >
+                  <img
+                    src={item.src}
+                    alt={item.name}
+                    className={isImage ? "h-full w-full object-cover" : "h-14 w-full object-contain"}
+                  />
                 </span>
                 <span className="w-full truncate text-[11px] font-semibold text-gray-700 group-hover:text-[#FF7F66]">
                   대안 {idx + 1} · {item.name}
@@ -77,7 +93,7 @@ export function AiAssetAlternativesDialog({
               </button>
             ))}
           </div>
-          {onPickAll ? (
+          {onPickAll && !isImage ? (
             <Button type="button" variant="outline" className="w-full text-xs" onClick={onPickAll}>
               3개 모두 캔버스에 추가
             </Button>

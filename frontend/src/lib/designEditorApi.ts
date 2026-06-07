@@ -150,10 +150,16 @@ export async function replaceDesignImage(body: {
   return { mimeType: data.mimeType, data: data.data };
 }
 
-export type GeneratedDesignAssetAlternative = { name: string; svg: string };
+export type GeneratedDesignSvgAlternative = { name: string; svg: string };
+export type GeneratedDesignImageAlternative = { name: string; mimeType: string; base64: string };
+export type GeneratedDesignAssetAlternative = GeneratedDesignSvgAlternative | GeneratedDesignImageAlternative;
+
+function isSvgAlternative(item: GeneratedDesignAssetAlternative): item is GeneratedDesignSvgAlternative {
+  return "svg" in item && typeof item.svg === "string";
+}
 
 export async function generateDesignAsset(body: {
-  assetKind: "pictogram" | "illustration";
+  assetKind: "pictogram" | "illustration" | "image";
   illustrationStyle?: "2d" | "3d";
   direction: string;
   templateLabel?: string;
@@ -172,9 +178,23 @@ export async function generateDesignAsset(body: {
     .map((item) => {
       if (!item || typeof item !== "object") return null;
       const name = typeof (item as { name?: unknown }).name === "string" ? (item as { name: string }).name : "";
+      if (!name.trim()) return null;
       const svg = typeof (item as { svg?: unknown }).svg === "string" ? (item as { svg: string }).svg : "";
-      if (!name.trim() || !svg.trim()) return null;
-      return { name: name.trim(), svg: svg.trim() };
+      if (svg.trim()) return { name: name.trim(), svg: svg.trim() } satisfies GeneratedDesignSvgAlternative;
+      const mimeType =
+        typeof (item as { mimeType?: unknown }).mimeType === "string"
+          ? (item as { mimeType: string }).mimeType
+          : "";
+      const base64 =
+        typeof (item as { base64?: unknown }).base64 === "string" ? (item as { base64: string }).base64 : "";
+      if (mimeType.trim() && base64.trim()) {
+        return {
+          name: name.trim(),
+          mimeType: mimeType.trim(),
+          base64: base64.trim(),
+        } satisfies GeneratedDesignImageAlternative;
+      }
+      return null;
     })
     .filter((x): x is GeneratedDesignAssetAlternative => x != null);
   if (alternatives.length === 0) {
@@ -182,3 +202,5 @@ export async function generateDesignAsset(body: {
   }
   return { alternatives };
 }
+
+export { isSvgAlternative };

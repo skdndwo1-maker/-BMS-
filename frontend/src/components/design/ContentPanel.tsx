@@ -33,14 +33,17 @@ import {
   AiAssetAlternativesDialog,
   type AiAssetAlternative,
 } from "@/components/design/AiAssetAlternativesDialog";
-import { generateDesignAsset } from "@/lib/designEditorApi";
+import { generateDesignAsset, isSvgAlternative } from "@/lib/designEditorApi";
 import {
+  base64ToDataUri,
+  dataUriToFile,
   deleteUserGeneratedAsset,
   listUserGeneratedAssets,
   saveUserGeneratedAssetForCurrentUser,
   svgToDataUri,
   type UserGeneratedAsset,
 } from "@/lib/userGeneratedAssetsApi";
+import { MyGeneratedImagePickerDialog } from "@/components/design/MyGeneratedImagePickerDialog";
 import { useAuthSession } from "@/contexts/AuthSessionContext";
 import { CoralTitleMarker } from "@/components/InspectionSectionTitle";
 import { resolveRcsMessageBackground } from "@/components/design/RCSCanvas";
@@ -192,9 +195,14 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const [pictoAiBusy, setPictoAiBusy] = useState(false);
   const [illustAiError, setIllustAiError] = useState<string | null>(null);
   const [pictoAiError, setPictoAiError] = useState<string | null>(null);
+  const [imageAiDirection, setImageAiDirection] = useState("");
+  const [imageAiBusy, setImageAiBusy] = useState(false);
+  const [imageAiError, setImageAiError] = useState<string | null>(null);
+  const [myImagePickerOpen, setMyImagePickerOpen] = useState(false);
   const [aiAltDialog, setAiAltDialog] = useState<AiAltDialogState | null>(null);
   const [myIllustAssets, setMyIllustAssets] = useState<UserGeneratedAsset[]>([]);
   const [myPictoAssets, setMyPictoAssets] = useState<UserGeneratedAsset[]>([]);
+  const [myImageAssets, setMyImageAssets] = useState<UserGeneratedAsset[]>([]);
   const [myAssetsLoading, setMyAssetsLoading] = useState(false);
   const [myAssetsSaveError, setMyAssetsSaveError] = useState<string | null>(null);
 
@@ -359,16 +367,19 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     if (!sb || !user) {
       setMyIllustAssets([]);
       setMyPictoAssets([]);
+      setMyImageAssets([]);
       return;
     }
     setMyAssetsLoading(true);
     try {
-      const [ill, pic] = await Promise.all([
+      const [ill, pic, img] = await Promise.all([
         listUserGeneratedAssets(sb, { userId: user.id, assetType: "illustration", limit: 60 }),
         listUserGeneratedAssets(sb, { userId: user.id, assetType: "pictogram", limit: 60 }),
+        listUserGeneratedAssets(sb, { userId: user.id, assetType: "image", limit: 60 }),
       ]);
       setMyIllustAssets(ill);
       setMyPictoAssets(pic);
+      setMyImageAssets(img);
     } catch (e) {
       console.warn("[myGeneratedAssets] load failed", e);
     } finally {
@@ -385,21 +396,29 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     async (args: {
       assetType: AssetType;
       name: string;
-      svg: string;
       direction: string;
       illustrationStyle?: "2d" | "3d";
+      svg?: string;
+      imageMime?: string;
+      imageBase64?: string;
     }) => {
       if (!sb || !user) {
-        setMyAssetsSaveError("로그인해야 「내가 생성한 Asset」에 저장됩니다. (캔버스 추가는 완료됨)");
+        setMyAssetsSaveError(
+          args.assetType === "image"
+            ? "로그인해야 「내 AI 이미지」에 저장됩니다. (캔버스 적용은 완료됨)"
+            : "로그인해야 「내가 생성한 Asset」에 저장됩니다. (캔버스 추가는 완료됨)",
+        );
         return;
       }
       try {
         await saveUserGeneratedAssetForCurrentUser(sb, {
           assetType: args.assetType,
           name: args.name,
-          svgContent: args.svg,
           generationDirection: args.direction,
           illustrationStyle: args.illustrationStyle ?? null,
+          svgContent: args.svg,
+          imageMime: args.imageMime,
+          imageBase64: args.imageBase64,
         });
         setMyAssetsSaveError(null);
         await refreshMyGeneratedAssets();
@@ -429,21 +448,45 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     [refreshMyGeneratedAssets, sb, user],
   );
 
+  const applyGeneratedImage = useCallback(
+    async (name: string, dataUri: string) => {
+      const safeName = name.replace(/\s+/g, "_").slice(0, 40) || "ai-image";
+      const ext = dataUri.includes("image/jpeg") ? "jpg" : "png";
+      const file = await dataUriToFile(dataUri, `${safeName}.${ext}`);
+      onContentChange((prev) => ({
+        ...prev,
+        image: file,
+        posterBackgroundImageRect: prev.posterBackgroundImageRect ?? DEFAULT_POSTER_BG_RECT,
+        posterImageOpacity: 100,
+        posterImagePosX: 50,
+        posterImagePosY: 50,
+      }));
+      setImagePreview(dataUri);
+    },
+    [onContentChange],
+  );
+
   const showAiAlternatives = useCallback(
     (
       assetType: AssetType,
-      items: Array<{ name: string; svg: string }>,
+      items: import("@/lib/designEditorApi").GeneratedDesignAssetAlternative[],
       meta: { direction: string; illustrationStyle?: "2d" | "3d" },
     ) => {
       setAiAltDialog({
         assetType,
         direction: meta.direction,
         illustrationStyle: meta.illustrationStyle,
-        alternatives: items.map((item) => ({
-          name: item.name,
-          svg: item.svg,
-          src: svgToDataUri(item.svg),
-        })),
+        alternatives: items.map((item) => {
+          if (isSvgAlternative(item)) {
+            return { name: item.name, svg: item.svg, src: svgToDataUri(item.svg) };
+          }
+          return {
+            name: item.name,
+            mimeType: item.mimeType,
+            imageBase64: item.base64,
+            src: base64ToDataUri(item.mimeType, item.base64),
+          };
+        }),
       });
     },
     [],
@@ -464,9 +507,11 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
       void persistMyGeneratedAsset({
         assetType,
         name: item.name,
-        svg: item.svg,
         direction,
         illustrationStyle,
+        svg: item.svg,
+        imageMime: item.mimeType,
+        imageBase64: item.imageBase64,
       });
     }
     setAiAltDialog(null);
@@ -531,29 +576,124 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     templateMeta?.name,
   ]);
 
+  const runImageAiGenerate = useCallback(async () => {
+    const direction = imageAiDirection.trim();
+    if (!direction || imageAiBusy) return;
+    setImageAiBusy(true);
+    setImageAiError(null);
+    try {
+      const out = await generateDesignAsset({
+        assetKind: "image",
+        direction,
+        templateLabel: templateMeta?.name ?? templateId ?? "template",
+        creativeTopic: content.title?.trim() || undefined,
+      });
+      showAiAlternatives("image", out.alternatives, { direction });
+    } catch (e) {
+      setImageAiError(e instanceof Error ? e.message : "이미지 생성에 실패했습니다.");
+    } finally {
+      setImageAiBusy(false);
+    }
+  }, [
+    content.title,
+    imageAiBusy,
+    imageAiDirection,
+    showAiAlternatives,
+    templateId,
+    templateMeta?.name,
+  ]);
+
+  const aiAltTitle =
+    aiAltDialog?.assetType === "pictogram"
+      ? "AI 픽토그램 대안"
+      : aiAltDialog?.assetType === "image"
+        ? "AI 이미지 대안"
+        : "AI 일러스트 대안";
+
   const aiAlternativesDialog = (
     <AiAssetAlternativesDialog
       open={aiAltDialog != null}
       onOpenChange={(open) => {
         if (!open) setAiAltDialog(null);
       }}
-      title={aiAltDialog?.assetType === "pictogram" ? "AI 픽토그램 대안" : "AI 일러스트 대안"}
+      title={aiAltTitle}
       assetType={aiAltDialog?.assetType ?? "illustration"}
       alternatives={aiAltDialog?.alternatives ?? []}
       onPick={(item) => {
         if (!aiAltDialog) return;
-        appendGeneratedAsset(aiAltDialog.assetType, item.name, item.src);
+        if (aiAltDialog.assetType === "image") {
+          void applyGeneratedImage(item.name, item.src);
+        } else {
+          appendGeneratedAsset(aiAltDialog.assetType, item.name, item.src);
+        }
         void persistMyGeneratedAsset({
           assetType: aiAltDialog.assetType,
           name: item.name,
-          svg: item.svg,
           direction: aiAltDialog.direction,
           illustrationStyle: aiAltDialog.illustrationStyle,
+          svg: item.svg,
+          imageMime: item.mimeType,
+          imageBase64: item.imageBase64,
         });
         setAiAltDialog(null);
       }}
-      onPickAll={pickAllAiAlternatives}
+      onPickAll={aiAltDialog?.assetType === "image" ? undefined : pickAllAiAlternatives}
     />
+  );
+
+  const myGeneratedImagePicker = (
+    <MyGeneratedImagePickerDialog
+      open={myImagePickerOpen}
+      onOpenChange={setMyImagePickerOpen}
+      items={myImageAssets}
+      loading={myAssetsLoading}
+      loggedIn={Boolean(user)}
+      saveError={myAssetsSaveError}
+      onPick={(item) => void applyGeneratedImage(item.name, item.src)}
+      onDelete={(id) => void handleDeleteMyGeneratedAsset(id)}
+    />
+  );
+
+  const imageAiBlock = (
+    <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-2.5 space-y-2">
+      <div className="flex items-end justify-between gap-2">
+        <Label className="text-[11px] font-semibold text-gray-600">AI 생성</Label>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 text-[11px]"
+          onClick={() => {
+            setMyImagePickerOpen(true);
+            void refreshMyGeneratedAssets();
+          }}
+        >
+          내 AI 이미지
+        </Button>
+      </div>
+      <Textarea
+        value={imageAiDirection}
+        onChange={(e) => setImageAiDirection(e.target.value)}
+        placeholder="생성방향 (예: 5G 속도를 표현하는 추상적 히어로 배경, 마젠타 포인트)"
+        className="min-h-[56px] text-xs resize-none bg-white"
+        disabled={imageAiBusy}
+        autoComplete="off"
+      />
+      <Button
+        type="button"
+        size="sm"
+        className="h-8 text-[12px] gap-1.5"
+        disabled={imageAiBusy || !imageAiDirection.trim()}
+        onClick={() => void runImageAiGenerate()}
+      >
+        {imageAiBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+        AI 생성
+      </Button>
+      {imageAiError ? <p className="text-[10px] text-red-500">{imageAiError}</p> : null}
+      {imageAiBusy ? (
+        <p className="text-[10px] text-gray-500">AI 생성 중… 3~5분 걸릴 수 있습니다.</p>
+      ) : null}
+    </div>
   );
 
   // ── 공통 컴포넌트 ─────────────────────────────────────────────────
@@ -876,6 +1016,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           onDropFiles={(files) => onAssetDrop(files, "pictogram")}
         />
         {aiAlternativesDialog}
+        {myGeneratedImagePicker}
         <div>
           <h2 className="font-semibold text-gray-900 mb-1">브랜드 디자인 콘텐츠</h2>
           <div className="flex flex-col gap-1 mt-1">
@@ -1567,6 +1708,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               </Button>
             </div>
           ) : null}
+          {imageAiBlock}
           <div className="pt-1">
             <input
               type="range"
@@ -1709,6 +1851,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         onChange={handleLogoFileChange}
       />
       {aiAlternativesDialog}
+      {myGeneratedImagePicker}
       <AssetPresetPickerDialog
         open={illustDialogOpen}
         onOpenChange={(open) => {
@@ -1834,6 +1977,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           <input {...getImageIP()} disabled={content.style==="basic"}/>
           {imagePreview&&content.style!=="basic"?(<div className="space-y-3"><img src={imagePreview} alt="Preview" className="max-h-32 mx-auto rounded"/><p className="text-sm text-gray-600">Click or drag to replace</p></div>):(<div className="space-y-3"><ImageIcon className="w-10 h-10 mx-auto text-gray-400"/><p className="text-sm font-medium text-gray-700">{content.style==="basic"?"이미지 업로드 불가 (Basic 스타일)":"Drop an image here, or click to browse"}</p></div>)}
         </div>
+        {content.style !== "basic" ? imageAiBlock : null}
       </div>
       {assetSection}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
