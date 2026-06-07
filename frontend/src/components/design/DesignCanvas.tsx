@@ -77,7 +77,7 @@ import {
   titleTextStyle,
   type CanvasTextEditTarget,
 } from "@/design/canvasTextTypography";
-import { measureTextBlock } from "@/design/measureCanvasText";
+import { measureAutoTextBox } from "@/design/measureCanvasText";
 
 /** 캔버스 빈 타이틀 플레이스홀더 — 높이 자동 계산·표시 문구와 동일해야 함 */
 const TITLE_PLACEHOLDER_TEXT = "메인 타이틀을 입력하세요";
@@ -294,6 +294,12 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
 
   /** 더블클릭 시에만 텍스트 내용 편집(textarea) */
   const [inlineEditTarget, setInlineEditTarget] = useState<CanvasTextEditTarget | null>(null);
+  /** 웹폰트 로드 후 텍스트 박스 자동 크기 재계산 */
+  const [fontReadyTick, setFontReadyTick] = useState(0);
+  useEffect(() => {
+    if (typeof document === "undefined" || !document.fonts?.ready) return;
+    void document.fonts.ready.then(() => setFontReadyTick((n) => n + 1));
+  }, []);
   const formatTarget = useMemo((): CanvasTextEditTarget | null => {
     if (selectedKeys.length !== 1) return null;
     return selectedKeyToFormatTarget(selectedKeys[0]);
@@ -1486,7 +1492,10 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     const tr = content.posterTitleRect ?? DEFAULT_POSTER_TITLE_RECT;
     const raw = content.title?.trim() ? content.title : TITLE_PLACEHOLDER_TEXT;
     const t = content.posterTitleTypography ?? {};
-    const m = measureTextBlock({
+    const padX = titleFontSize * 0.22;
+    const padY = titleFontSize * 0.45;
+    const maxWPx = displayW * 0.96;
+    const m = measureAutoTextBox({
       text: raw,
       fontPx: titleFontSize,
       fontWeight: t.fontWeight ?? 800,
@@ -1494,15 +1503,15 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       fontStyle: t.fontStyle ?? "normal",
       letterSpacingEm: t.letterSpacingEm ?? -0.025,
       lineHeight: t.lineHeight ?? 1.15,
+      padXPx: padX,
+      padYPx: padY,
+      maxBoxWidthPx: maxWPx,
     });
-    /** 박스 외곽선과 글자 사이 약간의 여유: 가장자리에서 글자가 잘리지 않도록 */
-    const padX = titleFontSize * 0.18;
-    const padY = titleFontSize * 0.4;
     const align = content.posterTitleAlign ?? "left";
     const next = fitNormalizedRect(
       tr,
-      m.widthPx + padX,
-      m.heightPx + padY,
+      m.boxWidthPx,
+      m.boxHeightPx,
       align === "center" ? "center" : align === "right" ? "right" : "left",
       {
         minWPx: Math.max(40, titleFontSize * 1.4),
@@ -1531,6 +1540,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     displayH,
     onContentDraftChange,
     fitNormalizedRect,
+    fontReadyTick,
   ]);
 
   useLayoutEffect(() => {
@@ -1541,7 +1551,10 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     if (!content.emphasizedTitle?.trim()) return;
     const fr = content.posterFooterRect ?? DEFAULT_POSTER_FOOTER_RECT;
     const t = content.posterFooterTypography ?? {};
-    const m = measureTextBlock({
+    const padX = disclaimerSize * 0.4;
+    const padY = disclaimerSize * 0.35;
+    const maxWPx = displayW * 0.96;
+    const m = measureAutoTextBox({
       text: content.emphasizedTitle,
       fontPx: disclaimerSize,
       fontWeight: t.fontWeight ?? 400,
@@ -1549,14 +1562,15 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       fontStyle: t.fontStyle ?? "normal",
       letterSpacingEm: t.letterSpacingEm ?? 0,
       lineHeight: t.lineHeight ?? 1.6,
+      padXPx: padX,
+      padYPx: padY,
+      maxBoxWidthPx: maxWPx,
     });
-    const padX = disclaimerSize * 0.4;
-    const padY = disclaimerSize * 0.3;
     const align = content.posterFooterAlign ?? "left";
     const next = fitNormalizedRect(
       fr,
-      m.widthPx + padX,
-      m.heightPx + padY,
+      m.boxWidthPx,
+      m.boxHeightPx,
       align === "center" ? "center" : align === "right" ? "right" : "left",
       {
         minWPx: Math.max(40, disclaimerSize * 4),
@@ -1585,6 +1599,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     displayH,
     onContentDraftChange,
     fitNormalizedRect,
+    fontReadyTick,
   ]);
 
   useLayoutEffect(() => {
@@ -1602,7 +1617,10 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         (b.id === "body-1" ? next.posterBodyRect : undefined) ??
         DEFAULT_POSTER_BODY_RECT;
       const t = next.posterBodyTypography?.[b.id] ?? {};
-      const m = measureTextBlock({
+      const padX = bodyFontSize * 0.32;
+      const padY = bodyFontSize * 0.28;
+      const maxWPx = displayW * 0.96;
+      const m = measureAutoTextBox({
         text: b.text,
         fontPx: bodyFontSize,
         fontWeight: t.fontWeight ?? 400,
@@ -1610,14 +1628,15 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         fontStyle: t.fontStyle ?? "normal",
         letterSpacingEm: t.letterSpacingEm ?? 0,
         lineHeight: t.lineHeight ?? 1.75,
+        padXPx: padX,
+        padYPx: padY,
+        maxBoxWidthPx: maxWPx,
       });
-      const padX = bodyFontSize * 0.32;
-      const padY = bodyFontSize * 0.2;
       const align = next.posterBodyAlign ?? "left";
       const fitted = fitNormalizedRect(
         br,
-        m.widthPx + padX,
-        m.heightPx + padY,
+        m.boxWidthPx,
+        m.boxHeightPx,
         align === "center" ? "center" : align === "right" ? "right" : "left",
         {
           minWPx: Math.max(40, bodyFontSize * 4),
@@ -1656,6 +1675,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     displayH,
     onContentDraftChange,
     fitNormalizedRect,
+    fontReadyTick,
   ]);
 
   useLayoutEffect(() => {
@@ -1678,7 +1698,10 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           ),
         };
       const t = next.posterSubtitleTypography?.[s.id] ?? {};
-      const m = measureTextBlock({
+      const padX = subtitleFontSize * 0.3;
+      const padY = subtitleFontSize * 0.28;
+      const maxWPx = displayW * 0.96;
+      const m = measureAutoTextBox({
         text: s.text,
         fontPx: subtitleFontSize,
         fontWeight: t.fontWeight ?? 680,
@@ -1686,14 +1709,15 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         fontStyle: t.fontStyle ?? "normal",
         letterSpacingEm: t.letterSpacingEm ?? -0.02,
         lineHeight: t.lineHeight ?? 1.35,
+        padXPx: padX,
+        padYPx: padY,
+        maxBoxWidthPx: maxWPx,
       });
-      const padX = subtitleFontSize * 0.3;
-      const padY = subtitleFontSize * 0.25;
       const align = getSubtitleAlign(next, s.id);
       const fitted = fitNormalizedRect(
         sr,
-        m.widthPx + padX,
-        m.heightPx + padY,
+        m.boxWidthPx,
+        m.boxHeightPx,
         align === "center" ? "center" : align === "right" ? "right" : "left",
         {
           minWPx: Math.max(40, subtitleFontSize * 3),
@@ -1729,6 +1753,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     displayH,
     onContentDraftChange,
     fitNormalizedRect,
+    fontReadyTick,
   ]);
 
   /** VI 1칸 높이의 30%까지 축소 허용(높이·폭 동일 기준의 최소 단계) */

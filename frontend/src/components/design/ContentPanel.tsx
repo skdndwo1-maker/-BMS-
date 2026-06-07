@@ -99,7 +99,7 @@ function PosterBodyTextarea({
         }}
         placeholder={"줄바꿈(Enter)으로 문단 구분\n예)\n5G 초고속 네트워크\n캔버스에서 본문을 선택한 뒤 좌측 「텍스트 옵션」에서 굵게 등을 적용할 수 있습니다"}
         rows={rows}
-        className="resize-none"
+        className="resize-none whitespace-pre-wrap"
       />
     </div>
   );
@@ -1489,7 +1489,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
             }
             placeholder={"예) 새로운 시작.\n(마침표로 끝나면 마젠타 점으로 변환)"}
             rows={3}
-            className="font-medium resize-none"
+            className="font-medium resize-none whitespace-pre-wrap"
           />
           <p className="text-xs text-gray-400">마침표(.)로 끝나면 마젠타 원형 포인트로 자동 변환됩니다</p>
           {isRcs ? (
@@ -1544,7 +1544,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                 }}
                 placeholder="부제 텍스트"
                 rows={2}
-                className="resize-none text-sm"
+                className="resize-none text-sm whitespace-pre-wrap"
               />
             </div>
           ))}
@@ -1648,7 +1648,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               }
               placeholder="예) ※ 본 이미지는 연출된 것입니다."
               rows={2}
-              className="resize-none text-sm"
+              className="resize-none text-sm whitespace-pre-wrap"
             />
             <p className="text-xs text-gray-400">하단 좌측에 작은 회색 글씨로 표시됩니다</p>
             {/* 기능부연설명(점선 박스) 제거 */}
@@ -1938,7 +1938,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
             <Settings className="w-3.5 h-3.5 mr-1"/>{showTitleOptions?<ChevronUp className="w-3.5 h-3.5"/>:<ChevronDown className="w-3.5 h-3.5"/>}
           </Button>
         </div>
-        <Textarea value={content.title} onChange={(e)=>onContentChange({...content,title:e.target.value})} placeholder="Enter your main headline" rows={3} className="font-medium resize-none"/>
+        <Textarea value={content.title} onChange={(e)=>onContentChange({...content,title:e.target.value})} placeholder="Enter your main headline" rows={3} className="font-medium resize-none whitespace-pre-wrap"/>
         {showTitleOptions&&(
           <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
             <Label className="text-xs font-medium text-gray-700 mb-2 block">텍스트 색상</Label>
@@ -1953,7 +1953,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         )}
         <p className="text-xs text-gray-500">{content.title.length} characters</p>
       </div>
-      <div className="space-y-3"><Label className="text-sm font-medium">Subtitle</Label><Textarea value={content.subtitle} onChange={(e)=>onContentChange({...content,subtitle:e.target.value})} placeholder="Add a supporting subtitle" rows={2} className="resize-none"/></div>
+      <div className="space-y-3"><Label className="text-sm font-medium">Subtitle</Label><Textarea value={content.subtitle} onChange={(e)=>onContentChange({...content,subtitle:e.target.value})} placeholder="Add a supporting subtitle" rows={2} className="resize-none whitespace-pre-wrap"/></div>
       <div className="space-y-3">
         <Label className="text-sm font-medium">Body Text</Label>
         <Textarea
@@ -1964,7 +1964,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           }}
           placeholder="Add detailed information or key points"
           rows={5}
-          className="resize-none"
+          className="resize-none whitespace-pre-wrap"
         />
       </div>
       <div className="border-t border-gray-200 pt-6 space-y-6">

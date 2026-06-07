@@ -68,6 +68,7 @@ export function titleTextStyle(c: DesignContent, titleFontSizePx: number, titleC
     wordBreak: "keep-all",
     /** keep-all만으로는 공백 없는 한글 한 줄이 박스보다 길 때 줄바꿈이 안 되어 잘릴 수 있음 */
     overflowWrap: "anywhere",
+    whiteSpace: "pre-wrap",
     margin: 0,
     width: "100%",
     minWidth: 0,
@@ -93,6 +94,12 @@ export function subtitleTextStyle(
     lineHeight: t.lineHeight ?? 1.35,
     color,
     wordBreak: "keep-all",
+    overflowWrap: "anywhere",
+    whiteSpace: "pre-wrap",
+    margin: 0,
+    width: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
   };
 }
 
@@ -109,6 +116,12 @@ export function bodyTextStyle(c: DesignContent, id: string, bodyFontSizePx: numb
     lineHeight: t.lineHeight ?? 1.75,
     color: bodyColor,
     whiteSpace: "pre-wrap",
+    wordBreak: "keep-all",
+    overflowWrap: "anywhere",
+    margin: 0,
+    width: "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
   };
 }
 
