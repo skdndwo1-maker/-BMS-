@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import type { AssetType } from "@/design/types";
 
-export type AiAssetAlternative = { name: string; src: string };
+export type AiAssetAlternative = { name: string; src: string; svg: string };
 
 type Props = {
   open: boolean;

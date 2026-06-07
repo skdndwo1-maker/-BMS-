@@ -33,7 +33,16 @@ import {
   AiAssetAlternativesDialog,
   type AiAssetAlternative,
 } from "@/components/design/AiAssetAlternativesDialog";
+import { MyGeneratedAssetsPanel } from "@/components/design/MyGeneratedAssetsPanel";
 import { generateDesignAsset } from "@/lib/designEditorApi";
+import {
+  deleteUserGeneratedAsset,
+  listUserGeneratedAssets,
+  saveUserGeneratedAssetForCurrentUser,
+  svgToDataUri,
+  type UserGeneratedAsset,
+} from "@/lib/userGeneratedAssetsApi";
+import { useAuthSession } from "@/contexts/AuthSessionContext";
 import { CoralTitleMarker } from "@/components/InspectionSectionTitle";
 import { resolveRcsMessageBackground } from "@/components/design/RCSCanvas";
 import { templates as allDesignTemplates } from "@/design/templates";
@@ -154,11 +163,15 @@ function createAssetLayer(src: string, type: AssetType, name: string): AssetLaye
   };
 }
 
-function svgPresetToDataUri(svg: string): string {
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg.replace(/\n/g, "").trim())}`;
-}
+type AiAltDialogState = {
+  assetType: AssetType;
+  direction: string;
+  illustrationStyle?: "2d" | "3d";
+  alternatives: AiAssetAlternative[];
+};
 
 export function ContentPanel({ content, onContentChange, onShowQuickStart, templateId, focusTarget }: ContentPanelProps) {
+  const { sb, user, isAuthReady } = useAuthSession();
   const [imagePreview,        setImagePreview]        = useState<string|null>(null);
   const [logoPreview,         setLogoPreview]         = useState<string|null>(null);
   const [showCategoryPalette, setShowCategoryPalette] = useState(false);
@@ -180,10 +193,10 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const [pictoAiBusy, setPictoAiBusy] = useState(false);
   const [illustAiError, setIllustAiError] = useState<string | null>(null);
   const [pictoAiError, setPictoAiError] = useState<string | null>(null);
-  const [aiAltDialog, setAiAltDialog] = useState<{
-    assetType: AssetType;
-    alternatives: AiAssetAlternative[];
-  } | null>(null);
+  const [aiAltDialog, setAiAltDialog] = useState<AiAltDialogState | null>(null);
+  const [myIllustAssets, setMyIllustAssets] = useState<UserGeneratedAsset[]>([]);
+  const [myPictoAssets, setMyPictoAssets] = useState<UserGeneratedAsset[]>([]);
+  const [myAssetsLoading, setMyAssetsLoading] = useState(false);
 
   /** 우측 패널 내부만 스크롤 — window/document scrollIntoView 시 하단 회색 띠 유발 방지 */
   const scrollPanelSection = useCallback((el: HTMLElement | null) => {
@@ -342,22 +355,93 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     [onContentChange]
   );
 
+  const refreshMyGeneratedAssets = useCallback(async () => {
+    if (!sb || !user) {
+      setMyIllustAssets([]);
+      setMyPictoAssets([]);
+      return;
+    }
+    setMyAssetsLoading(true);
+    try {
+      const [ill, pic] = await Promise.all([
+        listUserGeneratedAssets(sb, { userId: user.id, assetType: "illustration", limit: 60 }),
+        listUserGeneratedAssets(sb, { userId: user.id, assetType: "pictogram", limit: 60 }),
+      ]);
+      setMyIllustAssets(ill);
+      setMyPictoAssets(pic);
+    } catch (e) {
+      console.warn("[myGeneratedAssets] load failed", e);
+    } finally {
+      setMyAssetsLoading(false);
+    }
+  }, [sb, user]);
+
+  useEffect(() => {
+    if (!isAuthReady) return;
+    void refreshMyGeneratedAssets();
+  }, [isAuthReady, user?.id, refreshMyGeneratedAssets]);
+
+  const persistMyGeneratedAsset = useCallback(
+    async (args: {
+      assetType: AssetType;
+      name: string;
+      svg: string;
+      direction: string;
+      illustrationStyle?: "2d" | "3d";
+    }) => {
+      if (!sb || !user) return;
+      try {
+        await saveUserGeneratedAssetForCurrentUser(sb, {
+          assetType: args.assetType,
+          name: args.name,
+          svgContent: args.svg,
+          generationDirection: args.direction,
+          illustrationStyle: args.illustrationStyle ?? null,
+        });
+        await refreshMyGeneratedAssets();
+      } catch (e) {
+        console.warn("[myGeneratedAssets] save failed", e);
+      }
+    },
+    [refreshMyGeneratedAssets, sb, user],
+  );
+
+  const handleDeleteMyGeneratedAsset = useCallback(
+    async (id: string) => {
+      if (!sb || !user) return;
+      try {
+        await deleteUserGeneratedAsset(sb, { userId: user.id, id });
+        await refreshMyGeneratedAssets();
+      } catch (e) {
+        console.warn("[myGeneratedAssets] delete failed", e);
+      }
+    },
+    [refreshMyGeneratedAssets, sb, user],
+  );
+
   const showAiAlternatives = useCallback(
-    (assetType: AssetType, items: Array<{ name: string; svg: string }>) => {
+    (
+      assetType: AssetType,
+      items: Array<{ name: string; svg: string }>,
+      meta: { direction: string; illustrationStyle?: "2d" | "3d" },
+    ) => {
       setAiAltDialog({
         assetType,
+        direction: meta.direction,
+        illustrationStyle: meta.illustrationStyle,
         alternatives: items.map((item) => ({
           name: item.name,
-          src: svgPresetToDataUri(item.svg),
+          svg: item.svg,
+          src: svgToDataUri(item.svg),
         })),
       });
     },
-    []
+    [],
   );
 
   const pickAllAiAlternatives = useCallback(() => {
     if (!aiAltDialog) return;
-    const { assetType, alternatives } = aiAltDialog;
+    const { assetType, alternatives, direction, illustrationStyle } = aiAltDialog;
     onContentChange((prev) => {
       const layers = alternatives.map((item, i) => ({
         ...createAssetLayer(item.src, assetType, item.name),
@@ -366,8 +450,17 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
       }));
       return { ...prev, assetLayers: [...(prev.assetLayers ?? []), ...layers] };
     });
+    for (const item of alternatives) {
+      void persistMyGeneratedAsset({
+        assetType,
+        name: item.name,
+        svg: item.svg,
+        direction,
+        illustrationStyle,
+      });
+    }
     setAiAltDialog(null);
-  }, [aiAltDialog, onContentChange]);
+  }, [aiAltDialog, onContentChange, persistMyGeneratedAsset]);
 
   const runIllustAiGenerate = useCallback(async () => {
     const direction = illustAiDirection.trim();
@@ -382,7 +475,10 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         templateLabel: templateMeta?.name ?? templateId ?? "template",
         creativeTopic: content.title?.trim() || undefined,
       });
-      showAiAlternatives("illustration", out.alternatives);
+      showAiAlternatives("illustration", out.alternatives, {
+        direction,
+        illustrationStyle: illustAiStyle,
+      });
     } catch (e) {
       setIllustAiError(e instanceof Error ? e.message : "일러스트 생성에 실패했습니다.");
     } finally {
@@ -410,7 +506,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         templateLabel: templateMeta?.name ?? templateId ?? "template",
         creativeTopic: content.title?.trim() || undefined,
       });
-      showAiAlternatives("pictogram", out.alternatives);
+      showAiAlternatives("pictogram", out.alternatives, { direction });
     } catch (e) {
       setPictoAiError(e instanceof Error ? e.message : "픽토그램 생성에 실패했습니다.");
     } finally {
@@ -437,6 +533,13 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
       onPick={(item) => {
         if (!aiAltDialog) return;
         appendGeneratedAsset(aiAltDialog.assetType, item.name, item.src);
+        void persistMyGeneratedAsset({
+          assetType: aiAltDialog.assetType,
+          name: item.name,
+          svg: item.svg,
+          direction: aiAltDialog.direction,
+          illustrationStyle: aiAltDialog.illustrationStyle,
+        });
         setAiAltDialog(null);
       }}
       onPickAll={pickAllAiAlternatives}
@@ -621,6 +724,14 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           </div>
           {illustAiError ? <p className="text-[10px] text-red-500">{illustAiError}</p> : null}
         </div>
+        <MyGeneratedAssetsPanel
+          assetType="illustration"
+          items={myIllustAssets}
+          loading={myAssetsLoading}
+          loggedIn={Boolean(user)}
+          onUse={(item) => appendGeneratedAsset("illustration", item.name, item.src)}
+          onDelete={(id) => void handleDeleteMyGeneratedAsset(id)}
+        />
       </div>
 
       {/* 픽토그램 (RCS에서는 옵션 제거) */}
@@ -655,6 +766,14 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
             </Button>
             {pictoAiError ? <p className="text-[10px] text-red-500">{pictoAiError}</p> : null}
           </div>
+          <MyGeneratedAssetsPanel
+            assetType="pictogram"
+            items={myPictoAssets}
+            loading={myAssetsLoading}
+            loggedIn={Boolean(user)}
+            onUse={(item) => appendGeneratedAsset("pictogram", item.name, item.src)}
+            onDelete={(id) => void handleDeleteMyGeneratedAsset(id)}
+          />
         </div>
       ) : null}
 
