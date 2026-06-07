@@ -1218,7 +1218,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                       </div>
                       <div className="min-w-0 flex-1">
                         <h3 className="text-sm font-semibold text-gray-900">AI 디자인 어시스턴트</h3>
-                        <p className="text-xs text-gray-500">텍스트 제안 · VI 검수 · 시각 교정</p>
+                        <p className="text-xs text-gray-500">AI 디자인 제안 · 텍스트 제안 · VI 검수 · 시각 교정</p>
                       </div>
                     </div>
                     <DesignAssistantChat
@@ -1226,6 +1226,19 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                       onApplyContent={setContentWithHistory}
                       onCorrectionReference={setCorrectionReferenceUrl}
                       templateId={actualTemplateId ?? ""}
+                      templateMeta={
+                        template
+                          ? {
+                              name: template.name,
+                              category: template.category,
+                              width: template.size.width,
+                              height: template.size.height,
+                              unit: template.size.unit,
+                              mediaType: template.mediaType,
+                              posterCategory: content.posterCategory,
+                            }
+                          : { posterCategory: content.posterCategory }
+                      }
                       /* RCS(568×338)만 제외 — 그 외 온라인/오프라인은 우측 패널 부제·본문 슬롯과 동일 규칙 */
                       panelSyncedTextSuggest={!isRcsTemplate}
                     />

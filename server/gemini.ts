@@ -31,10 +31,12 @@ export {
   runDesignEditorCanvasVisualCorrection,
   runDesignEditorAssetGeneration,
   runDesignEditorImageGeneration,
+  runDesignEditorDraftProposal,
   type DesignEditorViolationRow,
   type DesignEditorTextSuggestionTarget,
   type DesignEditorAssetKind,
   type DesignEditorIllustrationStyle,
+  type DesignEditorDraftProposal,
 } from "./gemini/designEditor.js";
 export { runOptionsPageChat } from "./gemini/optionsChat.js";
 export {

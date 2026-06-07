@@ -204,3 +204,86 @@ export async function generateDesignAsset(body: {
 }
 
 export { isSvgAlternative };
+
+export type DesignEditorDraftProposal = {
+  summary: string;
+  logoOption: "CI" | "BI" | "SLOGAN" | "none";
+  logoPosition:
+    | "top-left"
+    | "top-center"
+    | "top-right"
+    | "bottom-left"
+    | "bottom-center"
+    | "bottom-right";
+  title: string;
+  subtitles: string[];
+  bodyBlocks: string[];
+  footer: string;
+  backgroundColor?: string;
+  titleColor?: string;
+  bodyColor?: string;
+  footerColor?: string;
+  posterTitleAlign: "left" | "center" | "right";
+  posterBodyAlign: "left" | "center" | "right";
+  posterFooterAlign: "left" | "center" | "right";
+  titleRect: { x: number; y: number; width: number; height: number };
+  subtitleRects: Array<{ x: number; y: number; width: number; height: number }>;
+  bodyRects: Array<{ x: number; y: number; width: number; height: number }>;
+  footerRect: { x: number; y: number; width: number; height: number };
+  image: {
+    include: boolean;
+    brief: string;
+    rect?: { x: number; y: number; width: number; height: number };
+    opacity?: number;
+  };
+  asset: {
+    include: boolean;
+    kind: "pictogram" | "illustration";
+    illustrationStyle?: "2d" | "3d";
+    brief: string;
+    rect?: { x: number; y: number; width: number; height: number };
+  };
+};
+
+export type DesignEditorDraftProposalResponse = {
+  proposal: DesignEditorDraftProposal;
+  generatedImage: { mimeType: string; base64: string; name: string } | null;
+  generatedAsset: { name: string; svg: string } | null;
+};
+
+export async function proposeDesignDraft(body: {
+  contentJson: string;
+  templateLabel: string;
+  templateMeta?: {
+    name?: string;
+    category?: string;
+    width?: number;
+    height?: number;
+    unit?: string;
+    mediaType?: string;
+    posterCategory?: string;
+  };
+  guidelineId?: string;
+  creativeTopic: string;
+}): Promise<DesignEditorDraftProposalResponse> {
+  const r = await fetch(apiUrl("/api/design-editor/propose-draft"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await readJsonBody(r);
+  if (!r.ok || !data.proposal || typeof data.proposal !== "object") {
+    throw new Error(typeof data.error === "string" ? data.error : "propose_draft_failed");
+  }
+  return {
+    proposal: data.proposal as DesignEditorDraftProposal,
+    generatedImage:
+      data.generatedImage && typeof data.generatedImage === "object"
+        ? (data.generatedImage as { mimeType: string; base64: string; name: string })
+        : null,
+    generatedAsset:
+      data.generatedAsset && typeof data.generatedAsset === "object"
+        ? (data.generatedAsset as { name: string; svg: string })
+        : null,
+  };
+}

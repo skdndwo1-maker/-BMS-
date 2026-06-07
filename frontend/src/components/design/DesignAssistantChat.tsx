@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { captureDesignCanvas } from "@/lib/designCanvasCapture";
 import { toast } from "sonner";
-import { Loader2, Type, Scan, Wand2, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, Type, Scan, Wand2, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,11 +18,14 @@ import {
   applyImageDataUrl,
   applyViTypographyToContent,
 } from "@/design/applyViPatch";
+import { applyDesignDraftProposal } from "@/design/applyDesignDraftProposal";
 import {
   correctDesignCanvas,
   inspectDesignCanvas,
   replaceDesignImage,
   suggestDesignText,
+  proposeDesignDraft,
+  type DesignEditorDraftProposal,
   type DesignEditorInspectResponse,
   type DesignEditorViolation,
   type DesignEditorTextSuggestionTarget,
@@ -162,6 +165,7 @@ export function DesignAssistantChat({
   onApplyContent,
   onCorrectionReference,
   templateId,
+  templateMeta,
   guidelineId = "uplus-brand-guideline",
   /** false: RCS 고정(메인·본문 1) · true: 우측 패널 부제·본문 슬롯 수와 동기(최대 각 3) */
   panelSyncedTextSuggest = false,
@@ -171,6 +175,15 @@ export function DesignAssistantChat({
   /** 디자인 교정 결과를 캔버스에 덮지 않고 에디터 옆 참조 패널에 표시 */
   onCorrectionReference?: (dataUrl: string | null) => void;
   templateId: string;
+  templateMeta?: {
+    name?: string;
+    category?: string;
+    width?: number;
+    height?: number;
+    unit?: string;
+    mediaType?: string;
+    posterCategory?: string;
+  };
   guidelineId?: string;
   panelSyncedTextSuggest?: boolean;
 }) {
@@ -202,6 +215,14 @@ export function DesignAssistantChat({
   /** 텍스트 제안 탭 하위(카테고리·미리보기) 접기 */
   const [textSuggestSectionOpen, setTextSuggestSectionOpen] = useState(false);
 
+  const [draftBusy, setDraftBusy] = useState(false);
+  const [draftDialogOpen, setDraftDialogOpen] = useState(false);
+  const [draftProposal, setDraftProposal] = useState<DesignEditorDraftProposal | null>(null);
+  const [draftGenerated, setDraftGenerated] = useState<{
+    image?: { mimeType: string; base64: string } | null;
+    asset?: { name: string; svg: string } | null;
+  } | null>(null);
+
   const textSuggestSections = useMemo(() => {
     if (panelSyncedTextSuggest) return buildPanelSyncedTextSections(content);
     return AI_TEXT_SECTIONS_RCS;
@@ -223,6 +244,47 @@ export function DesignAssistantChat({
     setLastCapture(cap);
     return cap;
   }, []);
+
+  const runDraftProposal = async () => {
+    const topic = creativeTopic.trim();
+    if (!topic) {
+      toast.error("주제를 입력해 주세요.");
+      return;
+    }
+    setDraftBusy(true);
+    setLoading(true);
+    try {
+      const out = await proposeDesignDraft({
+        contentJson: JSON.stringify(sanitizeDesignContent(content)),
+        templateLabel: templateId,
+        templateMeta,
+        guidelineId,
+        creativeTopic: topic,
+      });
+      setDraftProposal(out.proposal);
+      setDraftGenerated({
+        image: out.generatedImage
+          ? { mimeType: out.generatedImage.mimeType, base64: out.generatedImage.base64 }
+          : null,
+        asset: out.generatedAsset,
+      });
+      setDraftDialogOpen(true);
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "디자인 초안 제안에 실패했습니다.");
+    } finally {
+      setDraftBusy(false);
+      setLoading(false);
+    }
+  };
+
+  const applyDraftProposal = () => {
+    if (!draftProposal) return;
+    const next = applyDesignDraftProposal(content, draftProposal, draftGenerated ?? undefined);
+    onApplyContent(next);
+    setDraftDialogOpen(false);
+    toast.success("디자인 초안을 워크스페이스에 적용했습니다. 직접 수정한 뒤 재제안할 수 있습니다.");
+  };
 
   const runSuggestText = async (target: DesignEditorTextSuggestionTarget) => {
     setTextBusy(target);
@@ -507,8 +569,29 @@ export function DesignAssistantChat({
           rows={2}
           className="min-h-[52px] resize-y text-[11px]"
         />
-        <p className="text-[10px] text-gray-400">텍스트 제안·검수·교정에 함께 넘깁니다.</p>
+        <p className="text-[10px] text-gray-400">
+          AI 디자인 제안·텍스트 제안·검수·교정에 함께 넘깁니다.
+        </p>
       </div>
+
+      <Button
+        type="button"
+        size="sm"
+        className="w-full bg-gradient-to-r from-[#FF7F66] to-rose-500 hover:from-[#FF7F66]/90 hover:to-rose-500/90"
+        disabled={draftBusy || loading || !creativeTopic.trim()}
+        onClick={() => void runDraftProposal()}
+      >
+        {draftBusy ? (
+          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Sparkles className="mr-2 h-3.5 w-3.5" />
+        )}
+        AI 디자인 제안
+      </Button>
+      <p className="text-[10px] leading-snug text-gray-500">
+        캔버스 규격·유형·주제에 맞는 로고·타이틀·본문·유의사항·이미지·일러스트 초안을 제안합니다. 적용 후
+        직접 수정하고 재제안할 수 있습니다.
+      </p>
 
       <div className="flex gap-1 rounded-xl bg-gray-100/90 p-1">
         {tabBtn("text", "텍스트 제안", <Type className="h-3.5 w-3.5" />)}
@@ -740,6 +823,75 @@ export function DesignAssistantChat({
             >
               {loading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Wand2 className="mr-2 h-3.5 w-3.5" />}
               검수 반영 · 교정 참조 표시
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={draftDialogOpen} onOpenChange={setDraftDialogOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-sm">AI 디자인 제안</DialogTitle>
+          </DialogHeader>
+          {draftProposal ? (
+            <div className="space-y-3 text-xs text-gray-700">
+              <p className="whitespace-pre-wrap leading-relaxed">{draftProposal.summary}</p>
+              <div className="rounded border bg-gray-50 p-2.5 space-y-1.5">
+                <p>
+                  <span className="text-gray-500">타이틀:</span> {draftProposal.title}
+                </p>
+                {draftProposal.subtitles.map((s, i) => (
+                  <p key={i}>
+                    <span className="text-gray-500">부제 {i + 1}:</span> {s}
+                  </p>
+                ))}
+                {draftProposal.bodyBlocks.map((b, i) => (
+                  <p key={i}>
+                    <span className="text-gray-500">본문 {i + 1}:</span> {b}
+                  </p>
+                ))}
+                {draftProposal.footer ? (
+                  <p>
+                    <span className="text-gray-500">유의사항:</span> {draftProposal.footer}
+                  </p>
+                ) : null}
+                <p>
+                  <span className="text-gray-500">로고:</span>{" "}
+                  {draftProposal.logoOption === "none" ? "없음" : `${draftProposal.logoOption} · ${draftProposal.logoPosition}`}
+                </p>
+                {draftProposal.image.include ? (
+                  <p>
+                    <span className="text-gray-500">이미지:</span>{" "}
+                    {draftGenerated?.image ? "생성됨" : "텍스트·레이아웃만 (이미지 생성 실패)"}
+                  </p>
+                ) : null}
+                {draftProposal.asset.include ? (
+                  <p>
+                    <span className="text-gray-500">에셋:</span>{" "}
+                    {draftGenerated?.asset
+                      ? `${draftProposal.asset.kind} · ${draftGenerated.asset.name}`
+                      : "텍스트·레이아웃만 (에셋 생성 실패)"}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setDraftDialogOpen(false)}>
+              취소
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={draftBusy}
+              onClick={() => void runDraftProposal()}
+            >
+              {draftBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+              재제안
+            </Button>
+            <Button type="button" size="sm" className="bg-[#FF7F66]" onClick={applyDraftProposal}>
+              워크스페이스에 적용
             </Button>
           </DialogFooter>
         </DialogContent>

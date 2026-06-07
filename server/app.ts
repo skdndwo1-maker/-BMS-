@@ -22,6 +22,7 @@ import {
   runDesignEditorTextSuggestion,
   runDesignEditorAssetGeneration,
   runDesignEditorImageGeneration,
+  runDesignEditorDraftProposal,
   runInspectionWithGemini,
   runOptionsPageChat,
   summarizeGuidelineFile,
@@ -1297,6 +1298,118 @@ app.post("/api/design-editor/suggest-text", async (req, res) => {
       model: process.env.GEMINI_MODEL?.trim() || null,
     });
     res.json(out);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+app.post("/api/design-editor/propose-draft", async (req, res) => {
+  try {
+    const guidelineId = (req.body?.guidelineId as string) || "uplus-brand-guideline";
+    const contentJson = String(req.body?.contentJson ?? "");
+    const templateLabel = String(req.body?.templateLabel ?? "template");
+    const creativeTopic =
+      typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
+    const rawMeta = req.body?.templateMeta;
+    const templateMeta =
+      rawMeta && typeof rawMeta === "object"
+        ? {
+            name: typeof rawMeta.name === "string" ? rawMeta.name : undefined,
+            category: typeof rawMeta.category === "string" ? rawMeta.category : undefined,
+            width: typeof rawMeta.width === "number" ? rawMeta.width : undefined,
+            height: typeof rawMeta.height === "number" ? rawMeta.height : undefined,
+            unit: typeof rawMeta.unit === "string" ? rawMeta.unit : undefined,
+            mediaType: typeof rawMeta.mediaType === "string" ? rawMeta.mediaType : undefined,
+            posterCategory:
+              typeof rawMeta.posterCategory === "string" ? rawMeta.posterCategory : undefined,
+          }
+        : undefined;
+
+    if (!creativeTopic) {
+      res.status(400).json({ error: "creative_topic_required" });
+      return;
+    }
+    if (!process.env.GEMINI_API_KEY?.trim()) {
+      res.status(503).json({ error: "GEMINI_API_KEY가 설정되어 있지 않습니다." });
+      return;
+    }
+
+    const guidelineSummary = await buildPrimaryGuidelineBlock(
+      guidelineId,
+      [templateLabel, creativeTopic].filter(Boolean).join("\n\n")
+    );
+    const proposal = await runDesignEditorDraftProposal({
+      guidelineSummary,
+      contentJson,
+      templateLabel,
+      templateMeta,
+      creativeTopic,
+    });
+
+    if (!proposal) {
+      res.status(503).json({ error: "디자인 초안 제안에 실패했습니다. 주제를 구체적으로 입력해 보세요." });
+      return;
+    }
+
+    let generatedImage: { mimeType: string; base64: string; name: string } | null = null;
+    let generatedAsset: { name: string; svg: string } | null = null;
+
+    if (proposal.image.include && proposal.image.brief) {
+      const imgOut = await runDesignEditorImageGeneration({
+        direction: proposal.image.brief,
+        templateLabel,
+        creativeTopic,
+      });
+      const first = imgOut?.alternatives[0];
+      if (first) {
+        generatedImage = { mimeType: first.mimeType, base64: first.base64, name: first.name };
+      }
+    }
+
+    if (proposal.asset.include && proposal.asset.brief) {
+      const assetOut = await runDesignEditorAssetGeneration({
+        assetKind: proposal.asset.kind,
+        illustrationStyle:
+          proposal.asset.kind === "illustration" ? proposal.asset.illustrationStyle : undefined,
+        direction: proposal.asset.brief,
+        templateLabel,
+        creativeTopic,
+      });
+      const first = assetOut?.alternatives[0];
+      if (first) {
+        generatedAsset = { name: first.name, svg: first.svg };
+      }
+    }
+
+    await persistRun({
+      req,
+      type: "design_editor_draft_proposal",
+      status: "pending_review",
+      guidelineId,
+      templateId: templateLabel || null,
+      inputJson: {
+        guidelineId,
+        templateLabel,
+        creativeTopic,
+        templateMeta: templateMeta ?? null,
+        contentJsonBytes: contentJson.length,
+      },
+      outputJson: {
+        summary: proposal.summary,
+        hasImage: Boolean(generatedImage),
+        hasAsset: Boolean(generatedAsset),
+      },
+      inputText: creativeTopic,
+      outputText: proposal.summary,
+      model: process.env.GEMINI_MODEL?.trim() || null,
+    });
+
+    res.json({
+      ok: true,
+      proposal,
+      generatedImage,
+      generatedAsset,
+    });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }

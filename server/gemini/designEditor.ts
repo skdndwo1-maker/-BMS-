@@ -702,3 +702,371 @@ ${variantHint}`;
   }
   return null;
 }
+
+const normRectSchema = {
+  type: SchemaType.OBJECT,
+  description: "캔버스 대비 정규화 좌표 0~1",
+  properties: {
+    x: { type: SchemaType.NUMBER },
+    y: { type: SchemaType.NUMBER },
+    width: { type: SchemaType.NUMBER },
+    height: { type: SchemaType.NUMBER },
+  },
+  required: ["x", "y", "width", "height"],
+} as Schema;
+
+const designDraftProposalSchema = {
+  type: SchemaType.OBJECT,
+  description: "디자인 에디터 캔버스 초안 제안",
+  properties: {
+    summary: { type: SchemaType.STRING, description: "한국어 2~4문장, 레이아웃·카피 의도" },
+    logoOption: {
+      type: SchemaType.STRING,
+      format: "enum",
+      enum: ["CI", "BI", "SLOGAN", "none"] as string[],
+    },
+    logoPosition: {
+      type: SchemaType.STRING,
+      format: "enum",
+      enum: [
+        "top-left",
+        "top-center",
+        "top-right",
+        "bottom-left",
+        "bottom-center",
+        "bottom-right",
+      ] as string[],
+    },
+    title: { type: SchemaType.STRING },
+    subtitles: {
+      type: SchemaType.ARRAY,
+      description: "부제 0~3개",
+      items: { type: SchemaType.STRING },
+    },
+    bodyBlocks: {
+      type: SchemaType.ARRAY,
+      description: "본문 1~3개",
+      items: { type: SchemaType.STRING },
+    },
+    footer: { type: SchemaType.STRING, description: "하단 유의사항" },
+    backgroundColor: { type: SchemaType.STRING, description: "hex 예 #FFFFFF" },
+    titleColor: { type: SchemaType.STRING },
+    bodyColor: { type: SchemaType.STRING },
+    footerColor: { type: SchemaType.STRING },
+    posterTitleAlign: {
+      type: SchemaType.STRING,
+      format: "enum",
+      enum: ["left", "center", "right"] as string[],
+    },
+    posterBodyAlign: {
+      type: SchemaType.STRING,
+      format: "enum",
+      enum: ["left", "center", "right"] as string[],
+    },
+    posterFooterAlign: {
+      type: SchemaType.STRING,
+      format: "enum",
+      enum: ["left", "center", "right"] as string[],
+    },
+    titleRect: normRectSchema,
+    subtitleRects: { type: SchemaType.ARRAY, items: normRectSchema },
+    bodyRects: { type: SchemaType.ARRAY, items: normRectSchema },
+    footerRect: normRectSchema,
+    image: {
+      type: SchemaType.OBJECT,
+      properties: {
+        include: { type: SchemaType.BOOLEAN },
+        brief: { type: SchemaType.STRING, description: "이미지 생성 지시(한국어)" },
+        rect: normRectSchema,
+        opacity: { type: SchemaType.NUMBER, description: "0~100" },
+      },
+      required: ["include", "brief"],
+    },
+    asset: {
+      type: SchemaType.OBJECT,
+      properties: {
+        include: { type: SchemaType.BOOLEAN },
+        kind: {
+          type: SchemaType.STRING,
+          format: "enum",
+          enum: ["pictogram", "illustration"] as string[],
+        },
+        illustrationStyle: {
+          type: SchemaType.STRING,
+          format: "enum",
+          enum: ["2d", "3d"] as string[],
+        },
+        brief: { type: SchemaType.STRING },
+        rect: normRectSchema,
+      },
+      required: ["include", "kind", "brief"],
+    },
+  },
+  required: [
+    "summary",
+    "logoOption",
+    "logoPosition",
+    "title",
+    "bodyBlocks",
+    "footer",
+    "posterTitleAlign",
+    "posterBodyAlign",
+    "posterFooterAlign",
+    "titleRect",
+    "footerRect",
+    "image",
+    "asset",
+  ],
+} as Schema;
+
+export type DesignEditorDraftProposal = {
+  summary: string;
+  logoOption: "CI" | "BI" | "SLOGAN" | "none";
+  logoPosition:
+    | "top-left"
+    | "top-center"
+    | "top-right"
+    | "bottom-left"
+    | "bottom-center"
+    | "bottom-right";
+  title: string;
+  subtitles: string[];
+  bodyBlocks: string[];
+  footer: string;
+  backgroundColor?: string;
+  titleColor?: string;
+  bodyColor?: string;
+  footerColor?: string;
+  posterTitleAlign: "left" | "center" | "right";
+  posterBodyAlign: "left" | "center" | "right";
+  posterFooterAlign: "left" | "center" | "right";
+  titleRect: { x: number; y: number; width: number; height: number };
+  subtitleRects: Array<{ x: number; y: number; width: number; height: number }>;
+  bodyRects: Array<{ x: number; y: number; width: number; height: number }>;
+  footerRect: { x: number; y: number; width: number; height: number };
+  image: {
+    include: boolean;
+    brief: string;
+    rect?: { x: number; y: number; width: number; height: number };
+    opacity?: number;
+  };
+  asset: {
+    include: boolean;
+    kind: DesignEditorAssetKind;
+    illustrationStyle?: DesignEditorIllustrationStyle;
+    brief: string;
+    rect?: { x: number; y: number; width: number; height: number };
+  };
+};
+
+function clampNorm(n: unknown, fallback: number): number {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return fallback;
+  return Math.max(0, Math.min(1, v));
+}
+
+function parseNormRect(
+  raw: unknown,
+  fallback: { x: number; y: number; width: number; height: number }
+): { x: number; y: number; width: number; height: number } {
+  if (!raw || typeof raw !== "object") return fallback;
+  const r = raw as Record<string, unknown>;
+  return {
+    x: clampNorm(r.x, fallback.x),
+    y: clampNorm(r.y, fallback.y),
+    width: Math.max(0.05, clampNorm(r.width, fallback.width)),
+    height: Math.max(0.03, clampNorm(r.height, fallback.height)),
+  };
+}
+
+function parseAlign(raw: unknown, fallback: "left" | "center" | "right"): "left" | "center" | "right" {
+  const s = String(raw ?? fallback);
+  return s === "center" || s === "right" ? s : "left";
+}
+
+function parseLogoOption(raw: unknown): DesignEditorDraftProposal["logoOption"] {
+  const s = String(raw ?? "BI");
+  if (s === "CI" || s === "SLOGAN" || s === "none") return s;
+  return "BI";
+}
+
+function parseLogoPosition(raw: unknown): DesignEditorDraftProposal["logoPosition"] {
+  const allowed = new Set([
+    "top-left",
+    "top-center",
+    "top-right",
+    "bottom-left",
+    "bottom-center",
+    "bottom-right",
+  ]);
+  const s = String(raw ?? "top-center");
+  return allowed.has(s) ? (s as DesignEditorDraftProposal["logoPosition"]) : "top-center";
+}
+
+function parseDraftProposalPayload(raw: unknown): DesignEditorDraftProposal | null {
+  if (!raw || typeof raw !== "object") return null;
+  const p = raw as Record<string, unknown>;
+  const str = (k: string) => (typeof p[k] === "string" ? (p[k] as string).trim() : "");
+  const strArr = (k: string, max: number) => {
+    const arr = p[k];
+    if (!Array.isArray(arr)) return [] as string[];
+    return arr
+      .filter((x): x is string => typeof x === "string" && x.trim() !== "")
+      .map((x) => x.trim())
+      .slice(0, max);
+  };
+
+  const bodyBlocks = strArr("bodyBlocks", 3);
+  if (!str("title") || bodyBlocks.length === 0) return null;
+
+  const defaultTitle = { x: 0.08, y: 0.2, width: 0.84, height: 0.22 };
+  const defaultBody = { x: 0.08, y: 0.44, width: 0.84, height: 0.34 };
+  const defaultFooter = { x: 0.08, y: 0.86, width: 0.72, height: 0.07 };
+  const defaultSub = { x: 0.08, y: 0.43, width: 0.84, height: 0.055 };
+  const defaultImg = { x: 0.55, y: 0.12, width: 0.38, height: 0.42 };
+  const defaultAsset = { x: 0.62, y: 0.48, width: 0.28, height: 0.28 };
+
+  const subtitles = strArr("subtitles", 3);
+  const subtitleRectsRaw = Array.isArray(p.subtitleRects) ? p.subtitleRects : [];
+  const bodyRectsRaw = Array.isArray(p.bodyRects) ? p.bodyRects : [];
+
+  const imageRaw = p.image && typeof p.image === "object" ? (p.image as Record<string, unknown>) : {};
+  const assetRaw = p.asset && typeof p.asset === "object" ? (p.asset as Record<string, unknown>) : {};
+
+  const assetKindRaw = String(assetRaw.kind ?? "pictogram");
+  const assetKind: DesignEditorAssetKind =
+    assetKindRaw === "illustration" ? "illustration" : "pictogram";
+  const illStyleRaw = String(assetRaw.illustrationStyle ?? "2d");
+  const illustrationStyle: DesignEditorIllustrationStyle = illStyleRaw === "3d" ? "3d" : "2d";
+
+  return {
+    summary: str("summary") || "주제에 맞는 디자인 초안을 제안합니다.",
+    logoOption: parseLogoOption(p.logoOption),
+    logoPosition: parseLogoPosition(p.logoPosition),
+    title: str("title"),
+    subtitles,
+    bodyBlocks,
+    footer: str("footer"),
+    backgroundColor: str("backgroundColor") || undefined,
+    titleColor: str("titleColor") || undefined,
+    bodyColor: str("bodyColor") || undefined,
+    footerColor: str("footerColor") || undefined,
+    posterTitleAlign: parseAlign(p.posterTitleAlign, "center"),
+    posterBodyAlign: parseAlign(p.posterBodyAlign, "left"),
+    posterFooterAlign: parseAlign(p.posterFooterAlign, "left"),
+    titleRect: parseNormRect(p.titleRect, defaultTitle),
+    subtitleRects: subtitles.map((_, i) =>
+      parseNormRect(subtitleRectsRaw[i], {
+        ...defaultSub,
+        y: Math.min(0.78, defaultSub.y + i * 0.065),
+      })
+    ),
+    bodyRects: bodyBlocks.map((_, i) =>
+      parseNormRect(bodyRectsRaw[i], i === 0 ? defaultBody : { ...defaultBody, y: 0.62 + i * 0.14 })
+    ),
+    footerRect: parseNormRect(p.footerRect, defaultFooter),
+    image: {
+      include: Boolean(imageRaw.include),
+      brief: typeof imageRaw.brief === "string" ? imageRaw.brief.trim() : "",
+      rect: parseNormRect(imageRaw.rect, defaultImg),
+      opacity: Math.max(0, Math.min(100, Number(imageRaw.opacity) || 100)),
+    },
+    asset: {
+      include: Boolean(assetRaw.include),
+      kind: assetKind,
+      illustrationStyle: assetKind === "illustration" ? illustrationStyle : undefined,
+      brief: typeof assetRaw.brief === "string" ? assetRaw.brief.trim() : "",
+      rect: parseNormRect(assetRaw.rect, defaultAsset),
+    },
+  };
+}
+
+/**
+ * 디자인 에디터: 주제·캔버스 규격·유형에 맞는 전체 초안(JSON) 제안
+ */
+export async function runDesignEditorDraftProposal(opts: {
+  guidelineSummary: string;
+  contentJson: string;
+  templateLabel: string;
+  templateMeta?: {
+    name?: string;
+    category?: string;
+    width?: number;
+    height?: number;
+    unit?: string;
+    mediaType?: string;
+    posterCategory?: string;
+  };
+  creativeTopic: string;
+}): Promise<DesignEditorDraftProposal | null> {
+  const key = getKey();
+  const topic = opts.creativeTopic.trim();
+  if (!key || !topic) return null;
+
+  const meta = opts.templateMeta ?? {};
+  const sizeLine =
+    meta.width && meta.height
+      ? `${meta.width}×${meta.height}${meta.unit ?? "px"}`
+      : "알 수 없음";
+
+  const genAI = new GoogleGenerativeAI(key);
+  const guide = opts.guidelineSummary.slice(0, 72_000);
+  const ctx = opts.contentJson.slice(0, 28_000);
+
+  const prompt = `역할: LG U+ 브랜드 디자인 에디터 AI. U+ Simple 톤·VI 색(#F43182 포인트)·타이포 규칙을 따릅니다.
+
+작업: [제작 주제]와 [캔버스 정보]에 맞는 **완성형 디자인 초안**을 JSON으로 설계하세요.
+로고 위치·메인 타이틀·부제(0~3)·본문(1~3)·유의사항·배경/히어로 이미지·픽토그램/일러스트를 **자유롭게** 배치하되, 캔버스 비율 안에서 겹치지 않게 합니다.
+
+[캔버스 정보]
+- 템플릿 ID: ${opts.templateLabel}
+- 이름: ${meta.name ?? opts.templateLabel}
+- 유형/카테고리: ${meta.category ?? "poster"}${meta.posterCategory ? ` / ${meta.posterCategory}` : ""}
+- 규격: ${sizeLine}
+- 매체: ${meta.mediaType ?? "online"}
+
+[레이아웃 규칙]
+1) 모든 rect는 캔버스 대비 정규화 좌표(0~1). x,y=좌상단, width/height=비율.
+2) 메인 타이틀: 2줄 이내, 상대적으로 크게(보통 y 0.15~0.35).
+3) 본문: 핵심만 1~3블록, 각 2~3줄 분량.
+4) 유의사항(footer): 하단(y≥0.82) 작은 글씨 톤.
+5) logoOption: CI|BI|SLOGAN|none. logoPosition은 6방향 중 하나.
+6) image.include=true면 brief에 이미지 생성 지시(한국어). rect는 히어로/배경 영역.
+7) asset.include=true면 kind=pictogram|illustration, brief에 아이콘/일러스트 지시. pictogram은 경고·안내, illustration은 캠페인 비주얼.
+8) [현재 캔버스 JSON]이 비어있지 않으면 사용자 편집을 존중하되, 주제에 맞게 **개선·재구성**합니다.
+9) summary에 한국어로 2~4문장 레이아웃 의도를 설명합니다.
+10) JSON만 출력.
+
+[제작 주제]
+${topic}
+
+[참조 VI 가이드라인]
+${guide}
+
+[현재 캔버스 JSON]
+${ctx || "{}"}`;
+
+  let lastErr: unknown;
+  for (const modelId of textModelCandidates()) {
+    const model = genAI.getGenerativeModel({
+      model: modelId,
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: designDraftProposalSchema,
+      },
+    });
+    try {
+      const raw = (await model.generateContent(prompt)).response.text();
+      const parsed = JSON.parse(raw) as unknown;
+      const proposal = parseDraftProposalPayload(parsed);
+      if (proposal) return proposal;
+    } catch (e) {
+      rethrowIfInvalidApiKey(e);
+      lastErr = e;
+      if (shouldTryNextTextModel(e)) continue;
+      throw e;
+    }
+  }
+  console.warn("[gemini] draft proposal failed", lastErr);
+  return null;
+}
