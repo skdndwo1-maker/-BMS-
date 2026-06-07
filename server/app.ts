@@ -386,6 +386,9 @@ app.post("/api/simply-heart/step", async (req, res) => {
       return;
     }
 
+    const rawMode = (req.body as { mode?: unknown })?.mode;
+    const mode: "audit" | "generate" = rawMode === "generate" ? "generate" : "audit";
+
     const t0 = Date.now();
     const { text, model } = await runSimplyHeartStep({
       step: 0,
@@ -393,6 +396,7 @@ app.post("/api/simply-heart/step", async (req, res) => {
       extractedPdfText,
       imageParts: imageParts.length ? imageParts : undefined,
       prior: {},
+      mode,
     });
 
     void persistRun({

@@ -7,11 +7,18 @@ export async function postSimplyHeartStep(args: {
   text: string;
   pdfBase64?: string;
   images?: SimplyHeartImagePart[];
+  mode?: "audit" | "generate";
 }): Promise<{ text: string; model?: string }> {
   const r = await fetch(apiUrl("/api/simply-heart/step"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ step: 0, text: args.text, pdfBase64: args.pdfBase64, images: args.images }),
+    body: JSON.stringify({
+      step: 0,
+      text: args.text,
+      pdfBase64: args.pdfBase64,
+      images: args.images,
+      mode: args.mode ?? "audit",
+    }),
   });
   const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; text?: string; model?: string };
   if (!r.ok || !j?.ok) {

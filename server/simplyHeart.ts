@@ -98,8 +98,8 @@ function sharedRules(): string {
 `.trim();
 }
 
-/** 통합 분석: 진단 + Do/Don't + 단일 교정안 */
-function unifiedInstruction(): string {
+/** 통합 분석(검수): 진단 + Do/Don't + 교정안 */
+function unifiedAuditInstruction(): string {
   return `
 한 번의 응답에 아래 **세 구역**만 넣으세요. (Pain·Empathy 등 **별도 대제목** 금지)
 
@@ -112,6 +112,10 @@ function unifiedInstruction(): string {
 
 ## 요청내용 분석 (문제 진단)
 [구조] \`### 예상 타겟\` → \`### 목적\` → \`### 문제 진단\` 순서 고정.
+[사용자 입력 반영 — 필수] **[카테고리 선택]·[확인 분야]·[검수 내용]**을 아래 세 구역과 솔루션에 **모두** 반영하세요.
+- ### 예상 타겟: [확인 분야]·[검수 내용]·[카테고리 선택] 맥락에서 도출. 카테고리는 조직·채널 관점을 반영.
+- ### 목적: [확인 분야]와 [검수 내용]에서 드러나는 목적을 정리.
+- ### 문제 진단: [검수 내용] 중심으로 진단. [카테고리 선택]에 맞는 가이드 관점 적용.
 [예상 타겟·목적] 각각 **서술 문단**(1~3문장). 이 두 구역에 **번호(1. 2.)·불릿(-)** 금지.
 [문제 진단] **이 헤딩 아래만** 번호 목록. 각 줄 \`1. 소제목: 진단 내용\` (2~4줄).
 
@@ -122,6 +126,7 @@ function unifiedInstruction(): string {
 ### 문제 진단
 
 ## Do & Don't
+[사용자 입력 반영] [카테고리 선택]·[검수 내용] 맥락에 맞는 Do/Don't를 제시.
 ### Do
 - 가이드 근거 실행 항목만. 각 항목 \`한 줄\` 또는 \`소제목: 한두 문장\`.
 
@@ -130,11 +135,43 @@ function unifiedInstruction(): string {
 
 ## Simply U+ 솔루션
 - **대안·세부 비교·장문 분석 금지.** 오직 **하나의 교정안**만 제시합니다.
+- [카테고리 선택]·[확인 분야]·[검수 내용]을 모두 반영한 교정안.
 
 ### Simply U+ 솔루션
 - **고객이 바로 쓸 수 있는 문장/안** 1세트(필요 시 따옴표로 예시 1개).
 - 보완 포인트가 있으면 불릿 2~4개 이내로만. (별도 '솔루션 2·3' 등 금지)
 `.trim();
+}
+
+/** 통합 생성: 솔루션 + 반영 항목만 (진단·Do/Don't 없음) */
+function unifiedGenerateInstruction(): string {
+  return `
+사용자는 **새 메시지 생성**을 요청했습니다. **문제 진단·Do & Don't 구역은 출력하지 마세요.**
+
+[정확한 ## 대제목 — 이 한 줄만]
+## Simply U+ 솔루션
+
+---
+
+## Simply U+ 솔루션
+
+### Simply U+ 솔루션
+[출력 규칙 — 엄격]
+- **고객 대면용 완성 문구(모범 답안)만** 출력하세요. 분석·진단·반영 설명은 **절대 넣지 마세요**.
+- 불릿(-)·「~를 반영하여」「~관점에서」「입력하신」 등 **메타 코멘트·작성 근거 문장 금지**.
+- [카테고리 선택]·[타겟]·[목적]·[생성 개요]는 **완성 문구 안에 자연스럽게 녹이되**, 항목별 설명은 하지 마세요.
+- **바로 복사·붙여넣기** 가능한 1세트(제목+본문, 또는 \`>\` 인용 블록 1개).
+
+### 반영 항목 상세
+- **분석·반영 설명은 이 구역에만** 작성하세요. \`- [태그]: 설명\` 형식 **3~6개**.
+- **[카테고리 선택]·[타겟]·[목적]·[생성 개요]** 각각이 모범 답안에 어떻게 반영됐는지 **항목마다 1문장**.
+- (미입력) 항목은 생략.
+- 예: \`- [카테고리 반영]: …\`, \`- [타겟 반영]: …\`, \`- [목적 반영]: …\`, \`- [생성 개요 반영]: …\`
+`.trim();
+}
+
+function unifiedInstruction(mode: "audit" | "generate"): string {
+  return mode === "generate" ? unifiedGenerateInstruction() : unifiedAuditInstruction();
 }
 
 function stepInstruction(step: 1 | 2 | 3 | 4): string {
@@ -215,13 +252,14 @@ function buildUserPayload(opts: {
   extractedPdfText?: string;
   prior: Partial<Record<"1" | "2" | "3", string>>;
   step: 0 | 1 | 2 | 3 | 4;
+  mode?: "audit" | "generate";
 }): string {
   const chunks: string[] = [`[사용자 입력 — 텍스트]\n${opts.userText || "(없음)"}`];
   if (opts.extractedPdfText?.trim()) {
     chunks.push(`[사용자 첨부 PDF에서 추출한 텍스트]\n${opts.extractedPdfText.trim()}`);
   }
   if (opts.step === 0) {
-    chunks.push(`\n---\n${unifiedInstruction()}`);
+    chunks.push(`\n---\n${unifiedInstruction(opts.mode ?? "audit")}`);
     return chunks.join("\n\n");
   }
   if (opts.prior["1"]) chunks.push(`[1단계 결과 요약·전문]\n${opts.prior["1"]}`);
@@ -239,6 +277,7 @@ export async function runSimplyHeartStep(opts: {
   extractedPdfText?: string;
   imageParts?: SimplyHeartImagePart[];
   prior: Partial<Record<"1" | "2" | "3", string>>;
+  mode?: "audit" | "generate";
 }): Promise<{ text: string; model: string }> {
   const apiKeys = geminiApiKeyCandidates();
   if (apiKeys.length === 0) throw new Error("GEMINI_API_KEY가 설정되어 있지 않습니다.");
