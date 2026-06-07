@@ -4,7 +4,9 @@ import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { getSupabaseClient, isSessionPersistedToDisk } from "@/lib/supabaseClient";
 import { APP_DISPLAY_NAME } from "@/constants/appBranding";
+import type { LegalDocumentKind } from "@/constants/legalDocuments";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
+import { LegalDocumentModal } from "@/components/LegalDocumentModal";
 
 /** Reference: minimalist login — white bg, grey inputs, coral CTA (#FF7051) */
 const PALETTE = {
@@ -36,6 +38,13 @@ export function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [submitHovered, setSubmitHovered] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
+  const [legalModal, setLegalModal] = useState<LegalDocumentKind | null>(null);
+
+  const openLegalModal = (kind: LegalDocumentKind) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setLegalModal(kind);
+  };
 
   useEffect(() => {
     if (!sb) return;
@@ -283,10 +292,7 @@ export function LoginScreen() {
               I agree with{" "}
               <button
                 type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  toast.info("Terms 내용은 준비 중입니다.");
-                }}
+                onClick={openLegalModal("terms")}
                 style={{
                   font: "inherit",
                   color: PALETTE.ink,
@@ -302,10 +308,7 @@ export function LoginScreen() {
               and{" "}
               <button
                 type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  toast.info("Privacy Policy 내용은 준비 중입니다.");
-                }}
+                onClick={openLegalModal("privacy")}
                 style={{
                   font: "inherit",
                   color: PALETTE.ink,
@@ -375,7 +378,7 @@ export function LoginScreen() {
           <div style={{ marginTop: 8, display: "flex", justifyContent: "center", gap: 10, alignItems: "center" }}>
             <button
               type="button"
-              onClick={() => toast.info("Privacy Policy 내용은 준비 중입니다.")}
+              onClick={openLegalModal("privacy")}
               style={{
                 fontSize: 10,
                 color: PALETTE.mutedSoft,
@@ -390,7 +393,7 @@ export function LoginScreen() {
             <span style={{ fontSize: 10, color: PALETTE.mutedSoft }}>•</span>
             <button
               type="button"
-              onClick={() => toast.info("Terms 내용은 준비 중입니다.")}
+              onClick={openLegalModal("terms")}
               style={{
                 fontSize: 10,
                 color: PALETTE.mutedSoft,
@@ -406,6 +409,14 @@ export function LoginScreen() {
         </div>
       </div>
       </div>
+
+      <LegalDocumentModal
+        kind={legalModal}
+        open={legalModal !== null}
+        onOpenChange={(open) => {
+          if (!open) setLegalModal(null);
+        }}
+      />
     </div>
   );
 }
