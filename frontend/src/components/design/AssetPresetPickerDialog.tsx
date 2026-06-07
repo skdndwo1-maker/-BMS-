@@ -11,6 +11,8 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   title: string;
   presets: AssetPresetItem[];
+  /** 2D 일러스트와 분리된 3D 클레이모피즘 프리셋 */
+  presets3d?: AssetPresetItem[];
   filterPresets: (items: AssetPresetItem[], query: string) => AssetPresetItem[];
   onPick: (item: AssetPresetItem) => void;
   onDropFiles: (files: File[]) => void;
@@ -30,13 +32,16 @@ function AssetPresetPickerDialogOpen({
   onOpenChange,
   title,
   presets,
+  presets3d,
   filterPresets,
   onPick,
   onDropFiles,
   layout,
 }: Props) {
   const [q, setQ] = useState("");
+  const [illuDimension, setIlluDimension] = useState<"2d" | "3d">("2d");
   const [illuGroup, setIlluGroup] = useState<"기능" | "감정">("기능");
+  const has3d = layout === "illu" && (presets3d?.length ?? 0) > 0;
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: (accepted) => {
@@ -56,9 +61,10 @@ function AssetPresetPickerDialogOpen({
     return () => window.removeEventListener("keydown", onKey);
   }, [onOpenChange]);
 
-  const filtered = filterPresets(presets, q);
+  const activePresets = has3d && illuDimension === "3d" ? (presets3d ?? []) : presets;
+  const filtered = filterPresets(activePresets, q);
   const filteredByGroup =
-    layout === "illu"
+    layout === "illu" && (!has3d || illuDimension === "2d")
       ? filtered.filter((p) => {
           const isEmotion = p.keywords.includes("감정");
           return illuGroup === "감정" ? isEmotion : !isEmotion;
@@ -88,22 +94,50 @@ function AssetPresetPickerDialogOpen({
         </div>
         <div className="p-4">
           {layout === "illu" ? (
-            <div className="mb-3 flex items-center gap-1.5 rounded-xl bg-gray-100 p-1">
-              {(["기능", "감정"] as const).map((k) => {
-                const active = illuGroup === k;
-                return (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setIlluGroup(k)}
-                    className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-semibold transition-colors ${
-                      active ? "bg-white text-[#FF7F66] shadow-sm" : "text-gray-600 hover:bg-white/60"
-                    }`}
-                  >
-                    {k}
-                  </button>
-                );
-              })}
+            <div className="mb-3 space-y-2">
+              {has3d ? (
+                <div className="flex items-center gap-1.5 rounded-xl bg-gray-100 p-1">
+                  {(["2d", "3d"] as const).map((k) => {
+                    const active = illuDimension === k;
+                    const label = k === "2d" ? "2D 일러스트" : "3D 일러스트";
+                    return (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setIlluDimension(k)}
+                        className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-semibold transition-colors ${
+                          active ? "bg-white text-[#FF7F66] shadow-sm" : "text-gray-600 hover:bg-white/60"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {!has3d || illuDimension === "2d" ? (
+                <div className="flex items-center gap-1.5 rounded-xl bg-gray-100 p-1">
+                  {(["기능", "감정"] as const).map((k) => {
+                    const active = illuGroup === k;
+                    return (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setIlluGroup(k)}
+                        className={`flex-1 rounded-lg px-3 py-2 text-[11px] font-semibold transition-colors ${
+                          active ? "bg-white text-[#FF7F66] shadow-sm" : "text-gray-600 hover:bg-white/60"
+                        }`}
+                      >
+                        {k}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-[11px] text-gray-500 px-1">
+                  RCS 가안 스타일의 3D 클레이모피즘 오브젝트입니다.
+                </p>
+              )}
             </div>
           ) : null}
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">

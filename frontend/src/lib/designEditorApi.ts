@@ -149,3 +149,36 @@ export async function replaceDesignImage(body: {
   }
   return { mimeType: data.mimeType, data: data.data };
 }
+
+export type GeneratedDesignAssetAlternative = { name: string; svg: string };
+
+export async function generateDesignAsset(body: {
+  assetKind: "pictogram" | "illustration";
+  illustrationStyle?: "2d" | "3d";
+  direction: string;
+  templateLabel?: string;
+  creativeTopic?: string;
+}): Promise<{ alternatives: GeneratedDesignAssetAlternative[] }> {
+  const r = await fetch(apiUrl("/api/design-editor/generate-asset"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await readJsonBody(r);
+  if (!r.ok || !Array.isArray(data.alternatives)) {
+    throw new Error(typeof data.error === "string" ? data.error : "generate_asset_failed");
+  }
+  const alternatives = (data.alternatives as unknown[])
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const name = typeof (item as { name?: unknown }).name === "string" ? (item as { name: string }).name : "";
+      const svg = typeof (item as { svg?: unknown }).svg === "string" ? (item as { svg: string }).svg : "";
+      if (!name.trim() || !svg.trim()) return null;
+      return { name: name.trim(), svg: svg.trim() };
+    })
+    .filter((x): x is GeneratedDesignAssetAlternative => x != null);
+  if (alternatives.length === 0) {
+    throw new Error(typeof data.error === "string" ? data.error : "generate_asset_failed");
+  }
+  return { alternatives };
+}

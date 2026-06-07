@@ -909,7 +909,22 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         if (k === "body") bodyIds.add("body-1");
         else if (k.startsWith("body:")) bodyIds.add(k.slice(5));
       }
-      if (!removeTitle && !removeFooter && !removeImage && !removeUploadedLogoKey && bodyIds.size === 0) return;
+      const assetIds = new Set<string>();
+      for (const k of keys) {
+        if (!k.startsWith("asset:")) continue;
+        const id = k.slice(6);
+        const a = (c0.assetLayers ?? []).find((x) => x.id === id);
+        if (a && !a.locked) assetIds.add(id);
+      }
+      if (
+        !removeTitle &&
+        !removeFooter &&
+        !removeImage &&
+        !removeUploadedLogoKey &&
+        bodyIds.size === 0 &&
+        assetIds.size === 0
+      )
+        return;
       e.preventDefault();
       if (removeImage) imagePanSessionRef.current = null;
       const c = contentRef.current;
@@ -928,12 +943,16 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         next.customUploadedLogoRect = undefined;
       }
       if (bodyIds.size > 0) next = applyRemoveBodyBlockIds(next, bodyIds);
+      if (assetIds.size > 0) {
+        next.assetLayers = (next.assetLayers ?? []).filter((a) => !assetIds.has(a.id));
+      }
       const removedKeys: string[] = [];
       if (removeTitle) removedKeys.push("title");
       if (removeFooter) removedKeys.push("footer");
       if (removeImage) removedKeys.push("image");
       if (removeUploadedLogoKey) removedKeys.push("uploadedLogo");
       for (const id of bodyIds) removedKeys.push(id === "body-1" ? "body" : `body:${id}`);
+      for (const id of assetIds) removedKeys.push(`asset:${id}`);
       next = removeGroupsTouchingKeys(next, [...removedKeys, ...selectedKeysRef.current.filter(isGroupSelectionKey)]);
       onContentChange(next);
       setSelectedKeys((prev) =>
@@ -946,6 +965,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             const id = k === "body" ? "body-1" : k.slice(5);
             return !bodyIds.has(id);
           }
+          if (k.startsWith("asset:")) return !assetIds.has(k.slice(6));
           return true;
         })
       );

@@ -517,3 +517,130 @@ export async function runDesignEditorCanvasVisualCorrection(opts: {
     viGuidelineTakesPrecedence: true
   });
 }
+
+const assetGenerationSchema = {
+  type: SchemaType.OBJECT,
+  description: "브랜드 에디터용 SVG 일러스트/픽토그램 3종 대안",
+  properties: {
+    alternatives: {
+      type: SchemaType.ARRAY,
+      description: "서로 다른 구도·오브젝트의 대안 3개",
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          name: { type: SchemaType.STRING, description: "짧은 한국어 이름" },
+          svg: { type: SchemaType.STRING, description: "단일 루트 svg 요소 전체 문자열" },
+        },
+        required: ["name", "svg"],
+      },
+    },
+  },
+  required: ["alternatives"],
+} as Schema;
+
+function parseAssetAlternatives(raw: unknown): Array<{ name: string; svg: string }> {
+  if (!raw || typeof raw !== "object") return [];
+  const alts = (raw as { alternatives?: unknown }).alternatives;
+  if (!Array.isArray(alts)) return [];
+  const out: Array<{ name: string; svg: string }> = [];
+  for (const item of alts) {
+    if (!item || typeof item !== "object") continue;
+    const name = typeof (item as { name?: unknown }).name === "string"
+      ? (item as { name: string }).name.trim().slice(0, 40)
+      : "";
+    const svgRaw = typeof (item as { svg?: unknown }).svg === "string" ? (item as { svg: string }).svg : "";
+    const svg = normalizeGeneratedSvg(svgRaw);
+    if (name && svg) out.push({ name, svg });
+  }
+  return out;
+}
+
+function normalizeGeneratedSvg(raw: string): string | null {
+  const trimmed = raw.trim();
+  const match = trimmed.match(/<svg[\s\S]*<\/svg>/i);
+  if (!match) return null;
+  return match[0].replace(/\n/g, " ").trim();
+}
+
+export type DesignEditorAssetKind = "pictogram" | "illustration";
+export type DesignEditorIllustrationStyle = "2d" | "3d";
+
+/**
+ * 디자인 에디터: 사용자 생성방향에 맞는 SVG 픽토그램·일러스트 생성
+ */
+export async function runDesignEditorAssetGeneration(opts: {
+  assetKind: DesignEditorAssetKind;
+  illustrationStyle?: DesignEditorIllustrationStyle;
+  direction: string;
+  templateLabel?: string;
+  creativeTopic?: string;
+}): Promise<{ alternatives: Array<{ name: string; svg: string }> } | null> {
+  const key = getKey();
+  const direction = opts.direction.trim();
+  if (!key || !direction) return null;
+
+  const styleBlock =
+    opts.assetKind === "pictogram"
+      ? `[픽토그램 스타일]
+- viewBox="0 0 64 64"
+- 단색 라인 아이콘, stroke-width 3~4, stroke-linecap round
+- 주색 #1A1A1A, 포인트 #F43182
+- 배경 없음, 텍스트·글자 금지, 단일 아이콘`
+      : opts.illustrationStyle === "3d"
+        ? `[3D 일러스트 스타일 — RCS 클레이모피즘]
+- viewBox="0 0 240 240"
+- 부드러운 3D 오브젝트(둥근 모서리, 매트 질감)
+- 파스텔 흰/회/핑크(#F43182, #FF79B6), 필요 시 버건디 포인트
+- 하단에 옅은 타원 그림자(opacity .06~.08)
+- 텍스트·글자 금지`
+        : `[2D 일러스트 스타일 — RCS 플랫]
+- viewBox="0 0 240 240"
+- 부드러운 파스텔(#FFF0F5, #FAD7E8, #E8D9F5) + 마젠타 포인트 #F43182
+- 하단 옅은 타원 그림자, 단순 도형 조합
+- 텍스트·글자 금지`;
+
+  const genAI = new GoogleGenerativeAI(key);
+  const prompt = `역할: LG U+ 브랜드 디자인 에디터용 SVG 아티스트.
+
+작업: 아래 [생성방향]에 맞는 ${opts.assetKind === "pictogram" ? "픽토그램" : "일러스트"} SVG **대안 3개**를 설계하세요.
+각 대안은 같은 주제지만 구도·오브젝트 조합·포인트 색 배치가 서로 달라야 합니다.
+${styleBlock}
+
+규칙:
+1) alternatives 배열에 정확히 3개 항목. 각 svg는 xmlns="http://www.w3.org/2000/svg" 포함 완전한 <svg>...</svg> 한 개.
+2) id 충돌 방지를 위해 gradient/filter id는 대안마다 다른 짧은 접두 사용.
+3) name은 2~12자 한국어(3D면 3D- 접두 가능)로 대안별 요약.
+4) JSON만 출력: { "alternatives": [ { "name": "...", "svg": "..." }, ... ] }
+
+템플릿: ${opts.templateLabel ?? "template"}
+${opts.creativeTopic?.trim() ? `\n[제작 주제]\n${opts.creativeTopic.trim()}\n` : ""}
+[생성방향]
+${direction}`;
+
+  let lastErr: unknown;
+  for (const modelId of textModelCandidates()) {
+    const model = genAI.getGenerativeModel({
+      model: modelId,
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: assetGenerationSchema
+      }
+    });
+    try {
+      const raw = (await model.generateContent(prompt)).response.text();
+      const parsed = JSON.parse(raw) as unknown;
+      const alternatives = parseAssetAlternatives(parsed);
+      if (alternatives.length >= 3) return { alternatives: alternatives.slice(0, 3) };
+      if (alternatives.length > 0) {
+        console.warn("[gemini] asset generation returned fewer than 3 alternatives", alternatives.length);
+      }
+    } catch (e) {
+      rethrowIfInvalidApiKey(e);
+      lastErr = e;
+      if (shouldTryNextTextModel(e)) continue;
+      throw e;
+    }
+  }
+  console.warn("[gemini] asset generation failed", lastErr);
+  return null;
+}

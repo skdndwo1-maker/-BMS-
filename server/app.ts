@@ -20,6 +20,7 @@ import {
   runDesignEditorCanvasInspection,
   runDesignEditorCanvasVisualCorrection,
   runDesignEditorTextSuggestion,
+  runDesignEditorAssetGeneration,
   runInspectionWithGemini,
   runOptionsPageChat,
   summarizeGuidelineFile,
@@ -1295,6 +1296,63 @@ app.post("/api/design-editor/suggest-text", async (req, res) => {
       model: process.env.GEMINI_MODEL?.trim() || null,
     });
     res.json(out);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+app.post("/api/design-editor/generate-asset", async (req, res) => {
+  try {
+    const direction = typeof req.body?.direction === "string" ? req.body.direction.trim() : "";
+    const assetKind = req.body?.assetKind === "pictogram" ? "pictogram" : "illustration";
+    const illustrationStyle = req.body?.illustrationStyle === "3d" ? "3d" : "2d";
+    const templateLabel = String(req.body?.templateLabel ?? "template");
+    const creativeTopic =
+      typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
+
+    if (!direction) {
+      res.status(400).json({ error: "direction_required" });
+      return;
+    }
+    if (!process.env.GEMINI_API_KEY?.trim()) {
+      res.status(503).json({ error: "GEMINI_API_KEY가 설정되어 있지 않습니다." });
+      return;
+    }
+
+    const out = await runDesignEditorAssetGeneration({
+      assetKind,
+      illustrationStyle: assetKind === "illustration" ? illustrationStyle : undefined,
+      direction,
+      templateLabel,
+      creativeTopic: creativeTopic || undefined,
+    });
+
+    if (!out || out.alternatives.length === 0) {
+      res.status(503).json({ error: "에셋 생성에 실패했습니다. 생성방향을 조금 더 구체적으로 입력해 보세요." });
+      return;
+    }
+
+    await persistRun({
+      req,
+      type: "design_editor_asset_generation",
+      status: "pending_review",
+      inputJson: {
+        assetKind,
+        illustrationStyle: assetKind === "illustration" ? illustrationStyle : null,
+        direction,
+        templateLabel,
+        creativeTopic: creativeTopic || null,
+      },
+      outputJson: {
+        count: out.alternatives.length,
+        names: out.alternatives.map((a) => a.name),
+      },
+      inputText: direction,
+      outputText: out.alternatives.map((a) => a.name).join(", "),
+      model: process.env.GEMINI_MODEL?.trim() || null,
+    });
+
+    res.json({ ok: true, alternatives: out.alternatives });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }

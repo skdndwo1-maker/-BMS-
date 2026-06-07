@@ -10,7 +10,7 @@ import {
   Upload, Image as ImageIcon, Sparkles, Type,
   AlignLeft,
   CornerDownLeft, CornerDownRight, CornerUpLeft, CornerUpRight,
-  ChevronDown, ChevronUp, Settings, Shapes, Trash2, Eye, EyeOff, Plus,
+  ChevronDown, ChevronUp, Settings, Shapes, Trash2, Eye, EyeOff, Plus, Loader2,
 } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -22,8 +22,18 @@ import {
   DEFAULT_POSTER_BODY_EXTRA_2,
 } from "@/design/posterDefaults";
 import { adjustBoldRangesOnPlainReplace } from "@/design/bodyBoldRanges";
-import { ILLUSTRATION_PRESETS, PICTOGRAM_PRESETS, filterAssetPresets } from "@/design/assetPresets";
+import {
+  ILLUSTRATION_3D_PRESETS,
+  ILLUSTRATION_PRESETS,
+  PICTOGRAM_PRESETS,
+  filterAssetPresets,
+} from "@/design/assetPresets";
 import { AssetPresetPickerDialog } from "@/components/design/AssetPresetPickerDialog";
+import {
+  AiAssetAlternativesDialog,
+  type AiAssetAlternative,
+} from "@/components/design/AiAssetAlternativesDialog";
+import { generateDesignAsset } from "@/lib/designEditorApi";
 import { CoralTitleMarker } from "@/components/InspectionSectionTitle";
 import { resolveRcsMessageBackground } from "@/components/design/RCSCanvas";
 import { templates as allDesignTemplates } from "@/design/templates";
@@ -144,6 +154,10 @@ function createAssetLayer(src: string, type: AssetType, name: string): AssetLaye
   };
 }
 
+function svgPresetToDataUri(svg: string): string {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg.replace(/\n/g, "").trim())}`;
+}
+
 export function ContentPanel({ content, onContentChange, onShowQuickStart, templateId, focusTarget }: ContentPanelProps) {
   const [imagePreview,        setImagePreview]        = useState<string|null>(null);
   const [logoPreview,         setLogoPreview]         = useState<string|null>(null);
@@ -159,6 +173,17 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
 
   const [pictoDialogOpen, setPictoDialogOpen] = useState(false);
   const [illustDialogOpen, setIllustDialogOpen] = useState(false);
+  const [illustAiDirection, setIllustAiDirection] = useState("");
+  const [pictoAiDirection, setPictoAiDirection] = useState("");
+  const [illustAiStyle, setIllustAiStyle] = useState<"2d" | "3d">("2d");
+  const [illustAiBusy, setIllustAiBusy] = useState(false);
+  const [pictoAiBusy, setPictoAiBusy] = useState(false);
+  const [illustAiError, setIllustAiError] = useState<string | null>(null);
+  const [pictoAiError, setPictoAiError] = useState<string | null>(null);
+  const [aiAltDialog, setAiAltDialog] = useState<{
+    assetType: AssetType;
+    alternatives: AiAssetAlternative[];
+  } | null>(null);
 
   /** 우측 패널 내부만 스크롤 — window/document scrollIntoView 시 하단 회색 띠 유발 방지 */
   const scrollPanelSection = useCallback((el: HTMLElement | null) => {
@@ -306,6 +331,118 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const toggleAssetVisible = (id:string) => onContentChange({ ...content, assetLayers: assetLayers.map(a=>a.id===id?{...a,visible:!a.visible}:a) });
   const deleteAsset        = (id:string) => onContentChange({ ...content, assetLayers: assetLayers.filter(a=>a.id!==id) });
 
+  const appendGeneratedAsset = useCallback(
+    (type: AssetType, name: string, src: string) => {
+      const layer = createAssetLayer(src, type, name);
+      onContentChange((prev) => ({
+        ...prev,
+        assetLayers: [...(prev.assetLayers ?? []), layer],
+      }));
+    },
+    [onContentChange]
+  );
+
+  const showAiAlternatives = useCallback(
+    (assetType: AssetType, items: Array<{ name: string; svg: string }>) => {
+      setAiAltDialog({
+        assetType,
+        alternatives: items.map((item) => ({
+          name: item.name,
+          src: svgPresetToDataUri(item.svg),
+        })),
+      });
+    },
+    []
+  );
+
+  const pickAllAiAlternatives = useCallback(() => {
+    if (!aiAltDialog) return;
+    const { assetType, alternatives } = aiAltDialog;
+    onContentChange((prev) => {
+      const layers = alternatives.map((item, i) => ({
+        ...createAssetLayer(item.src, assetType, item.name),
+        x: 0.06 + i * 0.05,
+        y: 0.08 + i * 0.03,
+      }));
+      return { ...prev, assetLayers: [...(prev.assetLayers ?? []), ...layers] };
+    });
+    setAiAltDialog(null);
+  }, [aiAltDialog, onContentChange]);
+
+  const runIllustAiGenerate = useCallback(async () => {
+    const direction = illustAiDirection.trim();
+    if (!direction || illustAiBusy) return;
+    setIllustAiBusy(true);
+    setIllustAiError(null);
+    try {
+      const out = await generateDesignAsset({
+        assetKind: "illustration",
+        illustrationStyle: illustAiStyle,
+        direction,
+        templateLabel: templateMeta?.name ?? templateId ?? "template",
+        creativeTopic: content.title?.trim() || undefined,
+      });
+      showAiAlternatives("illustration", out.alternatives);
+    } catch (e) {
+      setIllustAiError(e instanceof Error ? e.message : "일러스트 생성에 실패했습니다.");
+    } finally {
+      setIllustAiBusy(false);
+    }
+  }, [
+    content.title,
+    illustAiBusy,
+    illustAiDirection,
+    illustAiStyle,
+    showAiAlternatives,
+    templateId,
+    templateMeta?.name,
+  ]);
+
+  const runPictoAiGenerate = useCallback(async () => {
+    const direction = pictoAiDirection.trim();
+    if (!direction || pictoAiBusy) return;
+    setPictoAiBusy(true);
+    setPictoAiError(null);
+    try {
+      const out = await generateDesignAsset({
+        assetKind: "pictogram",
+        direction,
+        templateLabel: templateMeta?.name ?? templateId ?? "template",
+        creativeTopic: content.title?.trim() || undefined,
+      });
+      showAiAlternatives("pictogram", out.alternatives);
+    } catch (e) {
+      setPictoAiError(e instanceof Error ? e.message : "픽토그램 생성에 실패했습니다.");
+    } finally {
+      setPictoAiBusy(false);
+    }
+  }, [
+    content.title,
+    pictoAiBusy,
+    pictoAiDirection,
+    showAiAlternatives,
+    templateId,
+    templateMeta?.name,
+  ]);
+
+  const aiAlternativesDialog = (
+    <AiAssetAlternativesDialog
+      open={aiAltDialog != null}
+      onOpenChange={(open) => {
+        if (!open) setAiAltDialog(null);
+      }}
+      title={aiAltDialog?.assetType === "pictogram" ? "AI 픽토그램 대안" : "AI 일러스트 대안"}
+      assetType={aiAltDialog?.assetType ?? "illustration"}
+      alternatives={aiAltDialog?.alternatives ?? []}
+      onPick={(item) => {
+        if (!aiAltDialog) return;
+        appendGeneratedAsset(aiAltDialog.assetType, item.name, item.src);
+        setAiAltDialog(null);
+      }}
+      onPickAll={pickAllAiAlternatives}
+    />
+  );
+
   // ── 공통 컴포넌트 ─────────────────────────────────────────────────
 
   const LogoSelector = () => (
@@ -422,7 +559,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     </div>
   );
 
-  const AssetSection = () => (
+  const assetSection = (
     <div className="border-t border-gray-100 pt-4 space-y-4">
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">에셋</p>
       <p className="text-xs text-gray-400">업로드 후 캔버스 위에서 자유롭게 이동 · 리사이즈 가능</p>
@@ -445,6 +582,45 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           </Button>
         </div>
         <p className="text-xs text-gray-400">버튼을 눌러 팝업에서 검색·선택하세요</p>
+        <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-2.5 space-y-2">
+          <Label className="text-[11px] font-semibold text-gray-600">AI 생성</Label>
+          <Textarea
+            value={illustAiDirection}
+            onChange={(e) => setIllustAiDirection(e.target.value)}
+            placeholder="생성방향 (예: 요금제 가입 안내용 3D 봉투, 핑크 알람시계)"
+            className="min-h-[56px] text-xs resize-none bg-white"
+            disabled={illustAiBusy}
+            autoComplete="off"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-0.5">
+              {(["2d", "3d"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  disabled={illustAiBusy}
+                  onClick={() => setIllustAiStyle(k)}
+                  className={`rounded-md px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+                    illustAiStyle === k ? "bg-[#FF7F66]/10 text-[#FF7F66]" : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {k === "2d" ? "2D" : "3D"}
+                </button>
+              ))}
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 text-[12px] gap-1.5"
+              disabled={illustAiBusy || !illustAiDirection.trim()}
+              onClick={() => void runIllustAiGenerate()}
+            >
+              {illustAiBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              AI 생성
+            </Button>
+          </div>
+          {illustAiError ? <p className="text-[10px] text-red-500">{illustAiError}</p> : null}
+        </div>
       </div>
 
       {/* 픽토그램 (RCS에서는 옵션 제거) */}
@@ -457,6 +633,28 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
             </Button>
           </div>
           <p className="text-xs text-gray-400">버튼을 눌러 팝업에서 검색·선택하세요</p>
+          <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-2.5 space-y-2">
+            <Label className="text-[11px] font-semibold text-gray-600">AI 생성</Label>
+            <Textarea
+              value={pictoAiDirection}
+              onChange={(e) => setPictoAiDirection(e.target.value)}
+              placeholder="생성방향 (예: 와이파이 연결, 보안 쉴드, 결제 카드)"
+              className="min-h-[56px] text-xs resize-none bg-white"
+              disabled={pictoAiBusy}
+              autoComplete="off"
+            />
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 text-[12px] gap-1.5"
+              disabled={pictoAiBusy || !pictoAiDirection.trim()}
+              onClick={() => void runPictoAiGenerate()}
+            >
+              {pictoAiBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              AI 생성
+            </Button>
+            {pictoAiError ? <p className="text-[10px] text-red-500">{pictoAiError}</p> : null}
+          </div>
         </div>
       ) : null}
 
@@ -512,8 +710,9 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           onOpenChange={setIllustDialogOpen}
           title="일러스트 선택"
           presets={ILLUSTRATION_PRESETS}
+          presets3d={ILLUSTRATION_3D_PRESETS}
           filterPresets={filterAssetPresets}
-          layout="picto"
+          layout="illu"
           onPick={(p) => {
             const layer = createAssetLayer(p.src, "illustration", p.name);
             onContentChange({ ...content, assetLayers: [...assetLayers, layer] });
@@ -535,6 +734,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           }}
           onDropFiles={(files) => onAssetDrop(files, "pictogram")}
         />
+        {aiAlternativesDialog}
         <div>
           <h2 className="font-semibold text-gray-900 mb-1">브랜드 디자인 콘텐츠</h2>
           <div className="flex flex-col gap-1 mt-1">
@@ -1349,7 +1549,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           </div>
         ) : null}
 
-        <AssetSection/>
+        {assetSection}
       </div>
     );
   }
@@ -1367,6 +1567,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         className="hidden"
         onChange={handleLogoFileChange}
       />
+      {aiAlternativesDialog}
       <AssetPresetPickerDialog
         open={pictoDialogOpen}
         onOpenChange={setPictoDialogOpen}
@@ -1462,7 +1663,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           {imagePreview&&content.style!=="basic"?(<div className="space-y-3"><img src={imagePreview} alt="Preview" className="max-h-32 mx-auto rounded"/><p className="text-sm text-gray-600">Click or drag to replace</p></div>):(<div className="space-y-3"><ImageIcon className="w-10 h-10 mx-auto text-gray-400"/><p className="text-sm font-medium text-gray-700">{content.style==="basic"?"이미지 업로드 불가 (Basic 스타일)":"Drop an image here, or click to browse"}</p></div>)}
         </div>
       </div>
-      <AssetSection/>
+      {assetSection}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-2"><Sparkles className="w-4 h-4 text-blue-600 mt-0.5 shrink-0"/><div className="text-xs text-blue-900"><p className="font-medium mb-1">Pro Tips:</p><ul className="space-y-1 text-blue-800"><li>• Keep titles concise for maximum impact</li><li>• Use high-resolution images for print formats</li><li>• Text auto-resizes to fit your canvas</li></ul></div></div>
       </div>

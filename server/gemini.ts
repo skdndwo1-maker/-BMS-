@@ -29,8 +29,11 @@ export {
   generateDesignEditorReplacementImage,
   runDesignEditorTextSuggestion,
   runDesignEditorCanvasVisualCorrection,
+  runDesignEditorAssetGeneration,
   type DesignEditorViolationRow,
   type DesignEditorTextSuggestionTarget,
+  type DesignEditorAssetKind,
+  type DesignEditorIllustrationStyle,
 } from "./gemini/designEditor.js";
 export { runOptionsPageChat } from "./gemini/optionsChat.js";
 export {
