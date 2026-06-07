@@ -36,13 +36,13 @@ import {
 import { generateDesignAsset, isSvgAlternative } from "@/lib/designEditorApi";
 import {
   base64ToDataUri,
-  dataUriToFile,
   deleteUserGeneratedAsset,
   listUserGeneratedAssets,
   saveUserGeneratedAssetForCurrentUser,
   svgToDataUri,
   type UserGeneratedAsset,
 } from "@/lib/userGeneratedAssetsApi";
+import { readFileAsDataUrl } from "@/lib/designContentPersistence";
 import { MyGeneratedImagePickerDialog } from "@/components/design/MyGeneratedImagePickerDialog";
 import { useAuthSession } from "@/contexts/AuthSessionContext";
 import { CoralTitleMarker } from "@/components/InspectionSectionTitle";
@@ -237,9 +237,13 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     else if (focusTarget === "logo") scrollPanelSection(refLogo.current);
   }, [focusTarget, scrollPanelSection]);
 
-  /** 캔버스 등에서 배경 이미지 제거 시 로컬 미리보기와 동기화 */
+  /** 캔버스·불러오기 등에서 배경 이미지 변경 시 로컬 미리보기와 동기화 */
   useEffect(() => {
-    if (content.image == null) setImagePreview(null);
+    if (content.image == null) {
+      setImagePreview(null);
+      return;
+    }
+    if (typeof content.image === "string") setImagePreview(content.image);
   }, [content.image]);
 
   useEffect(() => {
@@ -289,10 +293,17 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     }));
   };
 
-  const onAssetDrop = useCallback((files: File[], type: AssetType) => {
-    const newAssets = files.map(f => createAssetLayer(URL.createObjectURL(f), type, f.name));
-    onContentChange({ ...content, assetLayers: [...assetLayers, ...newAssets] });
-  }, [content, assetLayers, onContentChange]);
+  const onAssetDrop = useCallback(
+    (files: File[], type: AssetType) => {
+      void (async () => {
+        const newAssets = await Promise.all(
+          files.map(async (f) => createAssetLayer(await readFileAsDataUrl(f), type, f.name)),
+        );
+        onContentChange({ ...content, assetLayers: [...assetLayers, ...newAssets] });
+      })();
+    },
+    [content, assetLayers, onContentChange],
+  );
 
   const applyRcsTitle = (nextTitle: string) => {
     const t = (nextTitle ?? "").trim();
@@ -301,15 +312,18 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   };
 
   const { getRootProps:getImageRP,  getInputProps:getImageIP,  isDragActive:isImageDrag  } = useDropzone({ onDrop:(f)=>{ if(f[0]){
-    onContentChange({
-      ...content,
-      image:f[0],
-      posterBackgroundImageRect: content.posterBackgroundImageRect ?? DEFAULT_POSTER_BG_RECT,
-      posterImageOpacity: 100,
-      posterImagePosX: 50,
-      posterImagePosY: 50,
-    });
-    setImagePreview(URL.createObjectURL(f[0]));
+    void (async () => {
+      const dataUrl = await readFileAsDataUrl(f[0]);
+      onContentChange({
+        ...content,
+        image: dataUrl,
+        posterBackgroundImageRect: content.posterBackgroundImageRect ?? DEFAULT_POSTER_BG_RECT,
+        posterImageOpacity: 100,
+        posterImagePosX: 50,
+        posterImagePosY: 50,
+      });
+      setImagePreview(dataUrl);
+    })();
   }}, accept:{"image/*":[".png",".jpg",".jpeg",".webp"]}, multiple:false });
   /**
    * 로고 업로드: react-dropzone 대신 ref 기반 hidden input을 쓴다.
@@ -324,11 +338,14 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      onContentChange({ ...content, logo: file });
-      setLogoPreview(URL.createObjectURL(file));
+      void (async () => {
+        const dataUrl = await readFileAsDataUrl(file);
+        onContentChange({ ...content, logo: dataUrl });
+        setLogoPreview(dataUrl);
+      })();
       e.target.value = "";
     },
-    [content, onContentChange]
+    [content, onContentChange],
   );
 
   const clearUploadedLogo = () => {
@@ -449,13 +466,11 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   );
 
   const applyGeneratedImage = useCallback(
-    async (name: string, dataUri: string) => {
-      const safeName = name.replace(/\s+/g, "_").slice(0, 40) || "ai-image";
-      const ext = dataUri.includes("image/jpeg") ? "jpg" : "png";
-      const file = await dataUriToFile(dataUri, `${safeName}.${ext}`);
+    (name: string, dataUri: string) => {
+      void name;
       onContentChange((prev) => ({
         ...prev,
-        image: file,
+        image: dataUri,
         posterBackgroundImageRect: prev.posterBackgroundImageRect ?? DEFAULT_POSTER_BG_RECT,
         posterImageOpacity: 100,
         posterImagePosX: 50,

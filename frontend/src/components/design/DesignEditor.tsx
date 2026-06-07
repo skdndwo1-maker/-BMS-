@@ -42,6 +42,10 @@ import {
   type DesignListItem,
 } from "@/lib/designsApi";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
+import {
+  normalizeDesignContentFromStorage,
+  serializeDesignContentForStorage,
+} from "@/lib/designContentPersistence";
 import { registerGlobalNavPersist } from "@/lib/globalNavPersistence";
 import { InspectionSectionTitle } from "@/components/InspectionSectionTitle";
 
@@ -350,7 +354,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
         lastLoadedIdRef.current = row.id;
         setDesignId(row.id);
         setDesignName(row.name || "");
-        setContentWithHistory(() => row.canvas_data as DesignContent);
+        setContentWithHistory(() => normalizeDesignContentFromStorage(row.canvas_data));
         try {
           const rawDraft = sessionStorage.getItem(DESIGN_EDITOR_NAV_DRAFT_KEY);
           if (rawDraft) {
@@ -371,7 +375,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
               Date.parse(d.savedAt) > Date.parse(row.updated_at)
             ) {
               if (d.designName != null && d.designName !== "") setDesignName(d.designName);
-              setContentWithHistory(() => d.content as DesignContent);
+              setContentWithHistory(() => normalizeDesignContentFromStorage(d.content));
               if (typeof d.zoom === "number" && Number.isFinite(d.zoom)) setZoom(d.zoom);
             }
           }
@@ -461,7 +465,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
       setDesignId(null);
       setDesignName(d.designName ?? "");
       if (typeof d.zoom === "number" && Number.isFinite(d.zoom)) setZoom(d.zoom);
-      setContentWithHistory(() => d.content as DesignContent);
+      setContentWithHistory(() => normalizeDesignContentFromStorage(d.content));
     } catch {
       /* ignore */
     }
@@ -579,11 +583,12 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     try {
       const userId = await ensureUserId();
       const thumbnailUrl = await captureThumbnailDataUrl();
+      const persistedContent = await serializeDesignContentForStorage(content);
       const row = await createDesign(sb, {
         userId,
         templateId: actualTemplateId ?? "",
         name,
-        content,
+        content: persistedContent,
         thumbnailUrl,
       });
       // 저장한 결과를 URL에 반영하되, 자동 복원 useEffect가 다시 돌지 않게 가드.
@@ -617,12 +622,13 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     try {
       const userId = await ensureUserId();
       const thumbnailUrl = await captureThumbnailDataUrl();
+      const persistedContent = await serializeDesignContentForStorage(content);
       const row = await updateDesign(sb, {
         userId,
         id: designId,
         templateId: actualTemplateId ?? "",
         name,
-        content,
+        content: persistedContent,
         thumbnailUrl,
       });
       setDesignName(row.name || name);
@@ -1335,7 +1341,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                               },
                               { replace: true }
                             );
-                            setContentWithHistory(() => row.canvas_data as DesignContent);
+                            setContentWithHistory(() => normalizeDesignContentFromStorage(row.canvas_data));
                             toast.success("불러오기 완료");
                             setActiveDialog("none");
                           } catch (e) {

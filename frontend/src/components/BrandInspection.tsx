@@ -690,13 +690,13 @@ export function BrandInspection() {
                       </span>
                     ) : (
                       <span
-                        className={
+                        className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
                           serverGuideline?.hasFile
-                            ? "inline-flex items-center rounded-full bg-[#FF7F66] px-2.5 py-0.5 text-[11px] font-bold text-white shadow-sm"
-                            : "rounded-full bg-[#E5E3DD] px-2.5 py-0.5 text-[11px] font-semibold text-[#6B6B6B]"
-                        }
+                            ? "bg-[#c8d9c4] font-bold text-[#2f4a38]"
+                            : "bg-[#E5E3DD] text-[#6B6B6B]"
+                        }`}
                       >
-                        {serverGuideline?.hasFile ? "Active" : "Off"}
+                        {serverGuideline?.hasFile ? "연동됨" : "미연동"}
                       </span>
                     )}
                     <Button
