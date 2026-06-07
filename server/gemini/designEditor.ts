@@ -401,18 +401,18 @@ export async function runDesignEditorTextSuggestion(opts: {
 요청된 슬롯: ${targetStr}
 [제작 주제]에 「부제2만」「본문2만」「부제1·본문1만」「전체」처럼 원하는 슬롯만 지정할 수 있습니다. 지정이 없으면 요청된 슬롯 전부에 맞춥니다.`;
 
-  const prompt = `역할: LG U+ 브랜드 카피라이터. U+ Simple 톤(간결·명료·고객 중심·불필요한 수식어 배제)을 따릅니다.
+  const prompt = `역할: LG U+ 브랜드 카피라이터. **Simply U+ 가이드라인**의 표현·톤·금지 사항을 따릅니다.
 
 작업:
 1) 아래 [캔버스 JSON]의 목적·톤·메시지 방향을 파악하세요.
-2) [참조 VI 가이드라인]의 표현·금지·톤 가이드를 반영하세요.
+2) [참조 Simply U+ 가이드라인]의 Simple 톤(간결·명료·고객 중심)과 실천 과제를 반영하세요.
 3) 요청된 슬롯만 채우고, 요청되지 않은 필드는 반드시 빈 문자열 "" 입니다.
 ${slotHelp}
 4) JSON만 출력합니다.
 
 템플릿: ${opts.templateLabel}
 ${opts.creativeTopic?.trim() ? `\n[제작 주제·의도]\n${opts.creativeTopic.trim()}\n` : ""}
-[참조 VI 가이드라인]
+[참조 Simply U+ 가이드라인]
 ${guide}
 
 [캔버스 JSON]
@@ -574,6 +574,7 @@ export async function runDesignEditorAssetGeneration(opts: {
   direction: string;
   templateLabel?: string;
   creativeTopic?: string;
+  guidelineContext?: string;
 }): Promise<{ alternatives: Array<{ name: string; svg: string }> } | null> {
   const key = getKey();
   const direction = opts.direction.trim();
@@ -614,6 +615,7 @@ ${styleBlock}
 
 템플릿: ${opts.templateLabel ?? "template"}
 ${opts.creativeTopic?.trim() ? `\n[제작 주제]\n${opts.creativeTopic.trim()}\n` : ""}
+${opts.guidelineContext?.trim() ? `\n[참조 VI 가이드라인 — 색·스타일·톤 우선]\n${opts.guidelineContext.trim().slice(0, 10_000)}\n` : ""}
 [생성방향]
 ${direction}`;
 
@@ -657,6 +659,7 @@ export async function runDesignEditorImageGeneration(opts: {
   direction: string;
   templateLabel?: string;
   creativeTopic?: string;
+  guidelineContext?: string;
 }): Promise<{ alternatives: Array<{ name: string; mimeType: string; base64: string }> } | null> {
   const direction = opts.direction.trim();
   if (!direction || !getKey()) return null;
@@ -677,6 +680,7 @@ export async function runDesignEditorImageGeneration(opts: {
 
 템플릿: ${opts.templateLabel ?? "template"}
 ${opts.creativeTopic?.trim() ? `\n[제작 주제]\n${opts.creativeTopic.trim()}\n` : ""}
+${opts.guidelineContext?.trim() ? `\n[참조 VI 가이드라인 — 색·구도·톤 우선]\n${opts.guidelineContext.trim().slice(0, 10_000)}\n` : ""}
 [생성방향]
 ${direction}
 
@@ -1013,10 +1017,11 @@ export async function runDesignEditorDraftProposal(opts: {
   const guide = opts.guidelineSummary.slice(0, 72_000);
   const ctx = opts.contentJson.slice(0, 28_000);
 
-  const prompt = `역할: LG U+ 브랜드 디자인 에디터 AI. U+ Simple 톤·VI 색(#F43182 포인트)·타이포 규칙을 따릅니다.
+  const prompt = `역할: LG U+ 브랜드 디자인 에디터 AI. **VI 가이드라인 PDF**의 색·타이포·여백·톤·무드를 **절대 우선**합니다.
 
 작업: [제작 주제]와 [캔버스 정보]에 맞는 **완성형 디자인 초안**을 JSON으로 설계하세요.
-로고 위치·메인 타이틀·부제(0~3)·본문(1~3)·유의사항·배경/히어로 이미지·픽토그램/일러스트를 **자유롭게** 배치하되, 캔버스 비율 안에서 겹치지 않게 합니다.
+로고 위치·메인 타이틀·부제(0~3)·본문(1~3)·유의사항·배경/히어로 이미지·픽토그램/일러스트를 **VI 규정 범위 안에서** 배치하되, 캔버스 비율 안에서 겹치지 않게 합니다.
+프롬프트의 [참조 VI 가이드라인]과 충돌 시 **항상 VI PDF를 따르세요**.
 
 [캔버스 정보]
 - 템플릿 ID: ${opts.templateLabel}

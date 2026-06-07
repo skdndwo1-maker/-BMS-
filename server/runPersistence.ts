@@ -10,6 +10,8 @@ export type RunType =
   | "design_editor_inspection"
   | "design_editor_text_suggestion"
   | "design_editor_visual_correction"
+  | "design_editor_draft_proposal"
+  | "design_editor_asset_generation"
   | "simply_heart";
 
 export async function persistRun(args: {

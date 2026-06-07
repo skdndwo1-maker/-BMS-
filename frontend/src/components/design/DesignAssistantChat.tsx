@@ -166,7 +166,7 @@ export function DesignAssistantChat({
   onCorrectionReference,
   templateId,
   templateMeta,
-  guidelineId = "uplus-brand-guideline",
+  guidelineId = "uplus-vi-guideline",
   /** false: RCS 고정(메인·본문 1) · true: 우측 패널 부제·본문 슬롯 수와 동기(최대 각 3) */
   panelSyncedTextSuggest = false,
 }: {
@@ -294,7 +294,7 @@ export function DesignAssistantChat({
         contentJson: JSON.stringify(sanitizeDesignContent(content)),
         templateLabel: templateId,
         targets: [target],
-        guidelineId,
+        guidelineId: "simply-uplus-guideline",
         creativeTopic: creativeTopic.trim() || undefined,
       });
       const text = pickTextForTarget(target, out);
@@ -552,9 +552,8 @@ export function DesignAssistantChat({
   return (
     <div className="space-y-3">
       <p className="text-[10px] leading-snug text-gray-500">
-        검수·교정은 서버에 등록된{" "}
-        <span className="font-medium text-gray-700">VI 가이드라인 PDF</span> 원문을 필수로 반영합니다. 텍스트 제안 등
-        기타 기능은 등록된 참조 가이드와 Gemini API를 사용합니다.
+        검수·교정·AI 디자인 제안은 <span className="font-medium text-gray-700">VI 가이드라인 PDF</span>,
+        텍스트 제안은 <span className="font-medium text-gray-700">Simply U+ 가이드라인</span>을 반영합니다.
       </p>
 
       <div className="space-y-1.5">

@@ -29,6 +29,17 @@ export type InspectionRunResult = {
 };
 
 /** 번들에 포함된 고정 PDF로 해당 슬롯을 덮어쓰고 AI 요약까지 시도 */
+export async function syncGuidelineFromSupabase(id: string): Promise<{ guideline: GuidelineInfo }> {
+  const r = await fetch(apiUrl(`/api/guidelines/${encodeURIComponent(id)}/sync-supabase`), {
+    method: "POST",
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error ?? `sync-supabase ${r.status}`);
+  }
+  return (await r.json()) as { guideline: GuidelineInfo };
+}
+
 export async function syncGuidelineFromFixed(id: string): Promise<{ guideline: GuidelineInfo }> {
   const r = await fetch(apiUrl(`/api/guidelines/${encodeURIComponent(id)}/sync-fixed`), {
     method: "POST"

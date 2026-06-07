@@ -8,26 +8,34 @@ import {
   PROJECT_ROOT,
   resolveStoredPath
 } from "./store.js";
+import { syncGuidelineFromSupabaseLibrary, canSyncGuidelineFromSupabase } from "./guidelineSupabaseSync.js";
+
+export type FixedGuidelineSpec = {
+  relativeSource: string;
+  /** Supabase 미동기화 시 시도할 레거시 로컬 경로 */
+  legacyRelativeSources?: string[];
+  displayName: string;
+};
 
 /**
- * 참조 가이드라인 옵션 ↔ `data/guidelines/` 하위 폴더의 최종 PDF 1개.
- * 프론트에서 옵션 선택 시 sync-fixed가 이 파일을 슬롯으로 복사하고 Gemini로 요약·검수 맥락에 사용합니다.
+ * 참조 가이드라인 옵션 ↔ 로컬 PDF 또는 Supabase Brand Library(`guide` 카테고리).
+ * VI·Simply U+는 Supabase file_name(`U+_VI_Guidelines.pdf`, `Simply_U+_Guidelines.pdf`) 우선.
  */
-export const FIXED_GUIDELINE_SOURCES: Record<string, { relativeSource: string; displayName: string }> = {
+export const FIXED_GUIDELINE_SOURCES: Record<string, FixedGuidelineSpec> = {
   "uplus-brand-guideline": {
     relativeSource: "data/guidelines/U+ 브랜드 가이드라인/U+ 브랜드 가이드라인.pdf",
     displayName: "U+ 브랜드 가이드라인"
   },
   "uplus-vi-guideline": {
-    relativeSource: "data/guidelines/U+ VI 가이드라인/U+ VI 가이드라인.pdf",
+    relativeSource: "data/guidelines/U+_VI_Guidelines.pdf",
+    legacyRelativeSources: ["data/guidelines/U+ VI 가이드라인/U+ VI 가이드라인.pdf"],
     displayName: "U+ VI 가이드라인"
   },
-  /** 심플리하게 분석 — repo의 고정 원본 PDF (sync-fixed 시 슬롯으로 복사) */
   "simply-uplus-guideline": {
-    relativeSource: "data/guidelines/Simply U+ 가이드라인/Simply U+ 가이드라인.pdf",
+    relativeSource: "data/guidelines/Simply_U+_Guidelines.pdf",
+    legacyRelativeSources: ["data/guidelines/Simply U+ 가이드라인/Simply U+ 가이드라인.pdf"],
     displayName: "Simply U+ 설명자료·실천과제 V2 (18개 분류·학습용)",
   },
-  /** simplyHeart 분석 두 번째 참조: 직무별 실행 가이드 (레포 고정 경로) */
   "simply-uplus-job-guide": {
     relativeSource:
       "data/guidelines/Simply U+ 직무별 실행 가이드/직무별 Simply. U+ 실행 가이드_v1_학습용.pdf",
@@ -41,16 +49,16 @@ export const SIMPLY_HEART_FIXED_GUIDE_IDS: readonly string[] = [
   "simply-uplus-job-guide",
 ];
 
-export function copyFixedGuidelineToSlot(id: string): GuidelineRecord {
-  const spec = FIXED_GUIDELINE_SOURCES[id];
-  if (!spec) {
-    throw new Error(`unknown_guideline: ${id}`);
+function resolveLocalSourcePath(spec: FixedGuidelineSpec): string | null {
+  const candidates = [spec.relativeSource, ...(spec.legacyRelativeSources ?? [])];
+  for (const rel of candidates) {
+    const abs = join(PROJECT_ROOT, rel);
+    if (existsSync(abs)) return abs;
   }
-  const absSrc = join(PROJECT_ROOT, spec.relativeSource);
-  if (!existsSync(absSrc)) {
-    throw new Error(`fixed_file_missing: ${spec.relativeSource}`);
-  }
+  return null;
+}
 
+function writeGuidelineRecordFromFile(id: string, absSrc: string, spec: FixedGuidelineSpec): GuidelineRecord {
   const prev = getGuideline(id);
   if (prev?.storedRelativePath) {
     const oldAbs = resolveStoredPath(prev.storedRelativePath);
@@ -62,7 +70,7 @@ export function copyFixedGuidelineToSlot(id: string): GuidelineRecord {
   }
 
   mkdirSync(GUIDELINES_DIR, { recursive: true });
-  const safe = basename(spec.relativeSource).replace(/[^a-zA-Z0-9._-]/g, "_");
+  const safe = basename(absSrc).replace(/[^a-zA-Z0-9._-]/g, "_");
   const fname = `${id}-${Date.now()}-${safe}`;
   const destAbs = join(GUIDELINES_DIR, fname);
   copyFileSync(absSrc, destAbs);
@@ -72,7 +80,7 @@ export function copyFixedGuidelineToSlot(id: string): GuidelineRecord {
   const record: GuidelineRecord = {
     id,
     displayName: spec.displayName,
-    originalName: basename(spec.relativeSource),
+    originalName: basename(absSrc),
     storedRelativePath,
     mimeType: "application/pdf",
     size: stat.size,
@@ -84,21 +92,65 @@ export function copyFixedGuidelineToSlot(id: string): GuidelineRecord {
   return record;
 }
 
-/** 슬롯이 비어 있거나 파일이 없으면 레포 고정 PDF로 자동 동기화 (Railway 등 fresh deploy 대응) */
+export function copyFixedGuidelineToSlot(id: string): GuidelineRecord {
+  const spec = FIXED_GUIDELINE_SOURCES[id];
+  if (!spec) {
+    throw new Error(`unknown_guideline: ${id}`);
+  }
+  const absSrc = resolveLocalSourcePath(spec);
+  if (!absSrc) {
+    throw new Error(`fixed_file_missing: ${spec.relativeSource}`);
+  }
+  return writeGuidelineRecordFromFile(id, absSrc, spec);
+}
+
+/** 슬롯이 비어 있으면 로컬 고정 PDF로 동기화 (동기 — Supabase는 ensureFixedGuidelineSlotAsync 사용) */
 export function ensureFixedGuidelineSlot(id: string): GuidelineRecord | null {
   let g = getGuideline(id);
   const fileMissing =
     !g?.storedRelativePath || !existsSync(resolveStoredPath(g.storedRelativePath));
   const notPdf = g != null && g.mimeType !== "application/pdf";
-  if ((fileMissing || notPdf) && FIXED_GUIDELINE_SOURCES[id]) {
+  if (!fileMissing && !notPdf) return g ?? null;
+  if (!FIXED_GUIDELINE_SOURCES[id]) return g ?? null;
+
+  try {
+    g = copyFixedGuidelineToSlot(id);
+  } catch (e) {
+    console.error(
+      `[guideline] ensureFixedGuidelineSlot(${id}):`,
+      e instanceof Error ? e.message : String(e)
+    );
+  }
+  return g ?? null;
+}
+
+/** Supabase Brand Library → 로컬 고정 PDF 순으로 슬롯 채우기 */
+export async function ensureFixedGuidelineSlotAsync(id: string): Promise<GuidelineRecord | null> {
+  let g = getGuideline(id);
+  const fileMissing =
+    !g?.storedRelativePath || !existsSync(resolveStoredPath(g.storedRelativePath));
+  const notPdf = g != null && g.mimeType !== "application/pdf";
+  if (!fileMissing && !notPdf) return g ?? null;
+  if (!FIXED_GUIDELINE_SOURCES[id]) return g ?? null;
+
+  if (canSyncGuidelineFromSupabase()) {
     try {
-      g = copyFixedGuidelineToSlot(id);
+      return await syncGuidelineFromSupabaseLibrary(id);
     } catch (e) {
-      console.error(
-        `[guideline] ensureFixedGuidelineSlot(${id}):`,
+      console.warn(
+        `[guideline] ensureFixedGuidelineSlotAsync(${id}) supabase:`,
         e instanceof Error ? e.message : String(e)
       );
     }
   }
-  return g ?? null;
+
+  try {
+    return copyFixedGuidelineToSlot(id);
+  } catch (e) {
+    console.error(
+      `[guideline] ensureFixedGuidelineSlotAsync(${id}):`,
+      e instanceof Error ? e.message : String(e)
+    );
+    return g ?? null;
+  }
 }

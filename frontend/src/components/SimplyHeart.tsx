@@ -255,7 +255,7 @@ export function SimplyHeart() {
             <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-[#4B4B4B]">
               <li>
                 <strong>Simply U+ 설명자료·실천과제 V2 (18개 분류·학습용)</strong> —{" "}
-                <code className="rounded bg-white/80 px-1 text-[12px]">Simply U+ 가이드라인.pdf</code>
+                <code className="rounded bg-white/80 px-1 text-[12px]">Simply_U+_Guidelines.pdf</code>
               </li>
               <li>
                 <strong>직무별 Simply U+ 실행 가이드 v1 (학습용)</strong> —{" "}

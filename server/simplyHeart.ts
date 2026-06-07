@@ -2,11 +2,11 @@
  * Simply Heart — 심플리 가이드 통합 분석 또는(레거시) 단계별 Gemini 호출
  */
 import { existsSync } from "node:fs";
-import { basename } from "node:path";
+import { basename, join } from "node:path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { FIXED_GUIDELINE_SOURCES, SIMPLY_HEART_FIXED_GUIDE_IDS } from "./fixedGuidelines.js";
+import { FIXED_GUIDELINE_SOURCES, SIMPLY_HEART_FIXED_GUIDE_IDS, ensureFixedGuidelineSlotAsync } from "./fixedGuidelines.js";
 import type { GuidelineRecord } from "./store.js";
-import { loadMeta, resolveStoredPath } from "./store.js";
+import { getGuideline, loadMeta, resolveStoredPath, PROJECT_ROOT } from "./store.js";
 import { excerptGuidelineForInspection } from "./gemini.js";
 import {
   formatGeminiFailureMessage,
@@ -45,22 +45,30 @@ function recordFromFixedSimplyHeartGuide(id: string): GuidelineRecord | null {
   if (!SIMPLY_HEART_FIXED_GUIDE_IDS.includes(id)) return null;
   const spec = FIXED_GUIDELINE_SOURCES[id];
   if (!spec) return null;
-  const rel = spec.relativeSource.replace(/\\/g, "/");
-  if (!existsSync(resolveStoredPath(rel))) return null;
-  return {
-    id,
-    displayName: spec.displayName,
-    originalName: basename(rel),
-    storedRelativePath: rel,
-    mimeType: "application/pdf",
-    size: 0,
-    uploadedAt: "",
-    aiSummary: null,
-    aiAnalyzedAt: null,
-  };
+  const candidates = [spec.relativeSource, ...(spec.legacyRelativeSources ?? [])];
+  for (const rel of candidates) {
+    const normalized = rel.replace(/\\/g, "/");
+    const abs = join(PROJECT_ROOT, normalized);
+    if (!existsSync(abs)) continue;
+    return {
+      id,
+      displayName: spec.displayName,
+      originalName: basename(normalized),
+      storedRelativePath: normalized,
+      mimeType: "application/pdf",
+      size: 0,
+      uploadedAt: "",
+      aiSummary: null,
+      aiAnalyzedAt: null,
+    };
+  }
+  return null;
 }
 
 async function buildGuidelineContext(): Promise<string> {
+  for (const entry of CORE_GUIDES) {
+    await ensureFixedGuidelineSlotAsync(entry.id);
+  }
   const meta = loadMeta();
   const parts: string[] = [];
   const defaultCap = 34_000;
@@ -69,7 +77,8 @@ async function buildGuidelineContext(): Promise<string> {
     const { id, title } = entry;
     const perCap = entry.cap ?? defaultCap;
     const g: GuidelineRecord | undefined =
-      SIMPLY_HEART_FIXED_GUIDE_IDS.includes(id) ? recordFromFixedSimplyHeartGuide(id) ?? meta.guidelines[id] : meta.guidelines[id];
+      getGuideline(id) ??
+      (SIMPLY_HEART_FIXED_GUIDE_IDS.includes(id) ? recordFromFixedSimplyHeartGuide(id) ?? meta.guidelines[id] : meta.guidelines[id]);
     if (!g) {
       const hint = SIMPLY_HEART_FIXED_GUIDE_IDS.includes(id)
         ? `고정 PDF 없음: ${FIXED_GUIDELINE_SOURCES[id]?.relativeSource ?? id} 에 파일을 두세요.`

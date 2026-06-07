@@ -31,8 +31,10 @@ import {
 import {
   copyFixedGuidelineToSlot,
   ensureFixedGuidelineSlot,
+  ensureFixedGuidelineSlotAsync,
   FIXED_GUIDELINE_SOURCES
 } from "./fixedGuidelines.js";
+import { syncGuidelineFromSupabaseLibrary, canSyncGuidelineFromSupabase } from "./guidelineSupabaseSync.js";
 import { extractPdfTextFromBase64, runSimplyHeartStep } from "./simplyHeart.js";
 import { buildExternalNamingReferences } from "./namingExternalContext.js";
 import { resolveLawApiOc, searchLawsJson } from "./lawApi.js";
@@ -109,12 +111,13 @@ app.use(express.json({ limit: "50mb" }));
 
 ensureDataDirs();
 
-for (const id of ["uplus-brand-guideline", "uplus-vi-guideline"] as const) {
-  try {
-    ensureFixedGuidelineSlot(id);
-  } catch {
-    /* 디자인 에디터 검수·교정용 PDF 슬롯 — 실패해도 서버 기동은 계속 */
-  }
+for (const id of ["uplus-brand-guideline", "uplus-vi-guideline", "simply-uplus-guideline"] as const) {
+  void ensureFixedGuidelineSlotAsync(id).catch((e) => {
+    console.warn(
+      `[guideline] startup ensure ${id}:`,
+      e instanceof Error ? e.message : String(e)
+    );
+  });
 }
 
 /** 검수·에이전트 채팅용: 선택된 참조 가이드라인 슬롯의 본문(요약/발췌) */
@@ -643,6 +646,48 @@ app.post("/api/guidelines/:id/sync-fixed", async (req, res) => {
         aiAnalyzedAt: record.aiAnalyzedAt,
         hasFile: existsSync(absPath)
       }
+    });
+  } catch (e) {
+    res.status(400).json({ error: String(e) });
+  }
+});
+
+/** Supabase Brand Library(guide) → 로컬 슬롯 동기화 — VI·Simply U+ 등 */
+app.post("/api/guidelines/:id/sync-supabase", async (req, res) => {
+  const id = req.params.id;
+  try {
+    if (!canSyncGuidelineFromSupabase()) {
+      res.status(503).json({ error: "SUPABASE_URL 또는 SUPABASE_SERVICE_ROLE_KEY가 설정되어 있지 않습니다." });
+      return;
+    }
+    let record = await syncGuidelineFromSupabaseLibrary(id);
+    try {
+      const abs = resolveStoredPath(record.storedRelativePath);
+      const { summary } = await summarizeGuidelineFile(abs, record.mimeType);
+      record = { ...record, aiSummary: summary, aiAnalyzedAt: new Date().toISOString() };
+      setGuideline(record);
+    } catch (e) {
+      record = {
+        ...record,
+        aiSummary: record.aiSummary ?? `[AI 분석 실패] ${e instanceof Error ? e.message : String(e)}`,
+      };
+      setGuideline(record);
+    }
+    const absPath = resolveStoredPath(record.storedRelativePath);
+    res.json({
+      ok: true,
+      source: "supabase",
+      guideline: {
+        id: record.id,
+        displayName: record.displayName,
+        originalName: record.originalName,
+        mimeType: record.mimeType,
+        size: record.size,
+        uploadedAt: record.uploadedAt,
+        aiSummary: record.aiSummary,
+        aiAnalyzedAt: record.aiAnalyzedAt,
+        hasFile: existsSync(absPath),
+      },
     });
   } catch (e) {
     res.status(400).json({ error: String(e) });
@@ -1251,7 +1296,7 @@ app.post("/api/inspection/additional-revision", async (req, res) => {
 
 app.post("/api/design-editor/suggest-text", async (req, res) => {
   try {
-    const guidelineId = (req.body?.guidelineId as string) || "uplus-brand-guideline";
+    const guidelineId = (req.body?.guidelineId as string) || "simply-uplus-guideline";
     const contentJson = String(req.body?.contentJson ?? "");
     const templateLabel = String(req.body?.templateLabel ?? "template");
     const rawTargets = req.body?.targets;
@@ -1276,6 +1321,7 @@ app.post("/api/design-editor/suggest-text", async (req, res) => {
     }
     const creativeTopic =
       typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
+    await ensureFixedGuidelineSlotAsync(guidelineId);
     const guidelineSummary = await buildPrimaryGuidelineBlock(guidelineId, [templateLabel, creativeTopic].filter(Boolean).join("\n\n"));
     const out = await runDesignEditorTextSuggestion({
       guidelineSummary,
@@ -1305,7 +1351,7 @@ app.post("/api/design-editor/suggest-text", async (req, res) => {
 
 app.post("/api/design-editor/propose-draft", async (req, res) => {
   try {
-    const guidelineId = (req.body?.guidelineId as string) || "uplus-brand-guideline";
+    const guidelineId = "uplus-vi-guideline";
     const contentJson = String(req.body?.contentJson ?? "");
     const templateLabel = String(req.body?.templateLabel ?? "template");
     const creativeTopic =
@@ -1334,12 +1380,18 @@ app.post("/api/design-editor/propose-draft", async (req, res) => {
       return;
     }
 
-    const guidelineSummary = await buildPrimaryGuidelineBlock(
+    await ensureFixedGuidelineSlotAsync(guidelineId);
+    const viPdf = await buildMandatoryViPdfContextForDesignEditor(
       guidelineId,
       [templateLabel, creativeTopic].filter(Boolean).join("\n\n")
     );
+    if (!viPdf.ok) {
+      res.status(viPdf.status).json({ error: viPdf.error });
+      return;
+    }
+
     const proposal = await runDesignEditorDraftProposal({
-      guidelineSummary,
+      guidelineSummary: viPdf.block,
       contentJson,
       templateLabel,
       templateMeta,
@@ -1359,6 +1411,7 @@ app.post("/api/design-editor/propose-draft", async (req, res) => {
         direction: proposal.image.brief,
         templateLabel,
         creativeTopic,
+        guidelineContext: viPdf.block.slice(0, 12_000),
       });
       const first = imgOut?.alternatives[0];
       if (first) {
@@ -1374,6 +1427,7 @@ app.post("/api/design-editor/propose-draft", async (req, res) => {
         direction: proposal.asset.brief,
         templateLabel,
         creativeTopic,
+        guidelineContext: viPdf.block.slice(0, 12_000),
       });
       const first = assetOut?.alternatives[0];
       if (first) {
@@ -1491,7 +1545,7 @@ app.post("/api/design-editor/generate-asset", async (req, res) => {
 
 app.post("/api/design-editor/correct-canvas", async (req, res) => {
   try {
-    const guidelineId = (req.body?.guidelineId as string) || "uplus-brand-guideline";
+    const guidelineId = (req.body?.guidelineId as string) || "uplus-vi-guideline";
     const designBase64 = String(req.body?.designBase64 ?? "").replace(/^data:image\/\w+;base64,/, "");
     const designMime = String(req.body?.designMime ?? "image/png");
     const mode = req.body?.mode === "holistic" ? "holistic" : "inspection_followup";
@@ -1517,6 +1571,7 @@ app.post("/api/design-editor/correct-canvas", async (req, res) => {
 
     const creativeTopic =
       typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
+    await ensureFixedGuidelineSlotAsync(guidelineId);
     const viPdf = await buildMandatoryViPdfContextForDesignEditor(
       guidelineId,
       [overallSummary, creativeTopic].filter(Boolean).join("\n\n")
@@ -1570,7 +1625,7 @@ app.post("/api/design-editor/correct-canvas", async (req, res) => {
 
 app.post("/api/design-editor/inspect", async (req, res) => {
   try {
-    const guidelineId = (req.body?.guidelineId as string) || "uplus-brand-guideline";
+    const guidelineId = (req.body?.guidelineId as string) || "uplus-vi-guideline";
     const imageBase64 = String(req.body?.imageBase64 ?? "").replace(/^data:image\/\w+;base64,/, "");
     const imageMime = String(req.body?.imageMime ?? "image/png");
     const templateId = String(req.body?.templateId ?? "");
@@ -1583,6 +1638,7 @@ app.post("/api/design-editor/inspect", async (req, res) => {
 
     const creativeTopic =
       typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
+    await ensureFixedGuidelineSlotAsync(guidelineId);
     const viPdf = await buildMandatoryViPdfContextForDesignEditor(
       guidelineId,
       [templateId, creativeTopic].filter(Boolean).join("\n\n")
@@ -1626,7 +1682,7 @@ app.post("/api/design-editor/inspect", async (req, res) => {
 
 app.post("/api/design-editor/replace-image", async (req, res) => {
   try {
-    const guidelineId = (req.body?.guidelineId as string) || "uplus-brand-guideline";
+    const guidelineId = (req.body?.guidelineId as string) || "uplus-vi-guideline";
     const designBase64 = String(req.body?.designBase64 ?? "").replace(/^data:image\/\w+;base64,/, "");
     const designMime = String(req.body?.designMime ?? "");
     const imageBrief = String(req.body?.imageBrief ?? "").trim();
