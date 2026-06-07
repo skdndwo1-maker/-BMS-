@@ -48,6 +48,12 @@ import {
 } from "@/lib/designContentPersistence";
 import { registerGlobalNavPersist } from "@/lib/globalNavPersistence";
 import { InspectionSectionTitle } from "@/components/InspectionSectionTitle";
+import {
+  applySafetyCautionMaintenanceContent,
+  isSafetyCautionTemplate,
+  shouldApplySafetyCautionPreset,
+  unlockSafetyWarningAsset,
+} from "@/design/safetyCautionPreset";
 
 const ExportDialog = lazy(() => import("./ExportDialog").then((m) => ({ default: m.ExportDialog })));
 
@@ -140,6 +146,15 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     logoPosition: defaultLogoPosition,
   }));
   const [focusTarget, setFocusTarget] = useState<DesignFocusTarget>(null);
+  /** 동일 섹션 재클릭 시에도 우측 패널 스크롤이 다시 실행되도록 */
+  const handleFocusChange = useCallback((target: DesignFocusTarget) => {
+    if (target === null) {
+      setFocusTarget(null);
+      return;
+    }
+    setFocusTarget(null);
+    requestAnimationFrame(() => setFocusTarget(target));
+  }, []);
 
   /** AI 디자인 교정: 캔버스에 덮지 않고 옆 패널에 표시할 참조 이미지(data URL) */
   const [correctionReferenceUrl, setCorrectionReferenceUrl] = useState<string | null>(null);
@@ -439,6 +454,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     if (urlId) return;
     if (attemptedNoUrlDraftRef.current) return;
     attemptedNoUrlDraftRef.current = true;
+    let deferSafetyPreset = false;
     try {
       const raw = sessionStorage.getItem(DESIGN_EDITOR_NAV_DRAFT_KEY);
       if (!raw) return;
@@ -452,6 +468,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
       };
       if (d.v !== 1 || d.templateId !== actualTemplateId) return;
       if (d.designId) {
+        deferSafetyPreset = true;
         setSearchParams(
           (prev) => {
             const next = new URLSearchParams(prev);
@@ -468,6 +485,19 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
       setContentWithHistory(() => normalizeDesignContentFromStorage(d.content));
     } catch {
       /* ignore */
+    } finally {
+      if (
+        !deferSafetyPreset &&
+        isSafetyCautionTemplate(actualTemplateId) &&
+        !urlId
+      ) {
+        setContentWithHistory((prev) => {
+          const next = shouldApplySafetyCautionPreset(prev)
+            ? applySafetyCautionMaintenanceContent(prev)
+            : unlockSafetyWarningAsset(prev);
+          return next === prev ? prev : next;
+        });
+      }
     }
   }, [template, bootBusy, actualTemplateId, searchParams, setSearchParams, setContentWithHistory]);
 
@@ -683,7 +713,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
           onContentChange={setContentWithHistory}
           onContentDraftChange={setContent}
           onBeginCanvasTextEdit={pushUndoSnapshot}
-          onFocusChange={setFocusTarget}
+          onFocusChange={handleFocusChange}
           showViGrid={showViGrid}
           layoutSnapEnabled={layoutSnapEnabled}
           onTextFormatTargetChange={setTextFormatTarget}
@@ -1064,6 +1094,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                       target={textFormatTarget}
                       content={content}
                       onDraft={setContentWithHistory}
+                      templateId={actualTemplateId}
                       selectionRenderTick={textFormatSelectionTick}
                       getSelection={() => designCanvasRef.current?.getInlineTextSelection() ?? null}
                       onTogglePartialStyle={(w) => designCanvasRef.current?.handleTogglePartialStyle(w)}

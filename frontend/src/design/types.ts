@@ -5,6 +5,7 @@ export type TemplateCategory =
   | 'poster'
   | 'social-media'
   | 'internal-notice'
+  | 'safety-caution'
   | 'presentation'
   | 'placard'
   | 'xbanner'
@@ -26,7 +27,8 @@ export type PosterCategory =
   | 'notice'
   | 'new-product'
   | 'promotion'
-  | 'plan-benefit';
+  | 'plan-benefit'
+  | 'safety-caution';
 
 /** 포스터 캔버스 텍스트 정렬 (양쪽 맞춤 포함) */
 export type CanvasTextAlign = 'left' | 'center' | 'right' | 'justify';

@@ -13,8 +13,18 @@ function p(name: string, keywords: string[], svg: string): AssetPresetItem {
   return { name, src: svgToDataUri(svg), keywords };
 }
 
+/** 안전&주의 — 삼각형 느낌표 (딥 레드 #C0392B) */
+export const SAFETY_WARNING_PICTOGRAM = p(
+  "주의",
+  ["주의", "경고", "warning", "caution", "수리", "안전"],
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M32 6 58 54H6L32 6z" fill="none" stroke="#C0392B" stroke-width="5" stroke-linejoin="round"/><path d="M32 24v18" fill="none" stroke="#C0392B" stroke-width="5" stroke-linecap="round"/><circle cx="32" cy="48" r="3" fill="#C0392B"/></svg>`,
+);
+
+export const SAFETY_WARNING_PICTOGRAM_SRC = SAFETY_WARNING_PICTOGRAM.src;
+
 /** 픽토그램 30 — 단색 라인 위주 */
 export const PICTOGRAM_PRESETS: AssetPresetItem[] = [
+  SAFETY_WARNING_PICTOGRAM,
   p("네트워크", ["네트워크", "network", "연결", "망"], `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="2" y="2" width="60" height="60" rx="14" fill="none" stroke="#1A1A1A" stroke-width="4"/><path d="M18 40c6-8 22-8 28 0" fill="none" stroke="#F43182" stroke-width="4" stroke-linecap="round"/><path d="M24 32c4-5 12-5 16 0" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round"/><circle cx="32" cy="46" r="3.5" fill="#1A1A1A"/></svg>`),
   p("보안", ["보안", "security", "안전", "쉴드"], `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M32 6l22 10v16c0 16-10 26-22 28C20 58 10 48 10 32V16L32 6z" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linejoin="round"/><path d="M22 32l7 7 14-16" fill="none" stroke="#F43182" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`),
   p("클라우드", ["클라우드", "cloud", "저장"], `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M22 44h26a10 10 0 0 0 0-20 14 14 0 0 0-27-3A9 9 0 0 0 22 44z" fill="none" stroke="#1A1A1A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 44h26" fill="none" stroke="#F43182" stroke-width="4" stroke-linecap="round"/></svg>`),

@@ -8,6 +8,7 @@ type Props = {
   target: CanvasTextEditTarget | null;
   content: DesignContent;
   onDraft: (next: DesignContent) => void;
+  templateId?: string;
   /** 캔버스 텍스트 선택 변경 시 증가 — B/I/U 활성 표시 갱신 */
   selectionRenderTick?: number;
   getSelection?: () => [number, number] | null;
@@ -27,6 +28,7 @@ export function CanvasTextFormatPanel({
   target,
   content,
   onDraft,
+  templateId,
   selectionRenderTick = 0,
   getSelection,
   onTogglePartialStyle,
@@ -64,6 +66,7 @@ export function CanvasTextFormatPanel({
             target={target}
             content={content}
             onDraft={onDraft}
+            templateId={templateId}
             selectionRenderTick={selectionRenderTick}
             getSelection={getSelection}
             onTogglePartialStyle={onTogglePartialStyle}

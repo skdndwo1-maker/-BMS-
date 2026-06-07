@@ -15,6 +15,14 @@ import { DraggableAsset } from "./DraggableAsset";
 import { DraggableCanvasOverlay } from "./DraggableCanvasOverlay";
 
 import { defaultCI, defaultBI, defaultSLOGAN } from "@/design/defaultLogos";
+import {
+  isSafetyCautionTemplate,
+  layoutSafetyCautionTextBundle,
+  SAFETY_CAUTION_BODY_FONT_SCALE,
+  SAFETY_CAUTION_LOGO_HEIGHT_RATIO,
+  SAFETY_CAUTION_LOGO_POSITION,
+  SAFETY_CAUTION_TITLE_FONT_SCALE,
+} from "@/design/safetyCautionPreset";
 import type { LogoPosition } from "@/design/types";
 import {
   DEFAULT_POSTER_BG_RECT,
@@ -255,6 +263,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   ref
 ) {
   const isXBanner = (templateId ?? "").trim() === "xbanner";
+  const isSafetyCaution = isSafetyCautionTemplate(templateId);
   const isPlacard = useMemo(() => {
     const id = (templateId ?? "").trim();
     return (
@@ -442,7 +451,11 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     }
   };
 
-  const logoPosition = isPlacard ? "top-left" : normalizeLogoPosition(content.logoPosition);
+  const logoPosition = isPlacard
+    ? "top-left"
+    : isSafetyCaution
+      ? SAFETY_CAUTION_LOGO_POSITION
+      : normalizeLogoPosition(content.logoPosition);
 
   const getLogoPositionStyle = () => {
     // 로고 여백: 기존의 약 50% 수준으로 축소
@@ -471,8 +484,10 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const brandLogoSrc = getBrandLogo();
   const logoPositionStyle = getLogoPositionStyle();
 
-  const titleScale = (content.posterTitleFontScale ?? 100) / 100;
-  const bodyScale = (content.posterBodyFontScale ?? 100) / 100;
+  const titleScale =
+    (isSafetyCaution ? SAFETY_CAUTION_TITLE_FONT_SCALE : (content.posterTitleFontScale ?? 100)) / 100;
+  const bodyScale =
+    (isSafetyCaution ? SAFETY_CAUTION_BODY_FONT_SCALE : (content.posterBodyFontScale ?? 100)) / 100;
   const footerScale = (content.posterFooterFontScale ?? 100) / 100;
   // 폰트 크기: 템플릿 너비 비례 + 높이 상한(오버플로우 방지)
   // - 메인타이틀: 너비의 약 8%
@@ -498,15 +513,21 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       : content.logoOption === "BI"
         ? 0.4 * 0.8
         : 1.0 * 0.8
-    : content.logoOption === "BI"
-      ? 0.4
-      : 1.0;
+    : isSafetyCaution
+      ? 1.0
+      : content.logoOption === "BI"
+        ? 0.4
+        : 1.0;
   const logoWidth = Math.max(24, logoWidthBase * logoOptionScale);
+  /** 안전&주의: BI·CI·SLOGAN 동일 높이로 상단 중앙 배치 */
+  const safetyLogoHeightPx = isSafetyCaution
+    ? Math.max(18, displayH * SAFETY_CAUTION_LOGO_HEIGHT_RATIO)
+    : null;
   // X배너: 로고 기본 2배, 단 CI는 20% 축소
   const xbannerCiScale = isXBanner && content.logoOption === "CI" ? 0.8 : 1.0;
   const effectiveLogoWidth = isXBanner ? logoWidth * 2 * xbannerCiScale : logoWidth;
 
-  const hasUploadedLogo = Boolean(content.logo);
+  const hasUploadedLogo = Boolean(content.logo) && !isSafetyCaution;
   const fallbackCustomLogoRect = useMemo(
     () =>
       hasUploadedLogo
@@ -1488,12 +1509,12 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     const draft = onContentDraftChange;
     if (!draft) return;
     if (content.posterTitleOnCanvas === false) return;
-    if (content.posterTitleRectLocked) return;
+    if (content.posterTitleRectLocked && !isSafetyCaution) return;
     const tr = content.posterTitleRect ?? DEFAULT_POSTER_TITLE_RECT;
     const raw = content.title?.trim() ? content.title : TITLE_PLACEHOLDER_TEXT;
     const t = content.posterTitleTypography ?? {};
-    const padX = titleFontSize * 0.22;
-    const padY = titleFontSize * 0.45;
+    const padX = titleFontSize * (isSafetyCaution ? 0.28 : 0.22);
+    const padY = titleFontSize * (isSafetyCaution ? 0.55 : 0.45);
     const maxWPx = displayW * 0.96;
     const m = measureAutoTextBox({
       text: raw,
@@ -1507,17 +1528,19 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       padYPx: padY,
       maxBoxWidthPx: maxWPx,
     });
+    const dotExtraPx =
+      isSafetyCaution && raw.endsWith(".") ? titleFontSize * 0.32 : 0;
     const align = content.posterTitleAlign ?? "left";
     const next = fitNormalizedRect(
       tr,
-      m.boxWidthPx,
+      m.boxWidthPx + dotExtraPx,
       m.boxHeightPx,
       align === "center" ? "center" : align === "right" ? "right" : "left",
       {
         minWPx: Math.max(40, titleFontSize * 1.4),
         maxWPx: displayW * 0.96,
-        minHPx: Math.max(24, titleFontSize * 0.9),
-        maxHPx: displayH * 0.5,
+        minHPx: Math.max(24, titleFontSize * 1.05),
+        maxHPx: displayH * (isSafetyCaution ? 0.22 : 0.5),
       }
     );
     if (
@@ -1541,6 +1564,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     onContentDraftChange,
     fitNormalizedRect,
     fontReadyTick,
+    isSafetyCaution,
   ]);
 
   useLayoutEffect(() => {
@@ -1611,14 +1635,14 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     let touched = false;
     for (const b of bodies) {
       if (!b.text?.trim()) continue;
-      if (content.posterBodyRectLocked?.[b.id]) continue;
+      if (content.posterBodyRectLocked?.[b.id] && !isSafetyCaution) continue;
       const br =
         next.posterBodyRects?.[b.id] ??
         (b.id === "body-1" ? next.posterBodyRect : undefined) ??
         DEFAULT_POSTER_BODY_RECT;
       const t = next.posterBodyTypography?.[b.id] ?? {};
-      const padX = bodyFontSize * 0.32;
-      const padY = bodyFontSize * 0.28;
+      const padX = bodyFontSize * (isSafetyCaution ? 0.38 : 0.32);
+      const padY = bodyFontSize * (isSafetyCaution ? 0.36 : 0.28);
       const maxWPx = displayW * 0.96;
       const m = measureAutoTextBox({
         text: b.text,
@@ -1627,7 +1651,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         fontFamily: resolveFontFamily(t.fontFamily),
         fontStyle: t.fontStyle ?? "normal",
         letterSpacingEm: t.letterSpacingEm ?? 0,
-        lineHeight: t.lineHeight ?? 1.75,
+        lineHeight: t.lineHeight ?? (isSafetyCaution ? 1.45 : 1.75),
         padXPx: padX,
         padYPx: padY,
         maxBoxWidthPx: maxWPx,
@@ -1641,8 +1665,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         {
           minWPx: Math.max(40, bodyFontSize * 4),
           maxWPx: displayW * 0.96,
-          minHPx: Math.max(16, bodyFontSize * 1.2),
-          maxHPx: displayH * 0.7,
+          minHPx: Math.max(16, bodyFontSize * (isSafetyCaution ? 1.35 : 1.2)),
+          maxHPx: displayH * (isSafetyCaution ? 0.34 : 0.7),
         }
       );
       if (
@@ -1675,6 +1699,28 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     displayH,
     onContentDraftChange,
     fitNormalizedRect,
+    fontReadyTick,
+    isSafetyCaution,
+  ]);
+
+  /** 안전&주의: 타이틀+본문 묶음을 캔버스 수평 중앙(및 밴드 세로 중앙)에 정렬 */
+  useLayoutEffect(() => {
+    const draft = onContentDraftChange;
+    if (!draft || !isSafetyCaution) return;
+    if (content.posterTitleOnCanvas === false || content.posterBodyOnCanvas === false) return;
+    const patch = layoutSafetyCautionTextBundle(content);
+    if (!patch) return;
+    draft({ ...content, ...patch });
+  }, [
+    content,
+    content.posterTitleRect,
+    content.posterBodyRect,
+    content.posterBodyRects,
+    content.title,
+    content.bodyText,
+    content.posterBodies,
+    isSafetyCaution,
+    onContentDraftChange,
     fontReadyTick,
   ]);
 
@@ -2033,6 +2079,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             borderRadiusMode="square"
             snapStepPx={snapPx}
             locked={isPlacard}
+            clipContent={!isSafetyCaution}
             onOverlayDoubleClick={() => {
               onBeginCanvasTextEdit?.();
               setInlineEditTarget({ kind: "title" });
@@ -2051,7 +2098,13 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                 textAlign: titleFlex.textAlign,
               }}
             >
-              <div style={{ width: "100%", minWidth: 0, maxHeight: "100%" }}>
+              <div
+                style={{
+                  width: "100%",
+                  minWidth: 0,
+                  ...(isSafetyCaution ? {} : { maxHeight: "100%" }),
+                }}
+              >
                 <h1
                   style={{
                     ...titleTextStyle(content, titleFontSize, titleColor),
@@ -2249,6 +2302,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               borderRadiusMode="square"
               snapStepPx={snapPx}
               locked={isPlacard}
+              clipContent={!isSafetyCaution}
               onOverlayDoubleClick={() => {
                 onBeginCanvasTextEdit?.();
                 setInlineEditTarget({ kind: "body", id: b.id });
@@ -2398,14 +2452,19 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               ...logoPositionStyle,
               zIndex: 12,
               pointerEvents: "auto",
-              cursor: "pointer",
-              outline: selectedKeys.includes("logo") ? "2px solid #FF7F66" : undefined,
-              outlineOffset: selectedKeys.includes("logo") ? "2px" : undefined,
-              borderRadius: selectedKeys.includes("logo") ? "4px" : undefined,
+              cursor: isSafetyCaution ? "default" : "pointer",
+              outline:
+                !isSafetyCaution && selectedKeys.includes("logo") ? "2px solid #FF7F66" : undefined,
+              outlineOffset: !isSafetyCaution && selectedKeys.includes("logo") ? "2px" : undefined,
+              borderRadius: !isSafetyCaution && selectedKeys.includes("logo") ? "4px" : undefined,
               isolation: "isolate",
             }}
             onMouseDown={(e) => {
               e.stopPropagation();
+              if (isSafetyCaution) {
+                onFocusChange?.("logo");
+                return;
+              }
               pickKey("logo", e.shiftKey);
               onFocusChange?.("logo");
             }}
@@ -2415,13 +2474,24 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               alt="Brand Logo"
               draggable={false}
               onDragStart={(e) => e.preventDefault()}
-              style={{
-                width: `${effectiveLogoWidth}px`,
-                height: "auto",
-                objectFit: "contain",
-                display: "block",
-                userSelect: "none",
-              }}
+              style={
+                safetyLogoHeightPx != null
+                  ? {
+                      height: `${safetyLogoHeightPx}px`,
+                      width: "auto",
+                      maxWidth: `${W * 0.42}px`,
+                      objectFit: "contain",
+                      display: "block",
+                      userSelect: "none",
+                    }
+                  : {
+                      width: `${effectiveLogoWidth}px`,
+                      height: "auto",
+                      objectFit: "contain",
+                      display: "block",
+                      userSelect: "none",
+                    }
+              }
             />
           </div>
         ) : null}

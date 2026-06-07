@@ -36,16 +36,15 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InspectionSectionTitle } from "@/components/InspectionSectionTitle";
+import {
+  DESIGN_GROUPS,
+  DESIGN_TYPES,
+  normalizeDesignType,
+  type DesignGroup,
+  type DesignType,
+} from "@/constants/brandDesignTypes";
 
 type InspectionStep = "idle" | "uploading" | "analyzing" | "reviewing" | "complete";
-type DesignGroup = "online" | "offline";
-type DesignType = "사내공지" | "프로모션" | "신제품 홍보" | "매장 제작물" | "안전";
-
-const DESIGN_GROUPS: ReadonlyArray<{ id: DesignGroup; label: string }> = [
-  { id: "online", label: "온라인" },
-  { id: "offline", label: "오프라인" },
-];
-const DESIGN_TYPES: readonly DesignType[] = ["사내공지", "프로모션", "신제품 홍보", "매장 제작물", "안전"];
 
 /** 대시보드 ref: 필터·칩 — 비활성 베이지 톤, 활성 검은 pill */
 const categoryTabBase =
@@ -53,7 +52,7 @@ const categoryTabBase =
 const categoryTabIdle =
   "border-[rgba(0,0,0,0.08)] bg-white text-[#5C5C5C] hover:bg-[#EBE9E1] hover:border-[rgba(0,0,0,0.1)]";
 const categoryTabActive = "border-black bg-black text-white shadow-[0_4px_14px_-4px_rgba(0,0,0,0.25)]";
-/** 세부 유형(사내공지~안전) — 코랄 액센트 */
+/** 세부 유형(사내공지~안전&주의) — 코랄 액센트 */
 const designTypeTabIdle =
   "border-[rgba(255,127,102,0.4)] bg-white text-[#5C5C5C] hover:bg-[#FFF7F5] hover:border-[rgba(255,127,102,0.55)]";
 const designTypeTabActive =
@@ -151,11 +150,9 @@ export function BrandInspection() {
       };
       if (d.v !== 1) return;
       if (d.selectedDesignGroup === "online" || d.selectedDesignGroup === "offline") setSelectedDesignGroup(d.selectedDesignGroup);
-      if (
-        d.selectedDesignType === null ||
-        (typeof d.selectedDesignType === "string" && (DESIGN_TYPES as readonly string[]).includes(d.selectedDesignType))
-      ) {
-        setSelectedDesignType(d.selectedDesignType ?? null);
+      const normalizedType = normalizeDesignType(d.selectedDesignType ?? undefined);
+      if (d.selectedDesignType === null || normalizedType) {
+        setSelectedDesignType(normalizedType);
       }
       if (typeof d.guidelineText === "string") setGuidelineText(d.guidelineText);
       if (typeof d.selectedGuidelineLibrary === "string") setSelectedGuidelineLibrary(d.selectedGuidelineLibrary);

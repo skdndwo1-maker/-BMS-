@@ -50,6 +50,7 @@ import { resolveRcsMessageBackground } from "@/components/design/RCSCanvas";
 import { templates as allDesignTemplates } from "@/design/templates";
 import { resolvePosterBodyBlocksForRender, applyBodyBlockTextEdit } from "@/design/posterBodyDisplay";
 import { VI_COLORS } from "@/design/viCanvasConstants";
+import { isSafetyCautionTemplate } from "@/design/safetyCautionPreset";
 
 interface ContentPanelProps {
   content: DesignContent;
@@ -110,10 +111,6 @@ const POSTER_CATEGORIES: {
   preset: Partial<DesignContent>;
 }[] = [
   { key: "basic", label: "기본형", emoji: "📄", color: "#6B7280", preset: { backgroundColor: "#FFFFFF", titleColor: "#1A1A1A", subtitle: "", title: "", bodyText: "", emphasizedTitle: "" } },
-  { key: "notice", label: "공지사항", emoji: "📢", color: "#3B82F6", preset: { backgroundColor: "#FFFFFF", titleColor: "#1A1A1A", subtitle: "안내", title: "브랜드 공지사항.", bodyText: "서비스 점검 및 일정 안내\n자세한 내용은 홈페이지를 참고하세요", emphasizedTitle: "※ 일정은 사정에 따라 변경될 수 있습니다." } },
-  { key: "new-product", label: "신제품 출시", emoji: "📱", color: "#1A1A1A", preset: { backgroundColor: "#000000", titleColor: "#FFFFFF", subtitle: "신제품 출시", title: "새로운 시작.", bodyText: "최신 단말 출시\n단독 특가\n사전예약 진행 중", emphasizedTitle: "※ 실제 제품 색상은 화면과 다를 수 있습니다." } },
-  { key: "promotion", label: "프로모션", emoji: "🎁", color: "#FF7F66", preset: { backgroundColor: "#FF7F66", titleColor: "#FFFFFF", subtitle: "특별 혜택", title: "특별 혜택을 드립니다.", bodyText: "가입 즉시 혜택 제공\n최대 할인\n사은품 증정", emphasizedTitle: "※ 본 프로모션은 기간 한정으로 조기 종료될 수 있습니다." } },
-  { key: "plan-benefit", label: "요금&혜택", emoji: "💰", color: "#8B5CF6", preset: { backgroundColor: "#FFF0F5", titleColor: "#1A1A1A", subtitle: "요금 안내", title: "합리적인 요금제.", bodyText: "월 요금부터\n데이터 혜택\n가족 결합 할인", emphasizedTitle: "※ 부가세 포함 금액이며 약정 조건에 따라 상이합니다." } },
 ];
 
 const rcsTemplates = {
@@ -176,7 +173,6 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const { sb, user, isAuthReady } = useAuthSession();
   const [imagePreview,        setImagePreview]        = useState<string|null>(null);
   const [logoPreview,         setLogoPreview]         = useState<string|null>(null);
-  const [showCategoryPalette, setShowCategoryPalette] = useState(false);
   const [showTitleOptions,    setShowTitleOptions]    = useState(false);
 
   const refBadge = useRef<HTMLDivElement>(null);
@@ -185,6 +181,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const refFooter = useRef<HTMLDivElement>(null);
   const refImage = useRef<HTMLDivElement>(null);
   const refLogo = useRef<HTMLDivElement>(null);
+  const refAsset = useRef<HTMLDivElement>(null);
 
   const [pictoDialogOpen, setPictoDialogOpen] = useState(false);
   const [illustDialogOpen, setIllustDialogOpen] = useState(false);
@@ -216,8 +213,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     }
     const elRect = el.getBoundingClientRect();
     const parentRect = scrollParent.getBoundingClientRect();
-    const pad = 8;
-    if (elRect.top >= parentRect.top + pad && elRect.bottom <= parentRect.bottom - pad) return;
+    const pad = 12;
     const nextTop =
       scrollParent.scrollTop +
       (elRect.top - parentRect.top) -
@@ -235,6 +231,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     else if (focusTarget === "footer") scrollPanelSection(refFooter.current);
     else if (focusTarget === "image") scrollPanelSection(refImage.current);
     else if (focusTarget === "logo") scrollPanelSection(refLogo.current);
+    else if (typeof focusTarget === "object" && focusTarget.assetId) scrollPanelSection(refAsset.current);
   }, [focusTarget, scrollPanelSection]);
 
   /** 캔버스·불러오기 등에서 배경 이미지 변경 시 로컬 미리보기와 동기화 */
@@ -274,6 +271,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const isContentEmpty = !content.title && !content.subtitle && !content.bodyText;
   const templateMeta = allDesignTemplates.find((t) => t.id === templateId);
   const isXBanner = (templateId ?? "") === "xbanner" || templateMeta?.category === "xbanner";
+  const isSafetyCaution = isSafetyCautionTemplate(templateId);
   const isRcs = templateMeta?.category === "rcs";
   const assetLayers   = content.assetLayers ?? [];
 
@@ -352,18 +350,6 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     onContentChange({ ...content, logo: undefined, customUploadedLogoRect: undefined });
     setLogoPreview(null);
     if (logoInputRef.current) logoInputRef.current.value = "";
-  };
-
-  const handleCategorySelect = (cat: typeof POSTER_CATEGORIES[number]) => {
-    const bt = cat.preset.bodyText ?? "";
-    onContentChange({
-      ...content,
-      posterCategory: cat.key,
-      ...cat.preset,
-      bodyText: bt,
-      posterBodies: [{ id: "body-1", text: bt }],
-    });
-    setShowCategoryPalette(false);
   };
 
   const toggleAssetVisible = (id:string) => onContentChange({ ...content, assetLayers: assetLayers.map(a=>a.id===id?{...a,visible:!a.visible}:a) });
@@ -723,21 +709,34 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           <TooltipContent>CI / BI / SLOGAN 중 선택</TooltipContent>
         </Tooltip>
       </div>
-      <div className="grid grid-cols-4 gap-2">
+      <div className={`grid gap-2 ${isSafetyCaution ? "grid-cols-3" : "grid-cols-4"}`}>
         {(
-          [
-            { key: null, label: "None", desc: "로고 없음" },
-            { key: "CI", label: "CI", desc: "Corporate Identity" },
-            { key: "BI", label: "BI", desc: "Brand Identity" },
-            { key: "SLOGAN", label: "SLOGAN", desc: "슬로건 로고" },
-          ] as const
+          isSafetyCaution
+            ? [
+                { key: "CI" as const, label: "CI", desc: "Corporate Identity" },
+                { key: "BI" as const, label: "BI", desc: "Brand Identity" },
+                { key: "SLOGAN" as const, label: "SLOGAN", desc: "슬로건 로고" },
+              ]
+            : [
+                { key: null, label: "None", desc: "로고 없음" },
+                { key: "CI" as const, label: "CI", desc: "Corporate Identity" },
+                { key: "BI" as const, label: "BI", desc: "Brand Identity" },
+                { key: "SLOGAN" as const, label: "SLOGAN", desc: "슬로건 로고" },
+              ]
         ).map((opt) => {
           const active = (content.logoOption ?? null) === opt.key;
           return (
             <button
               key={opt.key ?? "none"}
               type="button"
-              onClick={() => onContentChange({ ...content, logoOption: opt.key as DesignContent["logoOption"] })}
+              onClick={() =>
+                onContentChange({
+                  ...content,
+                  logoOption: opt.key as DesignContent["logoOption"],
+                  logo: isSafetyCaution ? undefined : content.logo,
+                  customUploadedLogoRect: isSafetyCaution ? undefined : content.customUploadedLogoRect,
+                })
+              }
               className={`rounded-xl border-2 px-2 py-3 text-center transition-all ${
                 active ? "border-[#FF7F66] bg-[#FF7F66]/6" : "border-gray-200 hover:border-gray-300 bg-white"
               }`}
@@ -748,30 +747,39 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           );
         })}
       </div>
-      <div className="space-y-2">
-        <p className="text-[11px] text-gray-500">직접 업로드한 로고는 위 CI/BI/SLOGAN 프리셋과 함께 표시되며, 캔버스에서 자유롭게 위치·크기 조절 및 삭제가 가능합니다.</p>
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full gap-2 border-gray-300"
-          onClick={openLogoPicker}
-        >
-          <Upload className="w-4 h-4" />
-          로고 이미지 불러오기
-        </Button>
-        {content.logo && logoPreview ? (
-          <div className="flex items-center justify-center gap-3 rounded-lg border border-gray-200 bg-gray-50/50 p-2">
-            <img src={logoPreview} alt="선택한 로고" className="max-h-10 object-contain" />
-            <p className="text-[11px] text-gray-500">캔버스에서 끌어 위치·크기를 조정하세요</p>
+      {isSafetyCaution ? (
+        <p className="text-[11px] text-gray-500 leading-relaxed">
+          BI 로고는 캔버스 <span className="font-semibold text-gray-700">상단 중앙</span>에 고정됩니다. CI 또는 SLOGAN으로만
+          교체할 수 있습니다.
+        </p>
+      ) : (
+        <>
+          <div className="space-y-2">
+            <p className="text-[11px] text-gray-500">직접 업로드한 로고는 위 CI/BI/SLOGAN 프리셋과 함께 표시되며, 캔버스에서 자유롭게 위치·크기 조절 및 삭제가 가능합니다.</p>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full gap-2 border-gray-300"
+              onClick={openLogoPicker}
+            >
+              <Upload className="w-4 h-4" />
+              로고 이미지 불러오기
+            </Button>
+            {content.logo && logoPreview ? (
+              <div className="flex items-center justify-center gap-3 rounded-lg border border-gray-200 bg-gray-50/50 p-2">
+                <img src={logoPreview} alt="선택한 로고" className="max-h-10 object-contain" />
+                <p className="text-[11px] text-gray-500">캔버스에서 끌어 위치·크기를 조정하세요</p>
+              </div>
+            ) : null}
+            {content.logo ? (
+              <Button type="button" variant="outline" size="sm" className="w-full gap-1.5 text-gray-600" onClick={clearUploadedLogo}>
+                <Trash2 className="w-3.5 h-3.5" />
+                업로드 로고 제거
+              </Button>
+            ) : null}
           </div>
-        ) : null}
-        {content.logo ? (
-          <Button type="button" variant="outline" size="sm" className="w-full gap-1.5 text-gray-600" onClick={clearUploadedLogo}>
-            <Trash2 className="w-3.5 h-3.5" />
-            업로드 로고 제거
-          </Button>
-        ) : null}
-      </div>
+        </>
+      )}
     </div>
   );
 
@@ -828,7 +836,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   );
 
   const assetSection = (
-    <div className="border-t border-gray-100 pt-4 space-y-4">
+    <div ref={refAsset} className="border-t border-gray-100 pt-4 space-y-4">
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">에셋</p>
       <p className="text-xs text-gray-400">업로드 후 캔버스 위에서 자유롭게 이동 · 리사이즈 가능</p>
 
@@ -977,7 +985,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   if (useBrandGraphicPanel) {
     const currentCat=POSTER_CATEGORIES.find(c=>c.key===normalizePosterCategory(content.posterCategory))??POSTER_CATEGORIES[0];
     return (
-      <div data-design-content-panel className="h-full overflow-y-auto p-6 space-y-6">
+      <div data-design-content-panel className="p-6 space-y-6">
         <input
           ref={logoInputRef}
           type="file"
@@ -1159,45 +1167,26 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
             </div>
 
           </div>
-        ) : (
+        ) : !isSafetyCaution ? (
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CoralTitleMarker />
-                <Label className="text-sm font-semibold text-gray-700">제작물유형</Label>
-              </div>
-              <button onClick={()=>setShowCategoryPalette(!showCategoryPalette)} className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700">
-                {showCategoryPalette?<ChevronUp className="w-3.5 h-3.5"/>:<ChevronDown className="w-3.5 h-3.5"/>}{showCategoryPalette?'닫기':'변경'}
-              </button>
+            <div className="flex items-center gap-2">
+              <CoralTitleMarker />
+              <Label className="text-sm font-semibold text-gray-700">제작물유형</Label>
             </div>
-            <div className="flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 cursor-pointer transition-all" style={{borderColor:currentCat.color,backgroundColor:`${currentCat.color}10`}} onClick={()=>setShowCategoryPalette(!showCategoryPalette)}>
+            <div
+              className="flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5"
+              style={{ borderColor: currentCat.color, backgroundColor: `${currentCat.color}10` }}
+            >
               <span className="text-lg">{currentCat.emoji}</span>
-              <div><p className="text-sm font-bold" style={{color:currentCat.color}}>{currentCat.label}</p><p className="text-[10px] text-gray-400">클릭하여 제작물유형 변경</p></div>
-              <ChevronDown className="w-4 h-4 ml-auto text-gray-400"/>
-            </div>
-            {showCategoryPalette&&(
-              <div className="border border-gray-200 rounded-xl p-3 bg-gray-50 space-y-2">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <CoralTitleMarker variant="compact" />
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider m-0">제작물유형</p>
-                </div>
-                {POSTER_CATEGORIES.map((cat)=>{
-                  const isActive=normalizePosterCategory(content.posterCategory)===cat.key;
-                  return (
-                    <button key={cat.key} onClick={()=>handleCategorySelect(cat)}
-                      className={`w-full flex items-center gap-3 rounded-lg border-2 px-3 py-2.5 text-left transition-all ${isActive?'shadow-sm':'border-gray-200 hover:border-gray-300 bg-white'}`}
-                      style={isActive?{borderColor:cat.color,backgroundColor:`${cat.color}10`}:{}}>
-                      <span className="text-xl">{cat.emoji}</span>
-                      <div className="flex-1"><p className="text-sm font-bold" style={{color:isActive?cat.color:'#374151'}}>{cat.label}</p><p className="text-[10px] text-gray-400">{cat.key==='basic'?'기본 빈 양식':cat.key==='notice'?'공지·안내 문구':cat.key==='new-product'?'신제품 런칭':cat.key==='promotion'?'이벤트 및 프로모션':'요금제 및 혜택 안내'}</p></div>
-                      {isActive&&<span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{background:`${cat.color}20`,color:cat.color}}>선택됨</span>}
-                    </button>
-                  );
-                })}
-                <p className="text-[10px] text-gray-400 mt-2">※ 선택 시 샘플 텍스트와 색상이 자동 적용됩니다</p>
+              <div>
+                <p className="text-sm font-bold" style={{ color: currentCat.color }}>
+                  {currentCat.label}
+                </p>
+                <p className="text-[10px] text-gray-400">기본 빈 양식</p>
               </div>
-            )}
+            </div>
           </div>
-        )}
+        ) : null}
 
         {/* 현수막(placard): 분할영역 배경 옵션을 제작물유형 블록 바로 아래로 이동 */}
         {isPlacard ? (
@@ -1688,7 +1677,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           <div ref={refLogo} className="border-t border-gray-100 pt-4 space-y-4">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">브랜드 로고</p>
             <LogoSelector/>
-            {!isPlacard ? <LogoPositionSelector/> : null}
+            {!isPlacard && !isSafetyCaution ? <LogoPositionSelector/> : null}
           </div>
         ) : null}
 
@@ -1857,7 +1846,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   // ════════════════════════════════════════════════════════════════════
   return (
     <TooltipProvider>
-      <div data-design-content-panel className="h-full overflow-y-auto p-6 space-y-6">
+      <div data-design-content-panel className="p-6 space-y-6">
       <input
         ref={logoInputRef}
         type="file"
@@ -1984,7 +1973,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
       </div>
       <div className="border-t border-gray-200 pt-6 space-y-6">
         <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Sparkles className="w-4 h-4 text-[#FF7F66]"/>Brand Assets</h3>
-        <LogoSelector/><LogoPositionSelector/>
+        <LogoSelector/>{!isSafetyCaution ? <LogoPositionSelector/> : null}
       </div>
       <div className="space-y-2">
         <Label>Main Image</Label>

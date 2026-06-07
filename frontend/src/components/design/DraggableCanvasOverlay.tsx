@@ -23,6 +23,8 @@ interface Props {
   children: ReactNode;
   /** true면 이동/리사이즈 비활성(선택/더블클릭 편집은 유지) */
   locked?: boolean;
+  /** true면 자식 overflow hidden (기본). false면 텍스트 클리핑 방지 */
+  clipContent?: boolean;
   /** 선택 시 외곽선 (편집 가능 표시) */
   label?: string;
   /** 모서리 라운드 모드 */
@@ -56,6 +58,7 @@ export function DraggableCanvasOverlay({
   zIndex,
   children,
   locked = false,
+  clipContent = true,
   label,
   borderRadiusMode = "auto",
   borderRadiusScale = 1,
@@ -257,7 +260,7 @@ export function DraggableCanvasOverlay({
           width: "100%",
           height: "100%",
           borderRadius: `${rPx}px`,
-          overflow: "hidden",
+          overflow: clipContent ? "hidden" : "visible",
           userSelect: "none",
           WebkitUserSelect: "none",
         }}

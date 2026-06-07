@@ -159,6 +159,18 @@ export const templates: Template[] = [
     mediaType: 'offline',
     customizable: true,
   },
+
+  // Safety & Caution (Offline) — U+ 수리 중 안내 서식 (A4 가로)
+  {
+    id: 'safety-caution-maintenance',
+    name: '안전&주의',
+    category: 'safety-caution',
+    size: { width: 297, height: 210, unit: 'mm', name: 'A4 가로' },
+    thumbnail: '',
+    description: '수리·점검 안내 (A4 가로 · 중앙 정렬 · BI · 주의 픽토)',
+    mediaType: 'offline',
+    customizable: true,
+  },
 ];
  
 export const templateCategories = [
@@ -166,7 +178,8 @@ export const templateCategories = [
   { id: 'poster',           label: '포스터',        icon: 'FileImage' },
   { id: 'social-media',     label: '소셜 미디어',   icon: 'Share2' },
   { id: 'internal-notice',  label: '사내 공지',     icon: 'Bell' },
-  { id: 'presentation',     label: '프레젠테이션',  icon: 'Presentation' },
+  { id: 'safety-caution',    label: '안전&주의',     icon: 'Signpost' },
+  { id: 'presentation',      label: '프레젠테이션',  icon: 'Presentation' },
   { id: 'rcs',              label: 'RCS',           icon: 'LayoutTemplate' },
   { id: 'placard',          label: '현수막',        icon: 'RectangleHorizontal' },
   { id: 'xbanner',          label: 'X배너',         icon: 'RectangleHorizontal' },

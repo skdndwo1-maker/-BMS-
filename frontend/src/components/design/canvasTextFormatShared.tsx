@@ -24,6 +24,11 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { VI_COLORS } from "@/design/viCanvasConstants";
+import {
+  isSafetyCautionTemplate,
+  SAFETY_CAUTION_BODY_FONT_SCALE,
+  SAFETY_CAUTION_TITLE_FONT_SCALE,
+} from "@/design/safetyCautionPreset";
 
 export const SCALE_MIN = 25;
 export const SCALE_MAX = 300;
@@ -53,6 +58,7 @@ type SharedProps = {
   target: CanvasTextEditTarget;
   content: DesignContent;
   onDraft: (next: DesignContent) => void;
+  templateId?: string;
   selectionRenderTick?: number;
   getSelection?: () => [number, number] | null;
   onTogglePartialStyle?: (which: "bold" | "italic" | "underline") => void;
@@ -64,6 +70,7 @@ export function CanvasTextFormatControls({
   target,
   content,
   onDraft,
+  templateId,
   selectionRenderTick = 0,
   getSelection,
   onTogglePartialStyle,
@@ -71,6 +78,8 @@ export function CanvasTextFormatControls({
 }: SharedProps) {
   void selectionRenderTick;
   const kind = target.kind;
+  const isSafetyFixedScale =
+    isSafetyCautionTemplate(templateId) && (kind === "title" || kind === "body");
 
   const typoTitle = content.posterTitleTypography;
   const typoFooter = content.posterFooterTypography;
@@ -88,11 +97,15 @@ export function CanvasTextFormatControls({
 
   const scale =
     kind === "title"
-      ? content.posterTitleFontScale ?? 100
+      ? isSafetyFixedScale
+        ? SAFETY_CAUTION_TITLE_FONT_SCALE
+        : content.posterTitleFontScale ?? 100
       : kind === "footer"
         ? content.posterFooterFontScale ?? 100
         : kind === "body"
-          ? content.posterBodyFontScale ?? 100
+          ? isSafetyFixedScale
+            ? SAFETY_CAUTION_BODY_FONT_SCALE
+            : content.posterBodyFontScale ?? 100
           : content.posterSubtitleFontScale ?? 100;
 
   const align: CanvasTextAlign =
@@ -168,6 +181,7 @@ export function CanvasTextFormatControls({
   const boldThreshold = kind === "body" || kind === "footer" ? 600 : 650;
 
   const setScale = (n: number) => {
+    if (isSafetyFixedScale) return;
     const v = Math.round(Math.min(SCALE_MAX, Math.max(SCALE_MIN, n)));
     if (kind === "title") onDraft({ ...content, posterTitleFontScale: v });
     else if (kind === "footer") onDraft({ ...content, posterFooterFontScale: v });
@@ -288,7 +302,7 @@ export function CanvasTextFormatControls({
         ))}
       </select>
 
-      <div className="flex flex-wrap items-center gap-0.5">
+      <div className={`flex flex-wrap items-center gap-0.5${isSafetyFixedScale ? " opacity-60 pointer-events-none" : ""}`}>
         <button type="button" className={iconBtn} title="크기 감소" onClick={() => setScale(scale - 5)}>
           <Minus className="h-3.5 w-3.5" />
         </button>
