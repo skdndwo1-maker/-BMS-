@@ -1,12 +1,6 @@
 import type { DesignContent } from "./types";
 import { VI_COLORS, VI_FONT_STACK } from "./viCanvasConstants";
-import {
-  DEFAULT_POSTER_BADGE_RECT,
-  DEFAULT_POSTER_BODY_RECT,
-  DEFAULT_POSTER_FOOTER_RECT,
-  DEFAULT_POSTER_TITLE_RECT,
-  DEFAULT_POSTER_BG_RECT,
-} from "./posterDefaults";
+import { applyAxisLayoutGuide } from "./axisLayoutGuide";
 import type { DesignEditorViolation } from "@/lib/designEditorApi";
 
 /** AI·VI 기준으로 텍스트 스타일 필드를 가이드 값으로 맞춥니다. */
@@ -47,17 +41,25 @@ export function applyLayoutReset(content: DesignContent, layoutReset: DesignEdit
   if (!layoutReset || layoutReset === "none") return content;
   let next = { ...content };
   if (layoutReset === "poster_defaults") {
-    next = {
-      ...next,
-      posterTitleRect: DEFAULT_POSTER_TITLE_RECT,
-      posterBodyRect: DEFAULT_POSTER_BODY_RECT,
-      posterFooterRect: DEFAULT_POSTER_FOOTER_RECT,
-      posterBadgeRect: DEFAULT_POSTER_BADGE_RECT,
-      posterBackgroundImageRect: DEFAULT_POSTER_BG_RECT,
-      posterTitleAlign: "center",
-      posterBodyAlign: "left",
-      posterFooterAlign: "left",
-    };
+    const category = next.axisLayoutCategory ?? "basic";
+    const refSize =
+      category === "square"
+        ? { width: 260, height: 260 }
+        : category === "wide" || category === "wide-event"
+          ? { width: 1440, height: 300 }
+          : category === "live"
+            ? { width: 320, height: 568 }
+            : category === "sns"
+              ? { width: 1080, height: 1080 }
+              : category === "xbanner"
+                ? { width: 600, height: 1800 }
+                : category === "placard-wide"
+                  ? { width: 4700, height: 700 }
+                  : { width: 466, height: 262 };
+    next = applyAxisLayoutGuide(next, refSize, {
+      force: true,
+      templateCategory: next.axisLayoutProfile?.startsWith("web-") ? "marketing-banner" : undefined,
+    });
   }
   if (layoutReset === "clear_text_overrides") {
     const { titleSize: _ts, subtitleSize: _ss, bodySize: _bs, titleFont: _tf, ...rest } = next;

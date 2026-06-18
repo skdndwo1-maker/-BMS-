@@ -2,6 +2,7 @@ import { GoogleGenerativeAI, SchemaType, type Schema } from "@google/generative-
 
 import {
   buildAuditCategoryGeminiPromptSection,
+  buildNamingFriendlyStorylineToneBlock,
   buildTierStorylineToneBlock
 } from "../namingCategoryGeminiDirectives.js";
 import {
@@ -23,6 +24,108 @@ const NAMING_LEGALITY_DETAIL_DESC =
   "적법성 평가 상세 (한국어). 반드시 `[법적 적법성]`과 `[사회적 이슈·민감도]` 두 소제목으로 나누어 각 3줄 이상. [법적 적법성]: 상표법·표시광고법·저작권·국가법령정보 인용(있을 때 출처 명시). [사회적 이슈·민감도]: Gemini 추론으로 혐오·차별·선민·역사·정치·군사·기념일 등 민감 연상, 부적절한 이벤트·캠페인 논란·대외 PR 리스크(유사 브랜드 사례는 확실히 아는 경우에만 유형 참고, 불확실하면 지어내지 말 것)";
 
 const NAMING_LEGALITY_PROMPT_RULES = `- **적법성(legalityScore·legalScore·legalDetail·legalityDetail·detailLogicLegality)**: **(가) 법적 적법성** — [참고 정보]에 **국가법령정보센터 법령 검색** 결과가 있으면 **반드시 인용·요약**(출처 명시). 상표법·표시광고법 위반 가능성·일반명칭·저작권 이슈를 평가. **(나) 사회적 이슈·민감도** — **Gemini 추론**으로 네이밍·슬로건·캠페인 맥락에서 사회편향·혐오발언·차별·선민·역사·정치·군사·기념일 등 **민감 연상**, 부적절한 기념·이벤트로 인한 **대외 PR·여론 리스크**를 **사전 점검**. **대중성**과 역할 구분: 적법성은 **레드라인·NO-GO**, 대중성은 **일반적 수용·톤·세대 fit**. Detail은 **\`[법적 적법성]\`** / **\`[사회적 이슈·민감도]\`** 두 소제목 필수. **0점은 평가 자체가 불가능할 때만**. 평가 가능하면 **10점 이상** + 근거 3줄 이상.`;
+
+export type NamingLanguageMode = "ko" | "en" | "unlimited";
+
+export type NamingFormatMode = "general" | "collaboration";
+
+const COLLABORATION_DISPLAY_SUFFIX = " l ";
+
+function appendCollaborationDisplaySuffix(name: string, partnerBrand: string): string {
+  const base = String(name ?? "").trim();
+  const partner = String(partnerBrand ?? "").trim();
+  if (!base || !partner) return base;
+  const suffix = `${COLLABORATION_DISPLAY_SUFFIX}${partner}`;
+  if (base.endsWith(suffix)) return base;
+  return `${base}${suffix}`;
+}
+
+function applyCollaborationDisplaySuffixes(
+  r: BrandNamingGeminiResult,
+  partnerBrand: string
+): BrandNamingGeminiResult {
+  const partner = partnerBrand.trim();
+  if (!partner) return r;
+
+  const withSuffix = (name: string) => appendCollaborationDisplaySuffix(name, partner);
+
+  if (r.tierNamingAlternatives?.length) {
+    const tierNamingAlternatives = r.tierNamingAlternatives.map((alt) => ({
+      ...alt,
+      tierSteps: alt.tierSteps.map((step) => ({
+        ...step,
+        name: withSuffix(step.name)
+      }))
+    }));
+    const namingProposals = tierNamingAlternatives.map((alt, i) => {
+      const existing = (r.namingProposals ?? [])[i];
+      return {
+        ...(existing ?? {
+          name: "",
+          rationale: alt.storyline,
+          hierarchyScore: 0,
+          originalityDimensionScore: 0,
+          pronunciationScore: 0,
+          legalityScore: 0,
+          publicAppealScore: 0,
+          scalabilityScore: 0,
+          proposalDetailLogic: {
+            hierarchy: "",
+            originality: "",
+            pronunciationLanguage: "",
+            legality: "",
+            publicAppeal: "",
+            scalability: ""
+          }
+        }),
+        name: `[대안 ${i + 1}] ${alt.tierSteps.map((t) => t.name).join(" → ")}`,
+        rationale: existing?.rationale ?? alt.storyline
+      };
+    });
+    return {
+      ...r,
+      tierNamingAlternatives,
+      namingProposals,
+      suggestedNames: namingProposals.map((p) => p.name)
+    };
+  }
+
+  const namingProposals = (r.namingProposals ?? []).map((p) => ({
+    ...p,
+    name: withSuffix(p.name)
+  }));
+  return {
+    ...r,
+    namingProposals,
+    suggestedNames: namingProposals.map((p) => p.name)
+  };
+}
+
+function buildNamingLanguagePromptBlock(mode: NamingLanguageMode, tiered: boolean): string {
+  const nameTargets = tiered
+    ? "각 대안 패키지(tierNamingAlternatives[i])의 **모든 tierSteps.name**, 그리고 대응하는 **names[i].name**·**namingProposals[i].name**·**suggestedNames[i]**"
+    : "4개 네이밍 대안(**names[i].name**, **namingProposals[i].name**, **suggestedNames[i]**)";
+
+  if (mode === "ko") {
+    return `【언어 구성 — 필수】
+- 사용자 선택: **국문**
+- ${nameTargets}은 **모두 순수 국문(한글·한자 허용, 라틴 알파벳·영문 단어 금지)** 으로만 구성하세요.
+- 4개 대안 **전부** 순수 국문이어야 합니다. 영문 혼용·로마자 표기 금지.`;
+  }
+  if (mode === "en") {
+    return `【언어 구성 — 필수】
+- 사용자 선택: **영문**
+- ${nameTargets}은 **모두 순수 영문(Latin alphabet, 숫자·기호 허용)** 으로만 구성하세요.
+- 4개 대안 **전부** 순수 영문이어야 합니다. 한글·한자 금지.`;
+  }
+  return `【언어 구성 — 필수】
+- 사용자 선택: **제한없음 (혼합 비율 고정)**
+- 4개 대안 중 **정확히** 아래 비율을 지키세요 (슬롯당 1개씩, 순서는 자유):
+  1) **순수 국문** 1개 (25%): 한글·한자만, 라틴 알파벳 없음
+  2) **순수 영문** 1개 (25%): Latin alphabet만, 한글·한자 없음
+  3) **국문+영문 혼용** 2개 (50%): 한글과 영문을 함께 사용 (예: U+플러스, 스마트U+)
+- ${nameTargets} 각각 위 슬롯에 맞는 언어 규칙을 **반드시** 적용하세요. 4개 중 2개만 혼용·1개만 국문 같은 비율 위반 금지.`;
+}
 
 const brandNamingResponseSchema = {
   type: SchemaType.OBJECT,
@@ -1267,6 +1370,7 @@ function finalizeNamingResult(
     tieredPackage?: boolean;
     tierStepCount?: number;
     tierLabels?: string[];
+    collaborationBrand?: string;
   }
 ): BrandNamingGeminiResult {
   const reqCtx = (opts?.requestText ?? "").trim();
@@ -1354,35 +1458,38 @@ function finalizeNamingResult(
       alts.reduce((s, a) => s + weightedTierPackageOverall(a.tierPackageEvaluation), 0) / 4
     );
 
-    return {
-      ...r,
-      overallScore,
-      hierarchyScore: 0,
-      originalityDimensionScore: 0,
-      pronunciationScore: 0,
-      pronunciationLanguageScore: 0,
-      legalityScore: 0,
-      trademarkScore: 0,
-      copyrightScore: 0,
-      detailLogic: {
-        hierarchy: "",
-        originality: "",
-        pronunciationLanguage: "",
-        legality: "",
-        publicAppeal: "",
-        scalability: ""
+    return applyCollaborationDisplaySuffixes(
+      {
+        ...r,
+        overallScore,
+        hierarchyScore: 0,
+        originalityDimensionScore: 0,
+        pronunciationScore: 0,
+        pronunciationLanguageScore: 0,
+        legalityScore: 0,
+        trademarkScore: 0,
+        copyrightScore: 0,
+        detailLogic: {
+          hierarchy: "",
+          originality: "",
+          pronunciationLanguage: "",
+          legality: "",
+          publicAppeal: "",
+          scalability: ""
+        },
+        hierarchy: emptyHierarchy,
+        trademark: { risk: "low" as const, conflicts: [], recommendation: "" },
+        copyright: { originality: 0, risks: [], verdict: "" },
+        finalSummary: "",
+        goRecommendation: "go",
+        namingProposals: proposals,
+        suggestedNames: proposals.map((p) => p.name),
+        additionalNamingSuggestions: [],
+        tierNamingAlternatives: alts,
+        tierPackageEvaluation: undefined
       },
-      hierarchy: emptyHierarchy,
-      trademark: { risk: "low" as const, conflicts: [], recommendation: "" },
-      copyright: { originality: 0, risks: [], verdict: "" },
-      finalSummary: "",
-      goRecommendation: "go",
-      namingProposals: proposals,
-      suggestedNames: proposals.map((p) => p.name),
-      additionalNamingSuggestions: [],
-      tierNamingAlternatives: alts,
-      tierPackageEvaluation: undefined
-    };
+      opts?.collaborationBrand ?? ""
+    );
   }
 
   const expected =
@@ -1415,35 +1522,38 @@ function finalizeNamingResult(
   proposals = proposals.slice(0, expected);
   const names = proposals.map((p) => p.name);
 
-  return {
-    ...r,
-    overallScore: 0,
-    hierarchyScore: 0,
-    originalityDimensionScore: 0,
-    pronunciationScore: 0,
-    pronunciationLanguageScore: 0,
-    legalityScore: 0,
-    trademarkScore: 0,
-    copyrightScore: 0,
-    detailLogic: {
-      hierarchy: "",
-      originality: "",
-      pronunciationLanguage: "",
-      legality: "",
-      publicAppeal: "",
-      scalability: ""
+  return applyCollaborationDisplaySuffixes(
+    {
+      ...r,
+      overallScore: 0,
+      hierarchyScore: 0,
+      originalityDimensionScore: 0,
+      pronunciationScore: 0,
+      pronunciationLanguageScore: 0,
+      legalityScore: 0,
+      trademarkScore: 0,
+      copyrightScore: 0,
+      detailLogic: {
+        hierarchy: "",
+        originality: "",
+        pronunciationLanguage: "",
+        legality: "",
+        publicAppeal: "",
+        scalability: ""
+      },
+      hierarchy: emptyHierarchy,
+      trademark: { risk: "low" as const, conflicts: [], recommendation: "" },
+      copyright: { originality: 0, risks: [], verdict: "" },
+      finalSummary: "",
+      goRecommendation: "go",
+      namingProposals: proposals,
+      suggestedNames: names,
+      additionalNamingSuggestions: [],
+      tierPackageEvaluation: undefined,
+      tierNamingAlternatives: undefined
     },
-    hierarchy: emptyHierarchy,
-    trademark: { risk: "low" as const, conflicts: [], recommendation: "" },
-    copyright: { originality: 0, risks: [], verdict: "" },
-    finalSummary: "",
-    goRecommendation: "go",
-    namingProposals: proposals,
-    suggestedNames: names,
-    additionalNamingSuggestions: [],
-    tierPackageEvaluation: undefined,
-    tierNamingAlternatives: undefined
-  };
+    opts?.collaborationBrand ?? ""
+  );
 }
 
 export async function runBrandNamingWithGemini(opts: {
@@ -1453,6 +1563,12 @@ export async function runBrandNamingWithGemini(opts: {
   guidelineBlock: string;
   /** 검수: 클라이언트가 보낸 auditCategory 전문 — Gemini 전용 지시(`namingCategoryGeminiDirectives`)와 결합 */
   auditCategoryRaw?: string;
+  /** 생성: 국문 / 영문 / 제한없음(혼합 비율) */
+  languageMode?: NamingLanguageMode;
+  /** 생성: 일반 vs Collaboration(표기만 결합) */
+  namingFormat?: NamingFormatMode;
+  /** Collaboration 선택 시 타사 브랜드명 — name 뒤 ` l {brand}` 자동 부착 */
+  collaborationBrand?: string;
   /** 생성: 일반(4안) vs 단계별 요금제 N안(1~6) */
   generatePlan?: { kind: "general" } | { kind: "tiered"; stepCount: number; labels: string[] };
 }): Promise<BrandNamingGeminiResult> {
@@ -1467,7 +1583,9 @@ export async function runBrandNamingWithGemini(opts: {
     generateProposalCount: genProposalFinalizeCount,
     tieredPackage: Boolean(tierPlan),
     tierStepCount: tierPlan?.stepCount,
-    tierLabels: tierPlan?.labels
+    tierLabels: tierPlan?.labels,
+    collaborationBrand:
+      opts.namingFormat === "collaboration" ? (opts.collaborationBrand ?? "").trim() : undefined
   };
 
   const key = getKey();
@@ -1486,6 +1604,16 @@ export async function runBrandNamingWithGemini(opts: {
   /** 단계별 생성: Personal·Enterprise 등에 따른 스토리라인 톤 전용 지시 */
   const tierStorylineToneBlock =
     opts.mode === "generate" && tierPlan ? buildTierStorylineToneBlock(opts.auditCategoryRaw?.trim() ?? "") : "";
+
+  /** 생성 공통: 친근·생활 밀착 세계관·스토리라인 톤 (단계별은 tier 블록에 포함) */
+  const friendlyStorylineToneBlock =
+    opts.mode === "generate" ? buildNamingFriendlyStorylineToneBlock() : "";
+  const storylineToneSection =
+    opts.mode === "generate"
+      ? tierPlan
+        ? tierStorylineToneBlock
+        : friendlyStorylineToneBlock
+      : "";
 
   const finishWithAuditNoGoFill = async (base: BrandNamingGeminiResult): Promise<BrandNamingGeminiResult> => {
     const r = finalizeNamingResult(opts.mode, base, finalizeOpts);
@@ -1508,7 +1636,7 @@ export async function runBrandNamingWithGemini(opts: {
   - **storyline**: 이 대안에서 ${stepCountForTier}개 단계 네이밍이 **공유하는 하나의 세계관·스토리라인**(한국어 3~6문장). 모든 단계 이름이 이 서사에서 **일관되게 파생**되도록 서술(기본 전제). 아래 **【세계관·스토리라인 톤】** 블록을 **반드시** 따를 것.
 ${tierStorylineToneBlock ? `\n${tierStorylineToneBlock}\n` : ""}
   - **tierSteps**: 길이 **정확히 ${stepCountForTier}**, 순서는 [요청 내용] **[단계별 생성]** 단계 라벨과 동일. 각 원소: tierLabel, name, rationale.
-  - **tierPackageEvaluation**: 이 대안 패키지 전체에 대한 통합 **6대 평가**(0~100) 및 hierarchyDetail·legalityDetail·originalityDetail·pronunciationDetail·**publicAppealDetail**·**scalabilityDetail**(각 한국어 3줄 이상). **창의성(originalityDetail)**에는 반드시 **storyline과 각 단계 name의 연결**을 구체적으로 서술. **대중성**은 부정 연상·문화권 오해·세대·글로벌 발음/의미·특정 집단 편향을, **확장성**은 패밀리 네이밍(Pro/Lite/+ 등)·글로벌 왜곡·파생·내구성을 반영. Enterprise 선택 시 스토리라인의 **진중함·무게감**이 평가 근거에도 반영되도록 서술하고, Personal 선택 시 **커머셜·일상 맥락**과의 연결을 드러낼 것.
+  - **tierPackageEvaluation**: 이 대안 패키지 전체에 대한 통합 **6대 평가**(0~100) 및 hierarchyDetail·legalityDetail·originalityDetail·pronunciationDetail·**publicAppealDetail**·**scalabilityDetail**(각 한국어 3줄 이상). **창의성(originalityDetail)**에는 반드시 **storyline과 각 단계 name의 연결**을 구체적으로 서술. **대중성**은 부정 연상·문화권 오해·세대·글로벌 발음/의미·특정 집단 편향을, **확장성**은 패밀리 네이밍(Pro/Lite/+ 등)·글로벌 왜곡·파생·내구성을 반영.
 - **names**·**namingProposals**·**suggestedNames**: 각각 **정확히 4**. i번째 항목은 **tierNamingAlternatives[i]의 요약 행**(name은 대안 식별 제목, description/rationale은 storyline 요약 또는 동일 복제). 후보별 점수·Detail은 **tierNamingAlternatives[i].tierPackageEvaluation**과 **일치**시킬 것.
 - 루트 **tierPackageEvaluation**은 **쓰지 말 것**(레거시 단일 패키지용). 일반 생성과 혼동 금지.
 - **additionalNamingSuggestions**: [].
@@ -1521,7 +1649,7 @@ ${NAMING_LEGALITY_PROMPT_RULES}
           }`
         : `작업 유형: **생성 (일반 4안)**.
 - **고정 응답 형식(반드시 준수)**: 루트에 **names** 배열과 **namingProposals** 배열을 **각각 정확히 ${genCount}개**로 채웁니다. 두 배열의 ${genCount}개 항목은 **동일한 네이밍·동일 순서**이며, 각 원소는 아래 키를 **모두** 채웁니다(빈 문자열·생략 금지):
-  \`name\`, \`description\` (네이밍 설명·창작 근거, 한국어 3문장 이상),
+  \`name\`, \`description\` (네이밍 설명·창작 근거, 한국어 3문장 이상 — 아래 **【세계관·스토리라인 톤】** 을 따를 것),
   \`hierarchyScore\`, \`hierarchyDetail\` (브랜드 계층 평가 상세, **한국어 3줄 이상**),
   \`uniquenessScore\`, \`uniquenessDetail\` (창의성 상세, **3줄 이상** — 가이드·요청·참고 정보만으로 유사·식별력 관점을 **Gemini 추론**으로 서술. 외부 상표 DB·연동 여부는 **언급하지 말 것**),
   \`pronunciationScore\`, \`pronunciationDetail\` (직관성·발음·언어 상세, **3줄 이상**),
@@ -1569,11 +1697,29 @@ ${NAMING_LEGALITY_PROMPT_RULES}
       ? buildNamingGenerationRuleBlockFromAuditRaw(opts.auditCategoryRaw?.trim() ?? "")
       : "";
 
+  const languageMode: NamingLanguageMode =
+    opts.languageMode === "ko" || opts.languageMode === "en" ? opts.languageMode : "unlimited";
+  const namingLanguageSection =
+    opts.mode === "generate" ? buildNamingLanguagePromptBlock(languageMode, Boolean(tierPlan)) : "";
+
+  const collaborationFormatSection =
+    opts.mode === "generate" && opts.namingFormat === "collaboration"
+      ? `【Collaboration 표기 — 생성 규칙】
+- **name** 필드에는 **U+ 측 네이밍만** 출력하세요.
+- \` l \` 접미사·타사 브랜드명은 **서버에서 자동 부착**하므로 name·tierSteps.name에 **포함하지 마세요**.`
+      : "";
+
   const prompt = `역할: 브랜드 네이밍 전략가이자 지식재산 검토 보조입니다.
 ${modeIntro}${
     namingGenerationRuleSection
       ? `\n\n【네이밍 생성 규칙 — 선택 카테고리】\n${namingGenerationRuleSection}\n`
       : ""
+  }${
+    namingLanguageSection ? `\n\n${namingLanguageSection}\n` : ""
+  }${
+    collaborationFormatSection ? `\n\n${collaborationFormatSection}\n` : ""
+  }${
+    storylineToneSection ? `\n\n${storylineToneSection}\n` : ""
   }
 
 [U+ 브랜드 가이드라인 및 참고 문맥]

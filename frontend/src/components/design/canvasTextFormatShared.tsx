@@ -23,12 +23,16 @@ import {
   Plus,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { VI_COLORS } from "@/design/viCanvasConstants";
+import { VI_COLORS, TITLE_DEFAULT_FONT_WEIGHT } from "@/design/viCanvasConstants";
 import {
   isSafetyCautionTemplate,
   SAFETY_CAUTION_BODY_FONT_SCALE,
   SAFETY_CAUTION_TITLE_FONT_SCALE,
 } from "@/design/safetyCautionPreset";
+import {
+  isPlacardTemplateId,
+  PLACARD_BODY_TEXT_ALIGN,
+} from "@/design/placardCanvasLayout";
 
 export const SCALE_MIN = 25;
 export const SCALE_MAX = 300;
@@ -80,6 +84,7 @@ export function CanvasTextFormatControls({
   const kind = target.kind;
   const isSafetyFixedScale =
     isSafetyCautionTemplate(templateId) && (kind === "title" || kind === "body");
+  const isPlacardFixedBodyAlign = isPlacardTemplateId(templateId) && kind === "body";
 
   const typoTitle = content.posterTitleTypography;
   const typoFooter = content.posterFooterTypography;
@@ -114,7 +119,9 @@ export function CanvasTextFormatControls({
       : kind === "footer"
         ? content.posterFooterAlign ?? "left"
         : kind === "body"
-          ? content.posterBodyAlign ?? "left"
+          ? isPlacardFixedBodyAlign
+            ? PLACARD_BODY_TEXT_ALIGN
+            : content.posterBodyAlign ?? "left"
           : content.posterSubtitleAlign?.[target.id] ?? content.posterTitleAlign ?? "left";
 
   const letterEm =
@@ -137,7 +144,7 @@ export function CanvasTextFormatControls({
 
   const fw =
     kind === "title"
-      ? typoTitle?.fontWeight ?? 800
+      ? typoTitle?.fontWeight ?? TITLE_DEFAULT_FONT_WEIGHT
       : kind === "footer"
         ? typoFooter?.fontWeight ?? 400
         : kind === "body"
@@ -178,7 +185,12 @@ export function CanvasTextFormatControls({
           ? content.bodyColor ?? "#5A5A5A"
           : content.subtitleColor ?? content.titleColor ?? "#1A1A1A";
 
-  const boldThreshold = kind === "body" || kind === "footer" ? 600 : 650;
+  const boldThreshold =
+    kind === "title"
+      ? TITLE_DEFAULT_FONT_WEIGHT - 50
+      : kind === "body" || kind === "footer"
+        ? 600
+        : 650;
 
   const setScale = (n: number) => {
     if (isSafetyFixedScale) return;
@@ -190,6 +202,7 @@ export function CanvasTextFormatControls({
   };
 
   const setAlign = (a: CanvasTextAlign) => {
+    if (isPlacardFixedBodyAlign) return;
     if (kind === "title") onDraft({ ...content, posterTitleAlign: a });
     else if (kind === "footer") onDraft({ ...content, posterFooterAlign: a });
     else if (kind === "body") onDraft({ ...content, posterBodyAlign: a });
@@ -254,7 +267,7 @@ export function CanvasTextFormatControls({
    *   · 밑줄: textDecoration underline / none
    */
   const onWeightForKind =
-    kind === "title" ? 800 : kind === "subtitle" ? 700 : 600;
+    kind === "title" ? TITLE_DEFAULT_FONT_WEIGHT : kind === "subtitle" ? 700 : 600;
 
   const tryPartial = (which: "bold" | "italic" | "underline") => {
     const sel = getSelection?.();
@@ -420,7 +433,9 @@ export function CanvasTextFormatControls({
         </label>
       </div>
 
-      <div className="flex flex-wrap gap-0.5">
+      <div
+        className={`flex flex-wrap gap-0.5${isPlacardFixedBodyAlign ? " opacity-60 pointer-events-none" : ""}`}
+      >
         {(["left", "center", "right", "justify"] as const).map((a) => (
           <button
             key={a}

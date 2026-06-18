@@ -468,20 +468,30 @@ function geminiImagePartsToSnake(
 /**
  * 텍스트 + 이미지 1장 이상(참조 추가 등)을 한 요청으로 넘겨 이미지 생성 모델을 호출합니다.
  */
-function runGeminiImageGenerateWithMultiParts(parts: GeminiImageUserPart[]): Promise<unknown | null> {
+function runGeminiImageGenerateWithMultiParts(
+  parts: GeminiImageUserPart[],
+  opts?: { aspectRatio?: string }
+): Promise<unknown | null> {
   const key = getKey();
   if (!key) return Promise.resolve(null);
   if (parts.length === 0) return Promise.resolve(null);
 
+  const generationConfig: Record<string, unknown> = {
+    responseModalities: ["TEXT", "IMAGE"],
+  };
+  if (opts?.aspectRatio?.trim()) {
+    generationConfig.imageConfig = { aspectRatio: opts.aspectRatio.trim() };
+  }
+
   const bodies: object[] = [
     {
       contents: [{ role: "user", parts }],
-      generationConfig: { responseModalities: ["TEXT", "IMAGE"] }
+      generationConfig,
     },
     {
       contents: [{ role: "user", parts: geminiImagePartsToSnake(parts) }],
-      generationConfig: { responseModalities: ["TEXT", "IMAGE"] }
-    }
+      generationConfig,
+    },
   ];
 
   const models = [
@@ -521,9 +531,12 @@ function runGeminiImageGenerateWithMultiParts(parts: GeminiImageUserPart[]): Pro
 
 /** 텍스트 프롬프트만으로 브랜드용 이미지 1장 생성 */
 export async function generateImageFromTextPrompt(
-  prompt: string
+  prompt: string,
+  opts?: { aspectRatio?: string }
 ): Promise<{ mimeType: string; base64: string; caption: string } | null> {
-  const json = await runGeminiImageGenerateWithMultiParts([{ text: prompt }]);
+  const json = await runGeminiImageGenerateWithMultiParts([{ text: prompt }], {
+    aspectRatio: opts?.aspectRatio,
+  });
   if (!json) return null;
   const extracted = extractTextAndImageFromGeminiResponse(json);
   if (!extracted) return null;
@@ -531,6 +544,52 @@ export async function generateImageFromTextPrompt(
     mimeType: extracted.mimeType,
     base64: extracted.base64,
     caption: extracted.text || "이미지가 생성되었습니다.",
+  };
+}
+
+/** 기준 이미지 + 추가 프롬프트로 디벨롭(반복 개선) */
+export async function generateImageDevelopFromReference(opts: {
+  imageBase64: string;
+  imageMime: string;
+  developPrompt: string;
+  templateLabel?: string;
+  creativeTopic?: string;
+}): Promise<{ mimeType: string; base64: string; caption: string } | null> {
+  const developPrompt = opts.developPrompt.trim();
+  if (!developPrompt || !opts.imageMime.startsWith("image/")) return null;
+
+  const b64 = opts.imageBase64.replace(/^data:image\/\w+;base64,/, "").trim();
+  if (!b64) return null;
+
+  const prompt = `역할: LG U+ 브랜드 마케팅·디자인 템플릿용 이미지 편집 전문가.
+
+작업: 첨부 **기준 이미지**의 주제·구도·브랜드 톤을 유지하면서, 아래 [추가 요청]만 반영해 **새 마케팅 이미지 1장**을 생성하세요.
+
+[브랜드 스타일]
+- LG U+ 마젠타 포인트 #F43182, 파스텔 핑크·보라 보조
+- 깔끔하고 현대적인 한국 통신·IT 브랜드 톤
+- 과도한 텍스트·워터마크·로고 삽입 금지
+
+템플릿: ${opts.templateLabel ?? "template"}
+${opts.creativeTopic?.trim() ? `\n[제작 주제]\n${opts.creativeTopic.trim()}\n` : ""}
+[추가 요청]
+${developPrompt}
+
+규칙:
+- 원본과 동일한 캠페인·무드·구도를 기본으로 하되 [추가 요청] 변경만 명확히 반영
+- 한국어 1~2문장으로 무엇을 바꿨는지 설명한 뒤 이미지 출력`;
+
+  const json = await runGeminiImageGenerateWithMultiParts([
+    { text: prompt },
+    { inlineData: { mimeType: opts.imageMime, data: b64 } },
+  ]);
+  if (!json) return null;
+  const extracted = extractTextAndImageFromGeminiResponse(json);
+  if (!extracted) return null;
+  return {
+    mimeType: extracted.mimeType,
+    base64: extracted.base64,
+    caption: extracted.text || "이미지가 디벨롭되었습니다.",
   };
 }
 

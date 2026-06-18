@@ -2,6 +2,7 @@ import type { AssetLayer, DesignContent } from "@/design/types";
 import { FONT_FAMILY_PRETENDARD } from "@/design/canvasTextTypography";
 import { BRAND } from "@/constants/brandDesignSystem";
 import { SAFETY_WARNING_PICTOGRAM_SRC } from "@/design/assetPresets";
+import { TITLE_DEFAULT_FONT_WEIGHT } from "@/design/viCanvasConstants";
 
 /** 오프라인 「안전&주의」— 수리중_기본형 템플릿 ID */
 export const SAFETY_CAUTION_TEMPLATE_ID = "safety-caution-maintenance";
@@ -11,6 +12,9 @@ export const SAFETY_CAUTION_BG = BRAND.bg;
 
 /** 안전&주의 템플릿 BI/CI/SLOGAN 고정 위치 (상단 중앙) */
 export const SAFETY_CAUTION_LOGO_POSITION = "top-center" as const;
+
+/** 안전&주의 상단 로고 여백 — 짧은 변의 6% */
+export const SAFETY_CAUTION_LOGO_TOP_MARGIN_RATIO = 0.06;
 
 /** 첨부 레퍼런스 — 타이틀·본문 앵커 (autofit 후 캔버스 중심부 배치) */
 export const SAFETY_CAUTION_TITLE_RECT = { x: 0.1, y: 0.34, width: 0.8, height: 0.14 };
@@ -26,8 +30,8 @@ export const SAFETY_CAUTION_BODY_FONT_SCALE = 80;
 const TEXT_BUNDLE_GAP_Y = 0.014;
 const TEXT_BUNDLE_CENTER_Y = 0.47;
 
-/** BI·CI·SLOGAN 동일 표시 높이 (캔버스 높이 대비) */
-export const SAFETY_CAUTION_LOGO_HEIGHT_RATIO = 0.055;
+/** @deprecated canvasLogoLayout.CANVAS_LOGO_HEIGHT_RATIO 사용 */
+export const SAFETY_CAUTION_LOGO_HEIGHT_RATIO = 0.045;
 
 /** 이전 프리셋 위치 — 마이그레이션 시 새 기본값으로 교체 */
 const PRESET_TITLE_RECTS: Array<{ x: number; y: number; width: number; height: number }> = [
@@ -166,7 +170,7 @@ export function createSafetyCautionMaintenanceContent(): DesignContent {
     posterBodyFontScale: SAFETY_CAUTION_BODY_FONT_SCALE,
     posterTitleTypography: {
       fontFamily: FONT_FAMILY_PRETENDARD,
-      fontWeight: 800,
+      fontWeight: TITLE_DEFAULT_FONT_WEIGHT,
       lineHeight: 1.12,
       letterSpacingEm: -0.02,
     },
@@ -318,7 +322,7 @@ export const SAFETY_CAUTION_POSTER_PRESET: Partial<DesignContent> = {
   bodyFont: FONT_FAMILY_PRETENDARD,
   posterTitleTypography: {
     fontFamily: FONT_FAMILY_PRETENDARD,
-    fontWeight: 800,
+    fontWeight: TITLE_DEFAULT_FONT_WEIGHT,
   },
   posterBodyTypography: {
     "body-1": {

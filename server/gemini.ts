@@ -31,6 +31,8 @@ export {
   runDesignEditorCanvasVisualCorrection,
   runDesignEditorAssetGeneration,
   runDesignEditorImageGeneration,
+  runDesignEditorImageDevelop,
+  normalizeImageAspectRatioId,
   runDesignEditorDraftProposal,
   type DesignEditorViolationRow,
   type DesignEditorTextSuggestionTarget,

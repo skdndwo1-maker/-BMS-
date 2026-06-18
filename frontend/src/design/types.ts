@@ -171,11 +171,23 @@ export interface DesignContent {
 
   /** 포스터: 배경 이미지 / 뱃지 영역 — 캔버스 대비 정규화 좌표 (0~1), 중앙 캔버스에서 드래그·리사이즈 */
   posterBackgroundImageRect?: { x: number; y: number; width: number; height: number };
-  /** 포스터: 이미지 투명도(0~100). 기본 0 */
+  /** 이미지 배치: 라운드 박스형(기본) | 배경 전체형 */
+  posterImagePlacementMode?: "round-box" | "full-background";
+  /** 라운드 박스형 rect — 배경 전체형 전환 시 복원용 */
+  posterRoundBoxImageRect?: { x: number; y: number; width: number; height: number };
+  /** 포스터: 이미지 투명도(0~100). 기본 100 */
   posterImageOpacity?: number;
+  /** 포스터: 이미지 밝기(0~200, CSS brightness %). 기본 100 */
+  posterImageBrightness?: number;
+  /** 포스터: 이미지 대비(0~200, CSS contrast %). 기본 100 */
+  posterImageContrast?: number;
+  /** 포스터: 이미지 채도(0~200, CSS saturate %). 기본 100 */
+  posterImageSaturation?: number;
   /** 포스터: 이미지 내부 위치(0~100). 기본 50/50 */
   posterImagePosX?: number;
   posterImagePosY?: number;
+  /** 포스터: 이미지 박스 이동·리사이즈 잠금 */
+  posterImageLocked?: boolean;
   posterBadgeRect?: { x: number; y: number; width: number; height: number };
   /** 뱃지 배경: 마젠타(기본) 또는 블랙 */
   posterBadgeColor?: "magenta" | "black";
@@ -190,6 +202,8 @@ export interface DesignContent {
   /** 모든 템플릿: 라운드 배경 박스(드래그/리사이즈 가능, 맨 뒤) */
   panelBgOnCanvas?: boolean;
   panelBgRect?: { x: number; y: number; width: number; height: number };
+  /** 라운드 배경 박스 이동·리사이즈 잠금 */
+  panelBgLocked?: boolean;
 
   /** 포스터: 메인 타이틀/본문/유의사항 박스 — 드래그·리사이즈 */
   posterTitleRect?: { x: number; y: number; width: number; height: number };
@@ -255,8 +269,38 @@ export interface DesignContent {
   posterBodyTypography?: Record<string, PosterElementTypography>;
   posterSubtitleTypography?: Record<string, PosterElementTypography>;
 
-  /** 비RCS 캔버스: 사용자 정의 그룹(선택 키 기반) */
+  /** 비RCS 캔버스: 사용자 정의 그룹(선택 키 기준) */
   canvasGroups?: Array<{ id: string; keys: string[] }>;
+
+  /** AXIS 레이아웃 가이드 기본 배치가 적용됐는지(최초 1회) */
+  axisLayoutApplied?: boolean;
+  /** 적용된 레이아웃 카테고리 */
+  axisLayoutCategory?:
+    | "wide"
+    | "basic"
+    | "square"
+    | "live"
+    | "wide-event"
+    | "sns"
+    | "poster-window"
+    | "poster-full"
+    | "xbanner"
+    | "placard-wide";
+  /** 적용된 브랜드 레이아웃 프로필 */
+  axisLayoutProfile?:
+    | "web-wide"
+    | "web-basic-model-b"
+    | "web-basic-image"
+    | "web-square"
+    | "web-live"
+    | "web-wide-event"
+    | "sns-grid"
+    | "poster-window"
+    | "poster-full-image"
+    | "xbanner-stack"
+    | "placard-wide";
+  /** 가이드 기준 이미지 모서리 R(px) — 캔버스 짧은 변 비례 스케일 */
+  axisLayoutImageCornerRadiusPx?: number;
 }
 
 export interface ComplianceIssue {

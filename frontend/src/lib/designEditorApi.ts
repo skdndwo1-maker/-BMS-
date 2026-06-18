@@ -31,7 +31,14 @@ async function readJsonBody(r: Response): Promise<Record<string, unknown>> {
   try {
     return JSON.parse(text) as Record<string, unknown>;
   } catch {
-    if (!r.ok) throw new Error(text.slice(0, 400) || `요청 실패 (HTTP ${r.status})`);
+    if (!r.ok) {
+      if (text.includes("Cannot POST") || text.includes("<!DOCTYPE html>")) {
+        throw new Error(
+          `API 경로를 찾을 수 없습니다 (HTTP ${r.status}). 백엔드 서버를 최신 코드로 재시작·배포했는지 확인해 주세요.`
+        );
+      }
+      throw new Error(text.slice(0, 400) || `요청 실패 (HTTP ${r.status})`);
+    }
     throw new Error("서버 응답을 해석할 수 없습니다.");
   }
 }
@@ -164,6 +171,7 @@ export async function generateDesignAsset(body: {
   direction: string;
   templateLabel?: string;
   creativeTopic?: string;
+  imageAspectRatio?: string;
 }): Promise<{ alternatives: GeneratedDesignAssetAlternative[] }> {
   const r = await fetch(apiUrl("/api/design-editor/generate-asset"), {
     method: "POST",
@@ -201,6 +209,29 @@ export async function generateDesignAsset(body: {
     throw new Error(typeof data.error === "string" ? data.error : "generate_asset_failed");
   }
   return { alternatives };
+}
+
+export async function developDesignImage(body: {
+  imageBase64: string;
+  imageMime: string;
+  developPrompt: string;
+  templateLabel?: string;
+  creativeTopic?: string;
+}): Promise<{ mimeType: string; base64: string; caption: string }> {
+  const r = await fetch(apiUrl("/api/design-editor/develop-image"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await readJsonBody(r);
+  if (!r.ok || typeof data.base64 !== "string" || typeof data.mimeType !== "string") {
+    throw new Error(typeof data.error === "string" ? data.error : "develop_image_failed");
+  }
+  return {
+    mimeType: data.mimeType,
+    base64: data.base64,
+    caption: typeof data.caption === "string" ? data.caption : "",
+  };
 }
 
 export { isSvgAlternative };

@@ -22,6 +22,8 @@ import {
   runDesignEditorTextSuggestion,
   runDesignEditorAssetGeneration,
   runDesignEditorImageGeneration,
+  runDesignEditorImageDevelop,
+  normalizeImageAspectRatioId,
   runDesignEditorDraftProposal,
   runInspectionWithGemini,
   runOptionsPageChat,
@@ -32,7 +34,9 @@ import {
   copyFixedGuidelineToSlot,
   ensureFixedGuidelineSlot,
   ensureFixedGuidelineSlotAsync,
-  FIXED_GUIDELINE_SOURCES
+  FIXED_GUIDELINE_SOURCES,
+  NAMING_FIXED_GUIDELINE_DISPLAY,
+  NAMING_FIXED_GUIDELINE_IDS
 } from "./fixedGuidelines.js";
 import { syncGuidelineFromSupabaseLibrary, canSyncGuidelineFromSupabase } from "./guidelineSupabaseSync.js";
 import { extractPdfTextFromBase64, runSimplyHeartStep } from "./simplyHeart.js";
@@ -167,6 +171,25 @@ async function buildPrimaryGuidelineBlock(guidelineId: string, queryText?: strin
   }
 
   return out;
+}
+
+/** 브랜드 네이밍: Simply. U+ Guidebook + Brand Guideline 고정 참조(VI 제외) */
+async function buildNamingGuidelineBlock(queryText?: string): Promise<string> {
+  const q = queryText?.trim() ?? "";
+  const blocks: string[] = [];
+  for (const id of NAMING_FIXED_GUIDELINE_IDS) {
+    try {
+      copyFixedGuidelineToSlot(id);
+    } catch (e) {
+      blocks.push(
+        `[${NAMING_FIXED_GUIDELINE_DISPLAY[id]}]\n고정 PDF 동기화 실패: ${e instanceof Error ? e.message : String(e)}`
+      );
+      continue;
+    }
+    const block = await buildPrimaryGuidelineBlock(id, q);
+    blocks.push(`[${NAMING_FIXED_GUIDELINE_DISPLAY[id]}]\n${block}`);
+  }
+  return blocks.join("\n\n---\n\n");
 }
 
 /**
@@ -972,35 +995,32 @@ app.post(
       }
       const referenceText =
         typeof req.body?.referenceText === "string" ? req.body.referenceText.trim() : "";
-      const useLibrary = req.body?.useGuidelineLibrary !== "false" && req.body?.useGuidelineLibrary !== false;
-      const rawGuidelineId = String(req.body?.guidelineId ?? "").trim();
+      const rawLanguageMode = String(req.body?.languageMode ?? "unlimited").trim();
+      const languageMode: "ko" | "en" | "unlimited" =
+        rawLanguageMode === "ko" || rawLanguageMode === "en" ? rawLanguageMode : "unlimited";
+      const namingFormat =
+        mode === "generate" && String(req.body?.namingFormat ?? "").trim() === "collaboration"
+          ? "collaboration"
+          : "general";
+      const collaborationBrand = String(req.body?.collaborationBrand ?? "").trim();
+
+      if (mode === "generate" && namingFormat === "collaboration" && !collaborationBrand) {
+        res.status(400).json({ error: "collaborationBrand_required" });
+        return;
+      }
 
       if (!requestText) {
         res.status(400).json({ error: "requestText_required" });
         return;
       }
 
-      let guidelineId: string | null = null;
+      const ragQuery = [auditCategory, auditName, namingIntent, requestText, referenceText].filter(Boolean).join("\n\n");
       let guidelineBlock = "";
-      if (useLibrary) {
-        if (!rawGuidelineId || !FIXED_GUIDELINE_SOURCES[rawGuidelineId]) {
-          res.status(400).json({ error: "invalid_or_missing_guidelineId" });
-          return;
-        }
-        guidelineId = rawGuidelineId;
-        try {
-          copyFixedGuidelineToSlot(guidelineId);
-        } catch (e) {
-          res.status(500).json({ error: String(e) });
-          return;
-        }
-        guidelineBlock = await buildPrimaryGuidelineBlock(
-          guidelineId,
-          [auditCategory, auditName, namingIntent, requestText, referenceText].filter(Boolean).join("\n\n")
-        );
-      } else {
-        guidelineBlock =
-          "[참조 가이드라인]\n사용자가 라이브러리 참조를 끈 상태입니다. 아래 직접 입력·업로드만 반영하세요.";
+      try {
+        guidelineBlock = await buildNamingGuidelineBlock(ragQuery);
+      } catch (e) {
+        res.status(500).json({ error: String(e) });
+        return;
       }
 
       let supplement = "";
@@ -1035,6 +1055,9 @@ app.post(
         referenceNotes,
         guidelineBlock,
         auditCategoryRaw: auditCategory || undefined,
+        languageMode: mode === "generate" ? languageMode : undefined,
+        namingFormat: mode === "generate" ? namingFormat : undefined,
+        collaborationBrand: mode === "generate" && namingFormat === "collaboration" ? collaborationBrand : undefined,
         generatePlan:
           mode === "generate" && generateStyle === "tiered"
             ? { kind: "tiered" as const, stepCount: tierStepCount, labels: tierLabelsEffective }
@@ -1048,7 +1071,7 @@ app.post(
         req,
         type: mode === "generate" ? "naming_generate" : "naming_audit",
         status: "pending_review",
-        guidelineId: useLibrary && guidelineId ? guidelineId : null,
+        guidelineId: NAMING_FIXED_GUIDELINE_IDS.join(","),
         inputJson: {
           mode,
           auditName,
@@ -1057,12 +1080,14 @@ app.post(
           requestText,
           referenceText: referenceText || null,
           supplementIncluded: Boolean(supplement),
-          useGuidelineLibrary: useLibrary,
-          guidelineId: useLibrary && guidelineId ? guidelineId : null,
+          namingFixedGuidelineIds: [...NAMING_FIXED_GUIDELINE_IDS],
           generateMeta:
             mode === "generate"
               ? {
                   style: generateStyle,
+                  languageMode,
+                  namingFormat,
+                  ...(namingFormat === "collaboration" ? { collaborationBrand } : {}),
                   ...(generateStyle === "tiered" ? { tierStepCount, tierLabels: tierLabelsEffective } : {}),
                 }
               : null,
@@ -1076,13 +1101,16 @@ app.post(
       res.json({
         ok: true,
         mode,
-        guidelineId: useLibrary && guidelineId ? guidelineId : null,
+        guidelineId: NAMING_FIXED_GUIDELINE_IDS.join(","),
         ...result,
         namingGeminiConfigured: hasGeminiApiKey(),
         generateMeta:
           mode === "generate"
             ? {
                 style: generateStyle,
+                languageMode,
+                namingFormat,
+                ...(namingFormat === "collaboration" ? { collaborationBrand } : {}),
                 ...(generateStyle === "tiered"
                   ? { tierStepCount, tierLabels: tierLabelsEffective }
                   : {})
@@ -1479,6 +1507,10 @@ app.post("/api/design-editor/generate-asset", async (req, res) => {
     const templateLabel = String(req.body?.templateLabel ?? "template");
     const creativeTopic =
       typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
+    const imageAspectRatio =
+      assetKind === "image"
+        ? normalizeImageAspectRatioId(req.body?.imageAspectRatio) ?? "16:9"
+        : undefined;
 
     if (!direction) {
       res.status(400).json({ error: "direction_required" });
@@ -1495,6 +1527,7 @@ app.post("/api/design-editor/generate-asset", async (req, res) => {
             direction,
             templateLabel,
             creativeTopic: creativeTopic || undefined,
+            imageAspectRatio,
           })
         : await runDesignEditorAssetGeneration({
             assetKind,
@@ -1524,6 +1557,7 @@ app.post("/api/design-editor/generate-asset", async (req, res) => {
         direction,
         templateLabel,
         creativeTopic: creativeTopic || null,
+        imageAspectRatio: imageAspectRatio ?? null,
       },
       outputJson: {
         count: out.alternatives.length,
@@ -1538,6 +1572,65 @@ app.post("/api/design-editor/generate-asset", async (req, res) => {
     });
 
     res.json({ ok: true, alternatives: out.alternatives });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+app.post("/api/design-editor/develop-image", async (req, res) => {
+  try {
+    const developPrompt = typeof req.body?.developPrompt === "string" ? req.body.developPrompt.trim() : "";
+    const imageMime = typeof req.body?.imageMime === "string" ? req.body.imageMime.trim() : "image/png";
+    const rawB64 = String(req.body?.imageBase64 ?? "").replace(/^data:image\/\w+;base64,/, "");
+    const templateLabel = String(req.body?.templateLabel ?? "template");
+    const creativeTopic =
+      typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
+
+    if (!developPrompt) {
+      res.status(400).json({ error: "develop_prompt_required" });
+      return;
+    }
+    if (!rawB64 || !imageMime.startsWith("image/")) {
+      res.status(400).json({ error: "image_required" });
+      return;
+    }
+    if (!process.env.GEMINI_API_KEY?.trim()) {
+      res.status(503).json({ error: "GEMINI_API_KEY가 설정되어 있지 않습니다." });
+      return;
+    }
+
+    const out = await runDesignEditorImageDevelop({
+      imageBase64: rawB64,
+      imageMime,
+      developPrompt,
+      templateLabel,
+      creativeTopic: creativeTopic || undefined,
+    });
+
+    if (!out) {
+      res.status(503).json({
+        error: "이미지 디벨롭에 실패했습니다. GEMINI_IMAGE_MODEL 설정과 프롬프트를 확인해 주세요.",
+      });
+      return;
+    }
+
+    await persistRun({
+      req,
+      type: "design_editor_image_develop",
+      status: "pending_review",
+      inputJson: {
+        developPrompt,
+        templateLabel,
+        creativeTopic: creativeTopic || null,
+        imageMime,
+      },
+      outputJson: { ok: true, mimeType: out.mimeType, caption: out.caption },
+      inputText: developPrompt,
+      outputText: out.caption ?? null,
+      model: process.env.GEMINI_IMAGE_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || null,
+    });
+
+    res.json({ ok: true, mimeType: out.mimeType, base64: out.base64, caption: out.caption });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }

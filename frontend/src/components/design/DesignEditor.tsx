@@ -5,6 +5,7 @@ import type { DesignContent } from "@/design/types";
 import { DesignCanvas, type DesignCanvasHandle, type DesignFocusTarget } from './DesignCanvas';
 import type { CanvasTextEditTarget } from '@/design/canvasTextTypography';
 import { CanvasTextFormatPanel } from './CanvasTextFormatPanel';
+import { CanvasImageAdjustPanel } from './CanvasImageAdjustPanel';
 import { ContentPanel }           from './ContentPanel';
 import { LayersPanel }            from './LayersPanel';
 import { QuickStartDialog }       from './QuickStartDialog';
@@ -54,6 +55,12 @@ import {
   shouldApplySafetyCautionPreset,
   unlockSafetyWarningAsset,
 } from "@/design/safetyCautionPreset";
+import { resolveTemplateDefaultLogoPosition } from "@/design/canvasLogoLayout";
+import { PLACARD_BODY_TEXT_ALIGN } from "@/design/placardCanvasLayout";
+import {
+  applyAxisLayoutGuide,
+  shouldApplyAxisLayoutGuide,
+} from "@/design/axisLayoutGuide";
 
 const ExportDialog = lazy(() => import("./ExportDialog").then((m) => ({ default: m.ExportDialog })));
 
@@ -126,11 +133,10 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     const dd = String(d.getDate()).padStart(2, "0");
     return `${base} ${yyyy}-${mm}-${dd}`;
   }
-  const defaultLogoPosition: DesignContent["logoPosition"] =
-    // 가로형 템플릿(예: LinkedIn Post, 16:9 슬라이드 등)은 타이틀과 로고가 겹치기 쉬워 기본값을 우하단으로 둠
-    template?.size?.width && template?.size?.height && template.size.width / template.size.height >= 1.7
-      ? "bottom-right"
-      : "top-left";
+  const defaultLogoPosition: DesignContent["logoPosition"] = resolveTemplateDefaultLogoPosition(
+    actualTemplateId,
+    template?.category
+  );
 
   const [content, setContent] = useState<DesignContent>(() => ({
     title: "",
@@ -142,7 +148,6 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     venue: "",
     rightPanelBg: "white",
     logoOption: "CI",
-    // 가로형(높이 낮은) 템플릿은 로고/타이틀 겹침이 잦아 기본값을 우하단으로 둠
     logoPosition: defaultLogoPosition,
   }));
   const [focusTarget, setFocusTarget] = useState<DesignFocusTarget>(null);
@@ -177,17 +182,17 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     setContent((prev) => {
       const next: DesignContent = { ...prev };
 
-      // 정렬: 메인/본문/유의사항 모두 중앙정렬 (현수막에서만)
-      if (!next.posterTitleAlign) next.posterTitleAlign = "center";
-      if (!next.posterBodyAlign) next.posterBodyAlign = "center";
-      if (!next.posterFooterAlign) next.posterFooterAlign = "center";
+      // 정렬: 메인/유의사항 중앙, 본문 중앙 고정
+      next.posterTitleAlign = "center";
+      next.posterBodyAlign = PLACARD_BODY_TEXT_ALIGN;
+      next.posterFooterAlign = "center";
 
       // 기본 글자 크기 스케일
       if (next.posterTitleFontScale == null) next.posterTitleFontScale = 90;
       if (next.posterBodyFontScale == null) next.posterBodyFontScale = 58;
       if (next.posterFooterFontScale == null) next.posterFooterFontScale = 85;
 
-      // 현수막에서 우측 로고 배치 옵션은 제거되므로, 기존 값이 우측이면 좌측 상단으로 정규화
+      // 현수막: 로고 좌상단 고정
       next.logoPosition = "top-left";
 
       // 현수막 좌하단 "장소 및 날짜" 기본 텍스트
@@ -321,6 +326,14 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   useEffect(() => {
     if (textFormatTarget) setTextOptionsPanelOpen(true);
   }, [textFormatTarget]);
+
+  const hasCanvasImage = Boolean(content.image);
+  const showImageAdjustPanel =
+    actualTemplateId !== "rcs-568x368" && focusTarget === "image" && hasCanvasImage;
+
+  useEffect(() => {
+    if (showImageAdjustPanel) setTextOptionsPanelOpen(true);
+  }, [showImageAdjustPanel]);
 
   // 저장/불러오기 다이얼로그가 열리면 캔버스 VI 그리드를 숨겨 "후면 그리드 패턴"이 비치지 않게 함
   useEffect(() => {
@@ -500,6 +513,26 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
       }
     }
   }, [template, bootBusy, actualTemplateId, searchParams, setSearchParams, setContentWithHistory]);
+
+  /** 최초 진입 시 AXIS 레이아웃 가이드(캔버스 비율별 Wide/Basic/Square) 기본 배치 적용 */
+  useEffect(() => {
+    if (!template?.size?.width || !template.size.height) return;
+    if (bootBusy) return;
+    if (actualTemplateId === "rcs-568x368") return;
+
+    setContentWithHistory((prev) => {
+      if (!shouldApplyAxisLayoutGuide(actualTemplateId, prev, template.category)) return prev;
+      const next = applyAxisLayoutGuide(
+        prev,
+        {
+          width: template.size.width,
+          height: template.size.height,
+        },
+        { templateCategory: template.category, templateId: actualTemplateId }
+      );
+      return next === prev ? prev : next;
+    });
+  }, [template, bootBusy, actualTemplateId, setContentWithHistory]);
 
   /** document scroll 잠금 — focus/scrollIntoView 후 상태바 아래 회색 띠 방지 */
   useEffect(() => {
@@ -693,7 +726,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
       const next: DesignContent = { ...prev };
       if (next.titleSize == null) next.titleSize = 130;
       if (next.bodySize == null) next.bodySize = 130;
-      if ((next as any).titleWeight == null) (next as any).titleWeight = "bold";
+      if ((next as any).titleWeight == null) (next as any).titleWeight = "semi-bold";
       if ((next as any).bodyWeight == null) (next as any).bodyWeight = "standard";
       return next;
     });
@@ -708,6 +741,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
           ref={designCanvasRef}
           content={content}
           templateId={actualTemplateId}
+          templateCategory={template.category}
           canvasSize={template.size}
           zoom={zoom}
           onContentChange={setContentWithHistory}
@@ -990,10 +1024,16 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                   className="w-full h-9 text-xs font-medium"
                   onClick={() => setTextOptionsPanelOpen((o) => !o)}
                 >
-                  텍스트 옵션
+                  {showImageAdjustPanel ? "이미지 보정" : "텍스트 옵션"}
                 </Button>
                 {textOptionsPanelOpen ? (
-                  isRcsTemplate ? (
+                  showImageAdjustPanel ? (
+                    <CanvasImageAdjustPanel
+                      content={content}
+                      onDraft={setContent}
+                      onClose={() => setTextOptionsPanelOpen(false)}
+                    />
+                  ) : isRcsTemplate ? (
                     <div className="border border-gray-200 bg-white shadow-md rounded-lg overflow-hidden flex flex-col max-h-[min(70vh,520px)]">
                       <div className="flex items-center justify-between gap-2 px-2 py-1.5 border-b border-gray-100 bg-gray-50 shrink-0">
                         <span className="text-[11px] font-semibold text-gray-800">문자 옵션 (RCS)</span>

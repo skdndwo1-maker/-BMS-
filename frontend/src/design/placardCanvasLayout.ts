@@ -4,7 +4,24 @@
  * 수직 중심선에 텍스트 열을 맞추고, 세 블록+간격 묶음을 박스 안에서 세로 중앙 정렬한다.
  */
 
+import type { CanvasTextAlign } from "@/design/types";
 import type { NormalizedRect } from "@/design/designCanvasAlign";
+
+/** 현수막 본문 — 항상 중앙 정렬(고정) */
+export const PLACARD_BODY_TEXT_ALIGN: CanvasTextAlign = "center";
+
+export const PLACARD_IDS = [
+  "placard-wide-landscape",
+  "placard-1000x600",
+  "placard-2000x1000",
+  "placard-600x1800",
+  "placard-vertical",
+] as const;
+
+export function isPlacardTemplateId(templateId?: string): boolean {
+  const id = (templateId ?? "").trim();
+  return PLACARD_IDS.includes(id as (typeof PLACARD_IDS)[number]);
+}
 
 function clampNormRect(r: NormalizedRect): NormalizedRect {
   const x = Math.max(0, Math.min(1 - r.width, r.x));

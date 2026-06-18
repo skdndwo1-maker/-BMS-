@@ -49,6 +49,17 @@ export const SIMPLY_HEART_FIXED_GUIDE_IDS: readonly string[] = [
   "simply-uplus-job-guide",
 ];
 
+/** 브랜드 네이밍 생성·검수 — 항상 자동 참조(VI 제외) */
+export const NAMING_FIXED_GUIDELINE_IDS = [
+  "simply-uplus-guideline",
+  "uplus-brand-guideline",
+] as const;
+
+export const NAMING_FIXED_GUIDELINE_DISPLAY: Record<(typeof NAMING_FIXED_GUIDELINE_IDS)[number], string> = {
+  "simply-uplus-guideline": "Simply. U+ Guidebook",
+  "uplus-brand-guideline": "Brand Guideline",
+};
+
 function resolveLocalSourcePath(spec: FixedGuidelineSpec): string | null {
   const candidates = [spec.relativeSource, ...(spec.legacyRelativeSources ?? [])];
   for (const rel of candidates) {

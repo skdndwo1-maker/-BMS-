@@ -16,6 +16,15 @@ export const VI_COLORS = {
 /** 캔버스 루트 기본 서체 — 텍스트 옵션은 Pretendard / Geist만 선택 (canvasTextTypography) */
 export const VI_FONT_STACK = '"Pretendard Variable", Pretendard, system-ui, sans-serif';
 
+/** 메인 타이틀 기본 굵기 — Pretendard SemiBold */
+export const TITLE_DEFAULT_FONT_WEIGHT = 600;
+
+/** 부제 기본 굵기 — Pretendard Medium */
+export const SUBTITLE_DEFAULT_FONT_WEIGHT = 500;
+
+/** 하단 배지 기본 굵기 — Pretendard SemiBold */
+export const BADGE_DEFAULT_FONT_WEIGHT = 600;
+
 /**
  * VI 그리드 2배 세분화(한 칸 = 기본 1X / 2).
  * 포스터 캔버스 스냅·격자선에 동일 값 사용.

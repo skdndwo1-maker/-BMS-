@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DESIGN_CANVAS_BASE_VIEW_SCALE } from "@/design/canvasViewConstants";
 import type { AssetLayer, CanvasSize, DesignContent } from "@/design/types";
-import { VI_COLORS } from "@/design/viCanvasConstants";
+import { VI_COLORS, TITLE_DEFAULT_FONT_WEIGHT } from "@/design/viCanvasConstants";
 
 const DARK = "#1A1A1A";
 const MAGENTA = VI_COLORS.brandMagenta;
@@ -58,7 +58,7 @@ function getFontWeight(weight?: string): number {
     case "bold":
       return 800;
     default:
-      return 800;
+      return TITLE_DEFAULT_FONT_WEIGHT;
   }
 }
 

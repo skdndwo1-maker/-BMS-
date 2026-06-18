@@ -23,16 +23,15 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  analyzeGuideline,
-  fetchGuideline,
   fetchHealth,
   runBrandNaming,
   syncGuidelineFromFixed,
   normalizeNamingProposal,
   type BrandNamingRunResult,
-  type GuidelineInfo,
+  type NamingFormatMode,
+  type NamingLanguageMode,
 } from "@/lib/guidelineApi";
-import { GUIDELINE_REFERENCE_OPTIONS } from "@/constants/guidelineReferences";
+import { NAMING_FIXED_GUIDELINE_OPTIONS } from "@/constants/guidelineReferences";
 import { buildAuditCategoryContext } from "@/constants/namingCategoryRules";
 import { downloadBrandNamingReport, type ExportFormat } from "@/lib/inspectionExport";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -63,6 +62,8 @@ import {
   categoryTabIdle,
   generateStyleTabActive,
   generateStyleTabIdle,
+  generateLanguageTabActive,
+  generateLanguageTabIdle,
   namingMinorTabActive,
   namingMinorTabIdle,
   passFail,
@@ -92,22 +93,24 @@ export function BrandNaming() {
   const [namingResult, setNamingResult] = useState<BrandNamingRunResult | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
-  const [serverGuideline, setServerGuideline] = useState<GuidelineInfo | null>(null);
-  const [guidelineLoading, setGuidelineLoading] = useState(false);
-  const [guidelineUploadError, setGuidelineUploadError] = useState<string | null>(null);
-  const [guidelineAnalyzing, setGuidelineAnalyzing] = useState(false);
   const [geminiConfigured, setGeminiConfigured] = useState<boolean | null>(null);
-  const [guidelineDetailOpen, setGuidelineDetailOpen] = useState(false);
-  const [selectedGuidelineLibrary, setSelectedGuidelineLibrary] = useState("");
   const [namingExportFormat, setNamingExportFormat] = useState<ExportFormat>("pdf");
   /** 생성 모드: 일반(4안) vs 단계별(1~6단계 요금제 라인업) */
   const [generateStyle, setGenerateStyle] = useState<"general" | "tiered">("general");
+  /** 생성 모드: 네이밍 대안 언어 구성 */
+  const [generateLanguageMode, setGenerateLanguageMode] = useState<NamingLanguageMode>("unlimited");
+  /** 생성 모드: 일반 vs Collaboration 표기 */
+  const [generateFormat, setGenerateFormat] = useState<NamingFormatMode>("general");
+  const [collaborationBrand, setCollaborationBrand] = useState("");
   const [tierStepCount, setTierStepCount] = useState(3);
   const [tierLabels, setTierLabels] = useState<string[]>(["최고가", "중가", "저가"]);
   const [auditLogicModalOpen, setAuditLogicModalOpen] = useState(false);
   const [auditZoomDimension, setAuditZoomDimension] = useState<
     null | "hierarchy" | "originality" | "pronunciation" | "legality" | "publicAppeal" | "scalability"
   >(null);
+  const [fixedGuidelineStatus, setFixedGuidelineStatus] = useState<
+    Record<string, { loading: boolean; connected: boolean }>
+  >({});
 
   const referenceInputRef = useRef<HTMLInputElement>(null);
   const namingStepTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -128,7 +131,9 @@ export function BrandNaming() {
         generateStyle?: "general" | "tiered";
         tierStepCount?: number;
         tierLabels?: string[];
-        selectedGuidelineLibrary?: string;
+        generateLanguageMode?: NamingLanguageMode;
+        generateFormat?: NamingFormatMode;
+        collaborationBrand?: string;
         namingExportFormat?: ExportFormat;
       };
       if (d.v !== 1) return;
@@ -152,7 +157,13 @@ export function BrandNaming() {
       if (Array.isArray(d.tierLabels) && d.tierLabels.every((x) => typeof x === "string")) {
         setTierLabels(d.tierLabels);
       }
-      if (typeof d.selectedGuidelineLibrary === "string") setSelectedGuidelineLibrary(d.selectedGuidelineLibrary);
+      if (d.generateLanguageMode === "ko" || d.generateLanguageMode === "en" || d.generateLanguageMode === "unlimited") {
+        setGenerateLanguageMode(d.generateLanguageMode);
+      }
+      if (d.generateFormat === "general" || d.generateFormat === "collaboration") {
+        setGenerateFormat(d.generateFormat);
+      }
+      if (typeof d.collaborationBrand === "string") setCollaborationBrand(d.collaborationBrand);
       if (d.namingExportFormat === "pdf" || d.namingExportFormat === "png" || d.namingExportFormat === "jpeg") {
         setNamingExportFormat(d.namingExportFormat);
       }
@@ -177,7 +188,9 @@ export function BrandNaming() {
             generateStyle,
             tierStepCount,
             tierLabels,
-            selectedGuidelineLibrary,
+            generateLanguageMode,
+            generateFormat,
+            collaborationBrand,
             namingExportFormat,
           }),
         );
@@ -195,7 +208,9 @@ export function BrandNaming() {
     generateStyle,
     tierStepCount,
     tierLabels,
-    selectedGuidelineLibrary,
+    generateLanguageMode,
+    generateFormat,
+    collaborationBrand,
     namingExportFormat,
   ]);
 
@@ -206,13 +221,34 @@ export function BrandNaming() {
   }, []);
 
   useEffect(() => {
-    if (!guidelineDetailOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    let cancelled = false;
+    const docs = NAMING_FIXED_GUIDELINE_OPTIONS;
+    setFixedGuidelineStatus(
+      Object.fromEntries(docs.map((doc) => [doc.id, { loading: true, connected: false }]))
+    );
+    void Promise.all(
+      docs.map(async (doc) => {
+        try {
+          const synced = await syncGuidelineFromFixed(doc.id);
+          if (cancelled) return;
+          setFixedGuidelineStatus((prev) => ({
+            ...prev,
+            [doc.id]: { loading: false, connected: Boolean(synced.guideline?.hasFile) },
+          }));
+        } catch {
+          if (!cancelled) {
+            setFixedGuidelineStatus((prev) => ({
+              ...prev,
+              [doc.id]: { loading: false, connected: false },
+            }));
+          }
+        }
+      })
+    );
     return () => {
-      document.body.style.overflow = prev;
+      cancelled = true;
     };
-  }, [guidelineDetailOpen]);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -225,52 +261,6 @@ export function BrandNaming() {
     if (generateStyle !== "tiered") return;
     setTierLabels((prev) => resizeTierLabels(tierStepCount, prev));
   }, [tierStepCount, generateStyle]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!selectedGuidelineLibrary) {
-      setServerGuideline(null);
-      setGuidelineUploadError(null);
-      setGuidelineLoading(false);
-      return;
-    }
-    void (async () => {
-      setGuidelineLoading(true);
-      setGuidelineUploadError(null);
-      try {
-        const synced = await syncGuidelineFromFixed(selectedGuidelineLibrary);
-        if (cancelled) return;
-        setServerGuideline(synced.guideline);
-      } catch (e) {
-        if (!cancelled) {
-          setServerGuideline(null);
-          setGuidelineUploadError(e instanceof Error ? e.message : String(e));
-        }
-      } finally {
-        if (!cancelled) setGuidelineLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedGuidelineLibrary]);
-
-  const handleAnalyzeStoredGuideline = () => {
-    if (!selectedGuidelineLibrary) return;
-    setGuidelineUploadError(null);
-    void (async () => {
-      setGuidelineAnalyzing(true);
-      try {
-        await analyzeGuideline(selectedGuidelineLibrary);
-        const g = await fetchGuideline(selectedGuidelineLibrary);
-        setServerGuideline(g);
-      } catch (err) {
-        setGuidelineUploadError(err instanceof Error ? err.message : String(err));
-      } finally {
-        setGuidelineAnalyzing(false);
-      }
-    })();
-  };
 
   const isRunning = currentStep !== "idle" && currentStep !== "complete";
   const auditCategoryLine =
@@ -295,7 +285,8 @@ export function BrandNaming() {
       : Boolean(
           Boolean(namingOverviewForPrompt) &&
             auditCategoryMajor &&
-            (auditCategoryMajor === "etc." || auditCategoryMinor.trim())
+            (auditCategoryMajor === "etc." || auditCategoryMinor.trim()) &&
+            (generateFormat !== "collaboration" || collaborationBrand.trim())
         );
   const overallScore = namingResult?.overallScore ?? null;
   const finalVerdict = namingResult?.goRecommendation === "go" ? "go" : "no-go";
@@ -313,6 +304,9 @@ export function BrandNaming() {
   const switchNamingMode = (mode: "generate" | "audit") => {
     setNamingMode(mode);
     setGenerateStyle("general");
+    setGenerateLanguageMode("unlimited");
+    setGenerateFormat("general");
+    setCollaborationBrand("");
     setShowResults(false);
     setNamingResult(null);
     setCurrentStep("idle");
@@ -407,8 +401,10 @@ export function BrandNaming() {
           auditCategory: auditCategoryLine || undefined,
           referenceText,
           supplementaryReference: referenceFile,
-          useGuidelineLibrary: Boolean(selectedGuidelineLibrary),
-          guidelineId: selectedGuidelineLibrary || undefined,
+          languageMode: namingMode === "generate" ? generateLanguageMode : undefined,
+          namingFormat: namingMode === "generate" ? generateFormat : undefined,
+          collaborationBrand:
+            namingMode === "generate" && generateFormat === "collaboration" ? collaborationBrand : undefined,
           generateStyle: namingMode === "generate" ? generateStyle : undefined,
           tierStepCount: namingMode === "generate" && generateStyle === "tiered" ? tierStepCount : undefined,
           tierLabels: namingMode === "generate" && generateStyle === "tiered" ? tierLabels : undefined,
@@ -552,31 +548,115 @@ export function BrandNaming() {
               </div>
             </div>
             {namingMode === "generate" ? (
-              <div className="flex flex-col gap-2">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <label className="text-[12px] font-medium text-gray-600">작명 개요</label>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[10px] font-medium text-gray-400">생성 방식</span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className={generateStyle === "general" ? generateStyleTabActive : generateStyleTabIdle}
-                      onClick={() => setGenerateStyle("general")}
-                    >
-                      일반 생성
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className={generateStyle === "tiered" ? generateStyleTabActive : generateStyleTabIdle}
-                      onClick={() => setGenerateStyle("tiered")}
-                    >
-                      단계별 생성
-                    </Button>
+              <div className="flex flex-col gap-3">
+                <div className="rounded-2xl border border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] px-4 py-3">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-start lg:gap-x-10 lg:gap-y-3">
+                    <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                      <span className="shrink-0 whitespace-nowrap text-[12px] font-medium text-gray-600">
+                        작명 개요
+                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className={generateStyle === "general" ? generateStyleTabActive : generateStyleTabIdle}
+                          onClick={() => setGenerateStyle("general")}
+                        >
+                          일반 생성
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className={generateStyle === "tiered" ? generateStyleTabActive : generateStyleTabIdle}
+                          onClick={() => setGenerateStyle("tiered")}
+                        >
+                          단계별 생성
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                      <span className="shrink-0 whitespace-nowrap text-[12px] font-medium text-gray-600">
+                        네이밍 언어
+                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className={generateLanguageMode === "ko" ? generateLanguageTabActive : generateLanguageTabIdle}
+                          onClick={() => setGenerateLanguageMode("ko")}
+                        >
+                          국문
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className={generateLanguageMode === "en" ? generateLanguageTabActive : generateLanguageTabIdle}
+                          onClick={() => setGenerateLanguageMode("en")}
+                        >
+                          영문
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className={
+                            generateLanguageMode === "unlimited" ? generateLanguageTabActive : generateLanguageTabIdle
+                          }
+                          onClick={() => setGenerateLanguageMode("unlimited")}
+                        >
+                          제한없음
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                      <span className="shrink-0 whitespace-nowrap text-[12px] font-medium text-gray-600">
+                        네이밍 형식
+                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className={generateFormat === "general" ? generateStyleTabActive : generateStyleTabIdle}
+                          onClick={() => setGenerateFormat("general")}
+                        >
+                          일반
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className={generateFormat === "collaboration" ? generateStyleTabActive : generateStyleTabIdle}
+                          onClick={() => setGenerateFormat("collaboration")}
+                        >
+                          Collaboration
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </div>
+                {generateFormat === "collaboration" ? (
+                  <div className="rounded-2xl border border-[rgba(0,0,0,0.06)] bg-[#F5F3F0] px-3 py-3">
+                    <label htmlFor="naming-collaboration-brand" className="text-[11px] font-medium text-gray-600">
+                      타사 브랜드명
+                    </label>
+                    <input
+                      id="naming-collaboration-brand"
+                      value={collaborationBrand}
+                      onChange={(e) => setCollaborationBrand(e.target.value)}
+                      placeholder="예) Google, Apple, Netflix"
+                      className="mt-2 h-9 w-full rounded-lg border border-gray-200 bg-white px-3 text-[13px] outline-none focus:border-[#FF7F66] focus:ring-2 focus:ring-[#FF7F66]/20"
+                    />
+                    <p className="mt-2 text-[11px] leading-snug text-gray-500">
+                      생성된 네이밍 뒤에 <span className="font-medium text-gray-700"> l [타사 브랜드명]</span> 형식으로
+                      자동 결합되어 표시됩니다. (예: 생성된 네이밍 l Google)
+                    </p>
+                  </div>
+                ) : null}
                 {generateStyle === "tiered" ? (
                   <div className="rounded-2xl border border-[rgba(0,0,0,0.06)] bg-[#F5F3F0] px-3 py-3">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -651,7 +731,7 @@ export function BrandNaming() {
                 : "검수 모드: 입력하신 문구를 가이드라인·참고 자료 기준으로 평가합니다."}
             </p>
             <p className="mt-[8px] px-[2px] text-[12px] text-gray-400">
-              이 입력란·업로드 파일·선택한 저장 참고 문서는 서버에서 하나의 맥락으로 묶여 Gemini로 전달됩니다.
+              입력·업로드 자료는 서버에서 맥락으로 묶이며, Simply. U+ Guidebook과 Brand Guideline은 항상 자동 참조됩니다.
             </p>
           </div>
 
@@ -669,7 +749,6 @@ export function BrandNaming() {
             </div>
 
             <div className="grid grid-cols-1 gap-5 rounded-[20px] border border-[rgba(0,0,0,0.05)] bg-[#FAFAF8] p-4 sm:p-5 lg:grid-cols-2 lg:items-stretch lg:gap-6">
-              {/* 왼쪽: 파일 업로드 (우측 컬럼 높이에 맞춤) */}
               <div className="flex min-h-0 min-w-0 flex-col lg:h-full">
                 <h3 className="mb-3 shrink-0 text-[12px] font-semibold uppercase tracking-wide text-gray-500">
                   사업 및 서비스 개요 자료
@@ -742,68 +821,48 @@ export function BrandNaming() {
                 />
               </div>
 
-              {/* 오른쪽: 저장된 참고 문서 선택 */}
               <div className="flex min-h-0 min-w-0 flex-col lg:h-full">
                 <h3 className="mb-3 shrink-0 text-[12px] font-semibold uppercase tracking-wide text-gray-500">
-                  저장된 참고 문서에서 선택
+                  기본 참조 문서 (고정)
                 </h3>
-                <div className="flex min-h-0 flex-1 flex-col">
-                  <div className="relative shrink-0">
-                    <select
-                      id="naming-reference-guideline"
-                      value={selectedGuidelineLibrary}
-                      onChange={(e) => setSelectedGuidelineLibrary(e.target.value)}
-                      className="brand-naming-ref-select"
-                    >
-                      <option value="">참고 문서 선택…</option>
-                      {GUIDELINE_REFERENCE_OPTIONS.map((opt) => (
-                        <option key={opt.id} value={opt.id}>
-                          {opt.name}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      aria-hidden
-                      className="pointer-events-none absolute top-1/2 right-3.5 h-4 w-4 -translate-y-1/2 text-gray-500"
-                    />
-                  </div>
-                  {guidelineUploadError && (
-                    <p className="mt-2 line-clamp-2 shrink-0 text-[11px] text-red-600">{guidelineUploadError}</p>
-                  )}
-                  <div className="min-h-0 flex-1" aria-hidden />
-                  <div className="mt-3 min-h-0 shrink-0 rounded-2xl border border-[rgba(0,0,0,0.06)] bg-white p-3 text-xs text-gray-700 shadow-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-semibold text-gray-900">서버 연동 상태</p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {guidelineLoading ? (
-                          <span className="inline-flex items-center gap-1.5 text-gray-500">
-                            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                            확인 중
-                          </span>
-                        ) : (
-                          <span
-                            className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                              serverGuideline?.hasFile
-                                ? "bg-[#c8d9c4] font-bold text-[#2f4a38]"
-                                : "bg-gray-200 text-gray-600"
-                            }`}
-                          >
-                            {serverGuideline?.hasFile ? "연결됨" : "미연결"}
-                          </span>
-                        )}
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-8 rounded-full border border-gray-200 bg-white text-[11px] font-medium text-gray-800 shadow-sm hover:border-black/20"
-                          disabled={guidelineLoading}
-                          onClick={() => setGuidelineDetailOpen(true)}
+                <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-[rgba(0,0,0,0.06)] bg-white p-4 shadow-sm">
+                  <p className="text-[12px] leading-relaxed text-gray-600">
+                    네이밍 생성·검수 시 아래 두 문서가 항상 AI 맥락에 포함됩니다.
+                  </p>
+                  <ul className="mt-3 flex flex-col gap-2">
+                    {NAMING_FIXED_GUIDELINE_OPTIONS.map((doc) => {
+                      const status = fixedGuidelineStatus[doc.id];
+                      return (
+                        <li
+                          key={doc.id}
+                          className="flex items-center justify-between gap-3 rounded-xl border border-[rgba(0,0,0,0.05)] bg-[#FAFAF8] px-3 py-2.5"
                         >
-                          상세 보기
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
+                          <div className="flex min-w-0 items-center gap-2">
+                            <FileCheck className="h-4 w-4 shrink-0 text-[#FF7F66]" />
+                            <span className="truncate text-[13px] font-medium text-gray-900">{doc.name}</span>
+                          </div>
+                          <div className="shrink-0 pl-2">
+                            {status?.loading ? (
+                              <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                확인 중
+                              </span>
+                            ) : (
+                              <span
+                                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                                  status?.connected
+                                    ? "bg-[#c8d9c4] font-bold text-[#2f4a38]"
+                                    : "bg-gray-200 text-gray-600"
+                                }`}
+                              >
+                                {status?.connected ? "연결됨" : "미연결"}
+                              </span>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
               </div>
             </div>
@@ -1451,110 +1510,6 @@ export function BrandNaming() {
           )}
         </div>
       </main>
-
-      {guidelineDetailOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/40"
-            aria-label="배경 닫기"
-            onClick={() => setGuidelineDetailOpen(false)}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="naming-guideline-detail-title"
-            className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
-          >
-            <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3">
-              <h3 id="naming-guideline-detail-title" className="text-sm font-semibold text-gray-900">
-                서버 연동 상세
-              </h3>
-              <button
-                type="button"
-                className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-                aria-label="닫기"
-                onClick={() => setGuidelineDetailOpen(false)}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 text-xs text-gray-700">
-              {guidelineUploadError && (
-                <p className="mb-3 rounded-md border border-red-200 bg-red-50 p-2 text-red-800">{guidelineUploadError}</p>
-              )}
-              {guidelineLoading ? (
-                <p className="flex items-center gap-2 text-gray-500">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  불러오는 중…
-                </p>
-              ) : serverGuideline?.hasFile ? (
-                <>
-                  <p className="text-gray-600">
-                    등록 파일:{" "}
-                    <span className="font-medium text-gray-900">{serverGuideline.originalName ?? "—"}</span>
-                  </p>
-                  {serverGuideline.uploadedAt && (
-                    <p className="mt-1 text-gray-500">
-                      업로드: {new Date(serverGuideline.uploadedAt).toLocaleString()}
-                    </p>
-                  )}
-                  {serverGuideline.aiSummary && (
-                    <p className="mt-3 whitespace-pre-wrap text-gray-800">{serverGuideline.aiSummary}</p>
-                  )}
-                  {!serverGuideline.aiSummary && geminiConfigured && (
-                    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <p className="text-amber-700">AI 요약이 없습니다. 저장된 파일로 요약을 생성할 수 있습니다.</p>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={guidelineAnalyzing}
-                        onClick={handleAnalyzeStoredGuideline}
-                        className="shrink-0 border-gray-200 text-gray-800"
-                      >
-                        {guidelineAnalyzing ? (
-                          <>
-                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                            요약 생성 중…
-                          </>
-                        ) : (
-                          "AI 요약 생성"
-                        )}
-                      </Button>
-                    </div>
-                  )}
-                  {!serverGuideline.aiSummary && geminiConfigured === false && (
-                    <p className="mt-2 text-amber-700">
-                      AI 요약 없음 — 루트 .env에 GEMINI_API_KEY를 설정한 뒤 서버를 재시작하거나, 터미널에서{" "}
-                      <code className="rounded bg-amber-100 px-1">npm run analyze:guideline</code>을 실행하세요.
-                    </p>
-                  )}
-                </>
-              ) : !selectedGuidelineLibrary ? (
-                <p className="text-amber-800">
-                  위에서 참고 문서(브랜드 가이드라인 등)를 선택하면 <code className="rounded bg-amber-100 px-1">data/guidelines</code>{" "}
-                  고정 PDF가 서버 슬롯에 복사되어 Gemini 추론에 사용됩니다.
-                </p>
-              ) : (
-                <p className="text-amber-800">
-                  아직 서버에 가이드 파일이 없습니다. 동기화를 다시 시도하거나 브랜드 검수 화면에서 참조 가이드라인을 맞춰 주세요.
-                </p>
-              )}
-              {geminiConfigured === false && (
-                <p className="mt-3 text-amber-800">
-                  백엔드에 GEMINI_API_KEY가 없으면 검수는 모의 점수로 동작합니다.
-                </p>
-              )}
-            </div>
-            <div className="shrink-0 border-t border-gray-100 px-4 py-3">
-              <Button type="button" variant="outline" onClick={() => setGuidelineDetailOpen(false)}>
-                닫기
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {namingResult && namingMode === "audit" && auditLogicModalOpen && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center p-4">

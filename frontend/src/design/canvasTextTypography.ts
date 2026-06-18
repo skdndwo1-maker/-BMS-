@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { DesignContent } from "./types";
 import type { CanvasTextAlign } from "./types";
+import { SUBTITLE_DEFAULT_FONT_WEIGHT, TITLE_DEFAULT_FONT_WEIGHT } from "./viCanvasConstants";
 
 export type CanvasTextEditTarget =
   | { kind: "title" }
@@ -58,7 +59,7 @@ export function titleTextStyle(c: DesignContent, titleFontSizePx: number, titleC
   return {
     fontFamily: resolveFontFamily(t.fontFamily),
     fontSize: `${titleFontSizePx}px`,
-    fontWeight: t.fontWeight ?? 800,
+    fontWeight: t.fontWeight ?? TITLE_DEFAULT_FONT_WEIGHT,
     fontStyle: t.fontStyle ?? "normal",
     textDecoration: t.textDecoration ?? "none",
     textTransform: (t.textTransform ?? "none") as CSSProperties["textTransform"],
@@ -86,7 +87,7 @@ export function subtitleTextStyle(
   return {
     fontFamily: resolveFontFamily(t.fontFamily),
     fontSize: `${subtitleFontSizePx}px`,
-    fontWeight: t.fontWeight ?? 680,
+    fontWeight: t.fontWeight ?? SUBTITLE_DEFAULT_FONT_WEIGHT,
     fontStyle: t.fontStyle ?? "normal",
     textDecoration: t.textDecoration ?? "none",
     textTransform: (t.textTransform ?? "none") as CSSProperties["textTransform"],

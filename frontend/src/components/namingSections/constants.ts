@@ -39,6 +39,12 @@ export const generateStyleTabIdle =
 export const generateStyleTabActive =
   "h-7 rounded-full border-[#FF7F66] bg-[#FF7F66] px-2.5 text-[11px] font-medium text-white shadow-[0_4px_12px_-4px_rgba(255,127,102,0.35)] hover:bg-[#FF7F66]/90";
 
+/** 생성 모드 — 네이밍 언어(국문/영문/제한없음): 레드 브라운 액센트 */
+export const generateLanguageTabIdle =
+  "h-7 rounded-full border-[rgba(122,107,75,0.45)] bg-white px-2.5 text-[11px] font-medium text-[#5C5C5C] hover:bg-[#F7F4F0] hover:border-[rgba(122,107,75,0.65)]";
+export const generateLanguageTabActive =
+  "h-7 rounded-full border-[#7A6B4B] bg-[#7A6B4B] px-2.5 text-[11px] font-medium text-white shadow-[0_4px_12px_-4px_rgba(122,107,75,0.35)] hover:bg-[#7A6B4B]/90";
+
 /** 하위 카테고리(Personal 등 아래 모바일·인터넷…): 디자인 검수 세부 유형과 동일 코랄 */
 export const namingMinorTabIdle =
   "border-[rgba(255,127,102,0.4)] bg-white text-[#5C5C5C] hover:bg-[#FFF7F5] hover:border-[rgba(255,127,102,0.55)]";

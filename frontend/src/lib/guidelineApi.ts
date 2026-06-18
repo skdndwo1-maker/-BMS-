@@ -236,6 +236,10 @@ export async function runAdditionalRevisionImage(opts: {
 
 export type BrandNamingMode = "generate" | "audit";
 
+export type NamingLanguageMode = "ko" | "en" | "unlimited";
+
+export type NamingFormatMode = "general" | "collaboration";
+
 /** 생성 모드: 네이밍 대안 1건 — 검수와 동일 6축(각 0~100) + 항목별 상세 근거 */
 export type BrandNamingProposal = {
   name: string;
@@ -488,6 +492,9 @@ export type BrandNamingRunResult = {
   /** 생성 모드만: 일반 vs 단계별(요금제 티어) 메타 */
   generateMeta?: {
     style: "general" | "tiered";
+    languageMode?: NamingLanguageMode;
+    namingFormat?: NamingFormatMode;
+    collaborationBrand?: string;
     tierStepCount?: number;
     tierLabels?: string[];
   };
@@ -510,9 +517,12 @@ export async function runBrandNaming(opts: {
   auditCategory?: string;
   referenceText: string;
   supplementaryReference?: File | null;
-  useGuidelineLibrary?: boolean;
-  /** useGuidelineLibrary가 true일 때 필수 — `FIXED_GUIDELINE_SOURCES` 키 */
-  guidelineId?: string;
+  /** 생성 모드: 국문 / 영문 / 제한없음 — Gemini 프롬프트에 반영 */
+  languageMode?: NamingLanguageMode;
+  /** 생성 모드: 일반 vs Collaboration(표기 결합) */
+  namingFormat?: NamingFormatMode;
+  /** Collaboration 선택 시 타사 브랜드명 */
+  collaborationBrand?: string;
   /** 생성 모드: 일반(4안) vs 단계별(1~6단계, 요금제 라인업) */
   generateStyle?: "general" | "tiered";
   /** 단계별 생성 시 단계 수 1~6 */
@@ -545,9 +555,14 @@ export async function runBrandNaming(opts: {
     fd.append("auditCategory", auditCategory);
   }
   fd.append("referenceText", opts.referenceText.trim());
-  fd.append("useGuidelineLibrary", opts.useGuidelineLibrary === false ? "false" : "true");
-  if (opts.guidelineId?.trim()) {
-    fd.append("guidelineId", opts.guidelineId.trim());
+  if (opts.mode === "generate") {
+    const lm = opts.languageMode === "ko" || opts.languageMode === "en" ? opts.languageMode : "unlimited";
+    fd.append("languageMode", lm);
+    const nf = opts.namingFormat === "collaboration" ? "collaboration" : "general";
+    fd.append("namingFormat", nf);
+    if (nf === "collaboration") {
+      fd.append("collaborationBrand", (opts.collaborationBrand ?? "").trim());
+    }
   }
   if (opts.supplementaryReference) {
     fd.append("supplementaryReference", opts.supplementaryReference);

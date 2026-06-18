@@ -10,3 +10,9 @@ export const GUIDELINE_REFERENCE_OPTIONS = [
 ] as const;
 
 export type GuidelineReferenceId = (typeof GUIDELINE_REFERENCE_OPTIONS)[number]["id"];
+
+/** 브랜드 네이밍 — 사용자 선택 없이 항상 참조(VI 제외) */
+export const NAMING_FIXED_GUIDELINE_OPTIONS = [
+  { id: "simply-uplus-guideline", name: "Simply. U+ Guidebook" },
+  { id: "uplus-brand-guideline", name: "Brand Guideline" },
+] as const;

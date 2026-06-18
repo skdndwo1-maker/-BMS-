@@ -3,7 +3,8 @@
  */
 
 import { useRef, useCallback, useState, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { Lock, Unlock, X } from "lucide-react";
+import { computeCanvasRoundedBoxRadiusPx } from "@/design/canvasRoundedBox";
 
 export type NormalizedRect = { x: number; y: number; width: number; height: number };
 
@@ -27,9 +28,11 @@ interface Props {
   clipContent?: boolean;
   /** 선택 시 외곽선 (편집 가능 표시) */
   label?: string;
-  /** 모서리 라운드 모드 */
+  /** 모서리 라운드 모드 — auto: 이미지·라운드박스 공통 R(32px·높이 5%) */
   borderRadiusMode?: "auto" | "pill" | "square";
-  /** auto 라운드 배율 */
+  /** 브랜드 가이드 R(px) — auto 모드보다 우선 */
+  cornerRadiusPx?: number;
+  /** @deprecated auto 모드는 canvasRoundedBox 공식 사용. pill/square만 유지 */
   borderRadiusScale?: number;
   /** Alt+드래그로 내부 패닝 */
   onPan?: (deltaPx: { dx: number; dy: number }, ev: MouseEvent) => void;
@@ -46,6 +49,8 @@ interface Props {
   onOverlayDoubleClick?: (e: React.MouseEvent) => void;
   /** 선택 시 라벨 옆에 표시 — 캔버스에서 해당 박스 제거 */
   onRequestDelete?: () => void;
+  /** 잠금 토글 (이미지·라운드 박스) */
+  onToggleLock?: () => void;
 }
 
 export function DraggableCanvasOverlay({
@@ -61,13 +66,15 @@ export function DraggableCanvasOverlay({
   clipContent = true,
   label,
   borderRadiusMode = "auto",
-  borderRadiusScale = 1,
+  cornerRadiusPx,
+  borderRadiusScale: _borderRadiusScale = 1,
   onPan,
   snapStepPx,
   minWidthPx,
   minHeightPx,
   onOverlayDoubleClick,
   onRequestDelete,
+  onToggleLock,
   onPanEnd,
   panDragInsteadOfMove = false,
 }: Props) {
@@ -86,7 +93,9 @@ export function DraggableCanvasOverlay({
       ? 0
       : borderRadiusMode === "pill"
         ? Math.max(1, px.height / 2)
-        : Math.max(10, Math.min(px.width, px.height) * 0.06 * Math.max(0.2, borderRadiusScale));
+        : cornerRadiusPx != null && cornerRadiusPx >= 0
+          ? cornerRadiusPx
+          : computeCanvasRoundedBoxRadiusPx(px.width, px.height);
 
   const dragStart = useRef<{ mx: number; my: number; ox: number; oy: number } | null>(null);
 
@@ -101,7 +110,7 @@ export function DraggableCanvasOverlay({
         if (!dragStart.current) return;
         const dx = ev.clientX - dragStart.current.mx;
         const dy = ev.clientY - dragStart.current.my;
-        if (onPan && (ev.altKey || panDragInsteadOfMove)) {
+        if (onPan && !locked && (ev.altKey || panDragInsteadOfMove)) {
           didInnerPan = true;
           onPan({ dx, dy }, ev);
           return;
@@ -235,7 +244,13 @@ export function DraggableCanvasOverlay({
         borderRadius: `${rPx}px`,
         overflow: "visible",
         zIndex,
-        outline: isSelected ? "2px solid #FF7F66" : "2px solid transparent",
+        outline: isSelected
+          ? locked
+            ? "2px dashed #F59E0B"
+            : "2px solid #FF7F66"
+          : locked
+            ? "1px dashed rgba(245, 158, 11, 0.55)"
+            : "2px solid transparent",
         outlineOffset: "1px",
         boxSizing: "border-box",
         cursor: locked ? "default" : (panDragInsteadOfMove ? "grab" : "move"),
@@ -285,7 +300,7 @@ export function DraggableCanvasOverlay({
             onMouseDown={(e) => onMouseDownResize(e, h.key)}
           />
         ))}
-      {(isSelected || hover) && (label || onRequestDelete) ? (
+      {(isSelected || hover) && (label || onRequestDelete || onToggleLock) ? (
         <div
           style={{
             position: "absolute",
@@ -297,22 +312,42 @@ export function DraggableCanvasOverlay({
             alignItems: "center",
             gap: "4px",
             pointerEvents: "auto",
+            background: "#1A1A1A",
+            borderRadius: "6px",
+            padding: "2px 4px",
           }}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           {label ? (
             <div
               style={{
-                background: "#1A1A1A",
-                color: "#fff",
+                color: locked ? "#FCD34D" : "#fff",
                 fontSize: "10px",
-                padding: "2px 8px",
-                borderRadius: "4px",
+                padding: "2px 6px",
                 whiteSpace: "nowrap",
                 pointerEvents: "none",
               }}
             >
-              {label}
+              {locked ? `${label} · 잠김` : label}
             </div>
+          ) : null}
+          {onToggleLock ? (
+            <button
+              type="button"
+              aria-label={locked ? "잠금 해제" : "잠금"}
+              title={locked ? "잠금 해제" : "잠금"}
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded border border-white shadow ${
+                locked ? "bg-amber-600 text-white hover:bg-amber-500" : "bg-[#1A1A1A] text-white hover:bg-[#FF7F66]"
+              }`}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onToggleLock();
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {locked ? <Lock className="h-3.5 w-3.5" strokeWidth={2.5} /> : <Unlock className="h-3.5 w-3.5" strokeWidth={2.5} />}
+            </button>
           ) : null}
           {onRequestDelete && !locked ? (
             <button

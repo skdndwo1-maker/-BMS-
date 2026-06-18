@@ -10,20 +10,36 @@ import {
   type MouseEvent,
   type FocusEvent,
 } from "react";
-import type { DesignContent, CanvasSize, AssetLayer } from "@/design/types";
+import type { DesignContent, CanvasSize, AssetLayer, TemplateCategory } from "@/design/types";
 import { DraggableAsset } from "./DraggableAsset";
 import { DraggableCanvasOverlay } from "./DraggableCanvasOverlay";
 
 import { defaultCI, defaultBI, defaultSLOGAN } from "@/design/defaultLogos";
 import {
+  computeCanvasLogoHeightPx,
+  computeCanvasLogoPositionStyle,
+  computeDefaultCustomUploadedLogoRect,
+  computePlacardLogoLayout,
+  normalizeCanvasLogoPosition,
+  resolveTemplateLogoScale,
+} from "@/design/canvasLogoLayout";
+import {
   isSafetyCautionTemplate,
   layoutSafetyCautionTextBundle,
   SAFETY_CAUTION_BODY_FONT_SCALE,
-  SAFETY_CAUTION_LOGO_HEIGHT_RATIO,
   SAFETY_CAUTION_LOGO_POSITION,
+  SAFETY_CAUTION_LOGO_TOP_MARGIN_RATIO,
   SAFETY_CAUTION_TITLE_FONT_SCALE,
 } from "@/design/safetyCautionPreset";
-import type { LogoPosition } from "@/design/types";
+import {
+  computeAxisLayoutRectsForSize,
+} from "@/design/axisLayoutGuide";
+import {
+  resolvePosterImageRect,
+  resolvePosterImageZIndex,
+  getPosterImagePlacementMode,
+  FULL_BACKGROUND_IMAGE_RECT,
+} from "@/design/posterImagePlacement";
 import {
   DEFAULT_POSTER_BG_RECT,
   DEFAULT_POSTER_BADGE_RECT,
@@ -35,11 +51,16 @@ import {
 } from "@/design/posterDefaults";
 import { DESIGN_CANVAS_BASE_VIEW_SCALE } from "@/design/canvasViewConstants";
 import {
+  buildPosterImageCssFilter,
+  resolvePosterImageOpacity,
+} from "@/design/imageAdjust";
+import {
   computePlacardTextStackNormRects,
   getPlacardSplitBackdropBoxPx,
+  PLACARD_BODY_TEXT_ALIGN,
   type PlacardContentBoxPx,
 } from "@/design/placardCanvasLayout";
-import { VI_COLORS, VI_FONT_STACK, getViGridStepPx } from "@/design/viCanvasConstants";
+import { VI_COLORS, VI_FONT_STACK, TITLE_DEFAULT_FONT_WEIGHT, getViGridStepPx } from "@/design/viCanvasConstants";
 import {
   renderPlainWithBoldRanges,
   renderPlainWithTriStyleRanges,
@@ -134,62 +155,6 @@ function applyRemoveBodyBlockIds(c: DesignContent, ids: Set<string>): DesignCont
   };
 }
 
-function normalizeLogoPosition(pos: string | undefined): LogoPosition {
-  const allowed: LogoPosition[] = ["top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right"];
-  if (pos && allowed.includes(pos as LogoPosition)) return pos as LogoPosition;
-  return "top-left";
-}
-
-/** 직접 업로드 로고: 코너 프리셋과 동일한 기준으로 초기 정규화 rect (한 번만 저장) */
-function computeDefaultCustomUploadedLogoRect(args: {
-  displayW: number;
-  displayH: number;
-  W: number;
-  logoPosition: LogoPosition;
-  isXBanner: boolean;
-  realAspect: number;
-  effectiveLogoWidth: number;
-}): { x: number; y: number; width: number; height: number } {
-  const { displayW, displayH, W, logoPosition, isXBanner, realAspect, effectiveLogoWidth } = args;
-  const basePadRatio = realAspect >= 3 ? 0.02 : 0.04;
-  const padRatio = isXBanner ? basePadRatio * 2 : basePadRatio;
-  const pad = W * padRatio;
-  const approxLogoH = Math.min(displayH * 0.18, Math.max(18, effectiveLogoWidth * 0.3));
-  const wN = effectiveLogoWidth / displayW;
-  const hN = approxLogoH / displayH;
-  let xN: number;
-  let yN: number;
-  switch (logoPosition) {
-    case "top-right":
-      xN = (displayW - pad - effectiveLogoWidth) / displayW;
-      yN = pad / displayH;
-      break;
-    case "top-center":
-      xN = (displayW / 2 - effectiveLogoWidth / 2) / displayW;
-      yN = pad / displayH;
-      break;
-    case "bottom-left":
-      xN = pad / displayW;
-      yN = (displayH - pad - approxLogoH) / displayH;
-      break;
-    case "bottom-right":
-      xN = (displayW - pad - effectiveLogoWidth) / displayW;
-      yN = (displayH - pad - approxLogoH) / displayH;
-      break;
-    case "bottom-center":
-      xN = (displayW / 2 - effectiveLogoWidth / 2) / displayW;
-      yN = (displayH - pad - approxLogoH) / displayH;
-      break;
-    case "top-left":
-    default:
-      xN = pad / displayW;
-      yN = pad / displayH;
-      break;
-  }
-  return clampNormRect({ x: xN, y: yN, width: wN, height: hN });
-}
-
-/** 단일 선택 시 문자 툴바 대상 (클릭 한 번으로 표시) */
 function selectedKeyToFormatTarget(key: string | undefined): CanvasTextEditTarget | null {
   if (!key) return null;
   if (key === "title") return { kind: "title" };
@@ -203,6 +168,7 @@ function selectedKeyToFormatTarget(key: string | undefined): CanvasTextEditTarge
 
 export type DesignFocusTarget =
   | "image"
+  | "panelBg"
   | "badge"
   | "title"
   | "body"
@@ -216,6 +182,7 @@ export type DesignFocusTarget =
 interface DesignCanvasProps {
   content: DesignContent;
   templateId?: string;
+  templateCategory?: TemplateCategory;
   canvasSize: CanvasSize;
   zoom: number;
   onContentChange?: (content: DesignContent) => void;
@@ -248,6 +215,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   {
     content,
     templateId,
+    templateCategory,
     canvasSize,
     zoom,
     onContentChange,
@@ -262,7 +230,6 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   },
   ref
 ) {
-  const isXBanner = (templateId ?? "").trim() === "xbanner";
   const isSafetyCaution = isSafetyCautionTemplate(templateId);
   const isPlacard = useMemo(() => {
     const id = (templateId ?? "").trim();
@@ -451,38 +418,28 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     }
   };
 
-  const logoPosition = isPlacard
-    ? "top-left"
-    : isSafetyCaution
-      ? SAFETY_CAUTION_LOGO_POSITION
-      : normalizeLogoPosition(content.logoPosition);
+  const logoPosition = isSafetyCaution
+    ? SAFETY_CAUTION_LOGO_POSITION
+    : isPlacard
+      ? "top-left"
+      : normalizeCanvasLogoPosition(content.logoPosition);
 
-  const getLogoPositionStyle = () => {
-    // 로고 여백: 기존의 약 50% 수준으로 축소
-    const basePadRatio = realAspect >= 3 ? 0.02 : 0.04;
-    // X배너: 로고 여백을 지금의 2배로 확대
-    const padRatio = isXBanner ? basePadRatio * 2 : basePadRatio;
-    const pad = W * padRatio;
-    switch (logoPosition) {
-      case "top-right":
-        return { top: `${pad}px`, right: `${pad}px` };
-      case "top-center":
-        return { top: `${pad}px`, left: "50%", transform: "translateX(-50%)" };
-      case "top-left":
-        return { top: `${pad}px`, left: `${pad}px` };
-      case "bottom-left":
-        return { bottom: `${pad}px`, left: `${pad}px` };
-      case "bottom-right":
-        return { bottom: `${pad}px`, right: `${pad}px` };
-      case "bottom-center":
-        return { bottom: `${pad}px`, left: "50%", transform: "translateX(-50%)" };
-      default:
-        return { top: `${pad}px`, left: `${pad}px` };
-    }
-  };
+  const placardLogoLayout = isPlacard
+    ? computePlacardLogoLayout(displayW, displayH)
+    : null;
+
+  const logoScale = resolveTemplateLogoScale(templateId, templateCategory);
+  const logoHeightPx =
+    placardLogoLayout?.heightPx ?? computeCanvasLogoHeightPx(displayW, displayH, logoScale);
+  const logoPositionStyle = isSafetyCaution
+    ? computeCanvasLogoPositionStyle(logoPosition, displayW, displayH, {
+        topMarginRatio: SAFETY_CAUTION_LOGO_TOP_MARGIN_RATIO,
+      })
+    : placardLogoLayout
+      ? placardLogoLayout.positionStyle
+      : computeCanvasLogoPositionStyle(logoPosition, displayW, displayH);
 
   const brandLogoSrc = getBrandLogo();
-  const logoPositionStyle = getLogoPositionStyle();
 
   const titleScale =
     (isSafetyCaution ? SAFETY_CAUTION_TITLE_FONT_SCALE : (content.posterTitleFontScale ?? 100)) / 100;
@@ -500,33 +457,6 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
    * - autofit 효과에서도 참조해야 하므로 본문/타이틀과 같은 위치에서 선언 */
   const subtitleFontSize = W * 0.045 * ((content.posterSubtitleFontScale ?? 100) / 100);
 
-  // 로고: 너비의 15~20%(기본 18%). 가로형(>=3:1)일 때 40% 축소
-  const logoBase = W * 0.18;
-  const logoWidthBase = Math.max(W * 0.15, Math.min(W * 0.20, realAspect >= 3 ? logoBase * 0.6 : logoBase));
-  // BI 시각 보정(기본)
-  // 로고 옵션별 크기:
-  // - 현수막(placard): CI -10%, BI -60%, SLOGAN 유지
-  // - 현수막 제외: BI -60%, 그 외 유지
-  const logoOptionScale = isPlacard
-    ? content.logoOption === "CI"
-      ? 0.9 * 0.8
-      : content.logoOption === "BI"
-        ? 0.4 * 0.8
-        : 1.0 * 0.8
-    : isSafetyCaution
-      ? 1.0
-      : content.logoOption === "BI"
-        ? 0.4
-        : 1.0;
-  const logoWidth = Math.max(24, logoWidthBase * logoOptionScale);
-  /** 안전&주의: BI·CI·SLOGAN 동일 높이로 상단 중앙 배치 */
-  const safetyLogoHeightPx = isSafetyCaution
-    ? Math.max(18, displayH * SAFETY_CAUTION_LOGO_HEIGHT_RATIO)
-    : null;
-  // X배너: 로고 기본 2배, 단 CI는 20% 축소
-  const xbannerCiScale = isXBanner && content.logoOption === "CI" ? 0.8 : 1.0;
-  const effectiveLogoWidth = isXBanner ? logoWidth * 2 * xbannerCiScale : logoWidth;
-
   const hasUploadedLogo = Boolean(content.logo) && !isSafetyCaution;
   const fallbackCustomLogoRect = useMemo(
     () =>
@@ -534,14 +464,11 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         ? computeDefaultCustomUploadedLogoRect({
             displayW,
             displayH,
-            W,
             logoPosition,
-            isXBanner,
-            realAspect,
-            effectiveLogoWidth,
+            logoHeightPx,
           })
         : null,
-    [hasUploadedLogo, displayW, displayH, W, logoPosition, isXBanner, realAspect, effectiveLogoWidth]
+    [hasUploadedLogo, displayW, displayH, logoPosition, logoHeightPx]
   );
   const uploadedLogoRect = hasUploadedLogo ? (content.customUploadedLogoRect ?? fallbackCustomLogoRect) : null;
 
@@ -552,11 +479,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     const r = computeDefaultCustomUploadedLogoRect({
       displayW,
       displayH,
-      W,
       logoPosition,
-      isXBanner,
-      realAspect,
-      effectiveLogoWidth,
+      logoHeightPx,
     });
     onContentChange({ ...c, customUploadedLogoRect: r });
   }, [
@@ -565,84 +489,34 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     content.customUploadedLogoRect,
     displayW,
     displayH,
-    W,
     logoPosition,
-    isXBanner,
-    realAspect,
-    effectiveLogoWidth,
+    logoHeightPx,
   ]);
 
-  // 로고/텍스트 여백을 기존의 약 50% 수준으로 축소
-  const padRatio = realAspect >= 3 ? 0.02 : 0.04;
-  const marginX = padRatio;
-  const marginTop = padRatio;
-  const gapPx = realAspect >= 3 ? Math.max(8, Math.min(18, displayH * 0.06)) : displayH * 0.035;
-
-  const computeDefaultTextRects = (titleTextRaw: string) => {
-    // Compute in px then normalize (0~1). DraggableCanvasOverlay expects normalized rect.
-    const xPx = W * marginX;
-    const wPx = Math.max(40, W * (1 - marginX * 2));
-
-    // 로고 높이는 실제 이미지 비율을 모르므로 안전한 근사치로 배치(너비 기준, 상한 적용)
-    const approxLogoH = Math.min(displayH * 0.18, Math.max(18, effectiveLogoWidth * 0.3));
-    const logoY = displayH * marginTop;
-
-    const titleYPx = logoY + approxLogoH + gapPx;
-    const titleLineH = Math.max(12, titleFontSize * 1.15);
-    const titleCharsPerLine = Math.max(6, Math.floor(wPx / Math.max(10, titleFontSize * 0.9)));
-    const titleLen = titleTextRaw.trim().length;
-    const computedTitleLines = titleLen ? Math.ceil(titleLen / titleCharsPerLine) : 2;
-    const titleLines = Math.min(3, Math.max(2, computedTitleLines));
-    const titleH = titleLineH * titleLines + titleLineH * 0.15;
-
-    const bodyYPx = titleYPx + titleH + gapPx;
-    const bodyLineH = Math.max(11, bodyFontSize * 1.35);
-    const bodyH = Math.min(displayH * 0.42, Math.max(bodyLineH * 4, displayH * 0.18));
-
-    const footerYPx = bodyYPx + bodyH + gapPx;
-    const footerLineH = Math.max(10, disclaimerSize * 1.35);
-    const footerH = Math.min(displayH * 0.22, Math.max(footerLineH * 2, displayH * 0.10));
-
-    const bottomLimit = displayH * (1 - marginTop);
-    let overflow = footerYPx + footerH - bottomLimit;
-    let shrinkBodyH = bodyH;
-    let shrinkFooterH = footerH;
-    let shrinkTitleH = titleH;
-    if (overflow > 0) {
-      const minFooterH = footerLineH * 1.6;
-      const minBodyH = bodyLineH * 2.4;
-      const minTitleH = titleLineH * 1.8;
-
-      const bodyRoom = Math.max(0, shrinkBodyH - minBodyH);
-      const takeFromBody = Math.min(bodyRoom, overflow);
-      shrinkBodyH -= takeFromBody;
-      overflow -= takeFromBody;
-
-      const titleRoom = Math.max(0, shrinkTitleH - minTitleH);
-      const takeFromTitle = Math.min(titleRoom, overflow);
-      shrinkTitleH -= takeFromTitle;
-      overflow -= takeFromTitle;
-
-      const footerRoom = Math.max(0, shrinkFooterH - minFooterH);
-      const takeFromFooter = Math.min(footerRoom, overflow);
-      shrinkFooterH -= takeFromFooter;
-      overflow -= takeFromFooter;
-    }
-
+  const computeDefaultTextRects = () => {
+    const layout = computeAxisLayoutRectsForSize(
+      { width: realSize.width, height: realSize.height },
+      templateCategory,
+      templateId
+    );
     return {
-      titleRect: clampNormRect({ x: xPx / W, y: titleYPx / displayH, width: wPx / W, height: shrinkTitleH / displayH }),
-      bodyRect: clampNormRect({ x: xPx / W, y: bodyYPx / displayH, width: wPx / W, height: shrinkBodyH / displayH }),
-      footerRect: clampNormRect({ x: xPx / W, y: footerYPx / displayH, width: wPx / W, height: shrinkFooterH / displayH }),
-      badgeRect: clampNormRect({
-        x: xPx / W,
-        y: Math.max(displayH * marginTop, titleYPx - gapPx - displayH * 0.06) / displayH,
-        width: (W * 0.3) / W,
-        height: (displayH * 0.06) / displayH,
-      }),
+      titleRect: layout.titleRect,
+      bodyRect: layout.bodyRect,
+      footerRect: layout.footerRect,
+      badgeRect: layout.badgeRect,
+      subtitleRect: layout.subtitleRect,
+      imageRect: layout.imageRect,
     };
   };
 
   // 현수막(placard)에서는 메인/본문/유의사항 위치를 고정값으로 강제하고, 드래그/리사이즈를 막는다.
+  useLayoutEffect(() => {
+    if (!onContentChange) return;
+    if (!isPlacard) return;
+    if (contentRef.current.posterBodyAlign === PLACARD_BODY_TEXT_ALIGN) return;
+    onContentChange({ ...contentRef.current, posterBodyAlign: PLACARD_BODY_TEXT_ALIGN });
+  }, [isPlacard, onContentChange]);
+
   // 라운드 박스가 캔버스에 있으면 그 rect 기준, 없으면 우측 분할 고정 박스 기준으로 가로중앙·블록 세로중앙 정렬.
   useLayoutEffect(() => {
     if (!onContentChange) return;
@@ -721,14 +595,22 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     const showBody = content.posterBodyOnCanvas !== false;
     const showFooter = content.posterFooterOnCanvas !== false;
 
-    const titleTextRaw = typeof content.title === "string" ? content.title : "";
-    const { titleRect, bodyRect, footerRect, badgeRect } = computeDefaultTextRects(titleTextRaw);
+    const { titleRect, bodyRect, footerRect, badgeRect, subtitleRect, imageRect } = computeDefaultTextRects();
 
     if (showTitle && content.title?.trim() && !content.posterTitleRect) patch.posterTitleRect = titleRect;
     if (showBody && (content.bodyText?.trim() || content.posterBodies?.some((b) => b.text?.trim())) && !content.posterBodyRect)
       patch.posterBodyRect = bodyRect;
     if (showFooter && content.emphasizedTitle?.trim() && !content.posterFooterRect) patch.posterFooterRect = footerRect;
     if (content.subtitle?.trim() && !content.posterBadgeRect) patch.posterBadgeRect = badgeRect;
+    if (content.subtitle?.trim() && !content.posterSubtitleRects?.["subtitle-1"]) {
+      patch.posterSubtitleRects = { ...(content.posterSubtitleRects ?? {}), "subtitle-1": subtitleRect };
+    }
+    if (!content.posterBackgroundImageRect) {
+      patch.posterBackgroundImageRect =
+        getPosterImagePlacementMode(content) === "full-background"
+          ? FULL_BACKGROUND_IMAGE_RECT
+          : imageRect;
+    }
 
     if (Object.keys(patch).length === 0) return;
     const next = { ...content, ...patch };
@@ -741,13 +623,6 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     W,
     displayH,
     realAspect,
-    effectiveLogoWidth,
-    titleFontSize,
-    bodyFontSize,
-    disclaimerSize,
-    gapPx,
-    marginX,
-    marginTop,
     content,
     onContentChange,
   ]);
@@ -777,7 +652,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   useEffect(() => {
     const keys = expandKeysForRectOps(contentRef.current, selectedKeys);
     if (!keys.includes("image")) setImageInnerPosAdjust(false);
-  }, [selectedKeys]);
+    if (contentRef.current.posterImageLocked) setImageInnerPosAdjust(false);
+  }, [selectedKeys, content.posterImageLocked]);
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
@@ -903,6 +779,10 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       posterImageOpacity: 0,
       posterImagePosX: undefined,
       posterImagePosY: undefined,
+      posterImageBrightness: undefined,
+      posterImageContrast: undefined,
+      posterImageSaturation: undefined,
+      posterImageLocked: undefined,
     });
     setSelectedKeys((prev) => prev.filter((k) => k !== "image"));
   }, [onContentChange]);
@@ -964,6 +844,10 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         next.posterImageOpacity = 0;
         next.posterImagePosX = undefined;
         next.posterImagePosY = undefined;
+        next.posterImageBrightness = undefined;
+        next.posterImageContrast = undefined;
+        next.posterImageSaturation = undefined;
+        next.posterImageLocked = undefined;
       }
       if (removeUploadedLogoKey) {
         next.logo = undefined;
@@ -1217,7 +1101,14 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     setSelectedKeys(nextKeys);
   }, [onContentChange]);
 
-  const imageRect = content.posterBackgroundImageRect ?? DEFAULT_POSTER_BG_RECT;
+  const imageRect = resolvePosterImageRect(content, content.posterBackgroundImageRect ?? DEFAULT_POSTER_BG_RECT);
+  const imageZIndex = resolvePosterImageZIndex(content);
+  const isFullBackgroundImage = getPosterImagePlacementMode(content) === "full-background";
+  const layoutScale = displayH / Math.max(1, realSize.height);
+  const brandImageCornerRadiusPx =
+    content.axisLayoutImageCornerRadiusPx != null && !isFullBackgroundImage
+      ? content.axisLayoutImageCornerRadiusPx * layoutScale
+      : undefined;
   const badgeRect = content.posterBadgeRect ?? DEFAULT_POSTER_BADGE_RECT;
   const titleRect = content.posterTitleRect ?? DEFAULT_POSTER_TITLE_RECT;
   const footerRect = content.posterFooterRect ?? DEFAULT_POSTER_FOOTER_RECT;
@@ -1237,6 +1128,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     (next: typeof imageRect) => {
       if (!onContentChange) return;
       const c = contentRef.current;
+      if (getPosterImagePlacementMode(c) === "full-background") return;
       const prev = c.posterBackgroundImageRect ?? DEFAULT_POSTER_BG_RECT;
       const keys = expandKeysForRectOps(c, selectedKeysRef.current);
       if (next.width !== prev.width || next.height !== prev.height) {
@@ -1246,7 +1138,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           onContentChange(merged);
           return;
         }
-        const u = { ...c, posterBackgroundImageRect: next };
+        const u = { ...c, posterBackgroundImageRect: next, posterRoundBoxImageRect: next };
         contentRef.current = u;
         onContentChange(u);
         return;
@@ -1261,7 +1153,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           return;
         }
       }
-      const u = { ...c, posterBackgroundImageRect: next };
+      const u = { ...c, posterBackgroundImageRect: next, posterRoundBoxImageRect: next };
       contentRef.current = u;
       onContentChange(u);
     },
@@ -1519,7 +1411,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     const m = measureAutoTextBox({
       text: raw,
       fontPx: titleFontSize,
-      fontWeight: t.fontWeight ?? 800,
+      fontWeight: t.fontWeight ?? TITLE_DEFAULT_FONT_WEIGHT,
       fontFamily: resolveFontFamily(t.fontFamily),
       fontStyle: t.fontStyle ?? "normal",
       letterSpacingEm: t.letterSpacingEm ?? -0.025,
@@ -1656,7 +1548,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         padYPx: padY,
         maxBoxWidthPx: maxWPx,
       });
-      const align = next.posterBodyAlign ?? "left";
+      const align = isPlacard ? PLACARD_BODY_TEXT_ALIGN : (next.posterBodyAlign ?? "left");
       const fitted = fitNormalizedRect(
         br,
         m.boxWidthPx,
@@ -1830,7 +1722,9 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const multiSel = expandedSelKeys.length >= 2;
 
   const titleFlex = flexAlignFromCanvasAlign(content.posterTitleAlign ?? "left");
-  const bodyFlex = flexAlignFromCanvasAlign(content.posterBodyAlign ?? "left");
+  const bodyFlex = flexAlignFromCanvasAlign(
+    isPlacard ? PLACARD_BODY_TEXT_ALIGN : (content.posterBodyAlign ?? "left")
+  );
   const footerFlex = flexAlignFromCanvasAlign(content.posterFooterAlign ?? "left");
 
   const showTitleOnCanvas = content.posterTitleOnCanvas !== false;
@@ -1974,11 +1868,20 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             isSelected={expandedSelKeys.includes("panelBg")}
             onSelect={(opts) => {
               pickKey("panelBg", !!opts?.additive);
+              onFocusChange?.("panelBg");
             }}
             zIndex={2}
             label="배경 박스"
-            borderRadiusMode="auto"
-            borderRadiusScale={1.2}
+            locked={Boolean(content.panelBgLocked)}
+            onToggleLock={
+              onContentChange
+                ? () =>
+                    onContentChange({
+                      ...contentRef.current,
+                      panelBgLocked: !contentRef.current.panelBgLocked,
+                    })
+                : undefined
+            }
             snapStepPx={snapPx}
           >
             <div
@@ -2004,18 +1907,28 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               pickKey("image", !!opts?.additive);
               onFocusChange?.("image");
             }}
-            zIndex={4}
-            label={imageInnerPosAdjust ? "이미지 · 안쪽 위치 조절" : "이미지"}
-            borderRadiusScale={2.5}
+            zIndex={imageZIndex}
+            label={imageInnerPosAdjust ? "이미지 · 안쪽 위치 조절" : isFullBackgroundImage ? "배경 이미지" : "이미지"}
+            locked={Boolean(content.posterImageLocked)}
+            onToggleLock={
+              onContentChange
+                ? () =>
+                    onContentChange({
+                      ...contentRef.current,
+                      posterImageLocked: !contentRef.current.posterImageLocked,
+                    })
+                : undefined
+            }
             snapStepPx={snapPx}
-            panDragInsteadOfMove={imageInnerPosAdjust}
+            panDragInsteadOfMove={imageInnerPosAdjust && !content.posterImageLocked}
             onOverlayDoubleClick={() => {
+              if (contentRef.current.posterImageLocked) return;
               setImageInnerPosAdjust(true);
               pickKey("image", false);
               onFocusChange?.("image");
             }}
             onPan={(d, ev) => {
-              if (!onContentChange) return;
+              if (!onContentChange || contentRef.current.posterImageLocked) return;
               const wPx = Math.max(1, imageRect.width * displayW);
               const hPx = Math.max(1, imageRect.height * displayH);
               if (!imagePanSessionRef.current) {
@@ -2040,6 +1953,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               imagePanSessionRef.current = null;
             }}
             onRequestDelete={onContentChange ? removeImageFromCanvas : undefined}
+            borderRadiusMode={isFullBackgroundImage ? "square" : "auto"}
+            cornerRadiusPx={brandImageCornerRadiusPx}
           >
             <img
               src={imageUrl}
@@ -2053,8 +1968,9 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                 objectPosition: `${content.posterImagePosX ?? 50}% ${content.posterImagePosY ?? 50}%`,
                 opacity: Math.min(
                   1,
-                  Math.max(0, Number(content.posterImageOpacity ?? 100) / 100)
+                  Math.max(0, resolvePosterImageOpacity(content) / 100)
                 ),
+                filter: buildPosterImageCssFilter(content),
                 display: "block",
                 userSelect: "none",
               }}
@@ -2146,8 +2062,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                       return (
                         <>
                           {renderPlainWithTriStyleRanges(mainText, br, ir, ur, tw, {
-                            defaultWeight: 800,
-                            strongWeight: 900,
+                            defaultWeight: TITLE_DEFAULT_FONT_WEIGHT,
+                            strongWeight: 800,
                             colors: adjColors,
                           })}
                           {endsDot ? (
@@ -2474,24 +2390,18 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               alt="Brand Logo"
               draggable={false}
               onDragStart={(e) => e.preventDefault()}
-              style={
-                safetyLogoHeightPx != null
-                  ? {
-                      height: `${safetyLogoHeightPx}px`,
-                      width: "auto",
-                      maxWidth: `${W * 0.42}px`,
-                      objectFit: "contain",
-                      display: "block",
-                      userSelect: "none",
-                    }
-                  : {
-                      width: `${effectiveLogoWidth}px`,
-                      height: "auto",
-                      objectFit: "contain",
-                      display: "block",
-                      userSelect: "none",
-                    }
-              }
+              style={{
+                height: `${logoHeightPx}px`,
+                width: "auto",
+                maxWidth: placardLogoLayout
+                  ? `${placardLogoLayout.maxWidthPx}px`
+                  : isPlacard
+                    ? `${displayW * 0.22}px`
+                    : `${displayW * 0.45}px`,
+                objectFit: "contain",
+                display: "block",
+                userSelect: "none",
+              }}
             />
           </div>
         ) : null}

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, type SetStateAction } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo, type SetStateAction } from "react";
 import { useDropzone } from "react-dropzone";
 import type { DesignContent, DesignStyle, LogoPosition, PosterCategory, AssetLayer, AssetType } from "@/design/types";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
-  DEFAULT_POSTER_BG_RECT,
   DEFAULT_POSTER_BADGE_RECT,
   DEFAULT_POSTER_SUBTITLE_RECT,
   DEFAULT_POSTER_SUBTITLE_OFFSET_Y,
@@ -33,6 +32,7 @@ import {
   AiAssetAlternativesDialog,
   type AiAssetAlternative,
 } from "@/components/design/AiAssetAlternativesDialog";
+import { AiImageAlternativesDialog } from "@/components/design/AiImageAlternativesDialog";
 import { generateDesignAsset, isSvgAlternative } from "@/lib/designEditorApi";
 import {
   base64ToDataUri,
@@ -47,6 +47,18 @@ import { MyGeneratedImagePickerDialog } from "@/components/design/MyGeneratedIma
 import { useAuthSession } from "@/contexts/AuthSessionContext";
 import { CoralTitleMarker } from "@/components/InspectionSectionTitle";
 import { resolveRcsMessageBackground } from "@/components/design/RCSCanvas";
+import { CanvasElementLockToggle } from "@/components/design/CanvasElementLockToggle";
+import {
+  applyPosterImageToContent,
+  getPosterImagePlacementMode,
+  setPosterImagePlacementMode,
+} from "@/design/posterImagePlacement";
+import {
+  AI_IMAGE_ASPECT_RATIO_OPTIONS,
+  computePosterImageAreaAspectRatio,
+  detectClosestAiImageAspectRatio,
+  type AiImageAspectRatioId,
+} from "@/design/aiImageAspectRatio";
 import { templates as allDesignTemplates } from "@/design/templates";
 import { resolvePosterBodyBlocksForRender, applyBodyBlockTextEdit } from "@/design/posterBodyDisplay";
 import { VI_COLORS } from "@/design/viCanvasConstants";
@@ -180,6 +192,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const refBody = useRef<HTMLDivElement>(null);
   const refFooter = useRef<HTMLDivElement>(null);
   const refImage = useRef<HTMLDivElement>(null);
+  const refPanelBg = useRef<HTMLDivElement>(null);
   const refLogo = useRef<HTMLDivElement>(null);
   const refAsset = useRef<HTMLDivElement>(null);
 
@@ -230,6 +243,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     else if (typeof focusTarget === "string" && focusTarget.startsWith("subtitle:")) scrollPanelSection(refTitle.current);
     else if (focusTarget === "footer") scrollPanelSection(refFooter.current);
     else if (focusTarget === "image") scrollPanelSection(refImage.current);
+    else if (focusTarget === "panelBg") scrollPanelSection(refPanelBg.current);
     else if (focusTarget === "logo") scrollPanelSection(refLogo.current);
     else if (typeof focusTarget === "object" && focusTarget.assetId) scrollPanelSection(refAsset.current);
   }, [focusTarget, scrollPanelSection]);
@@ -275,6 +289,26 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const isRcs = templateMeta?.category === "rcs";
   const assetLayers   = content.assetLayers ?? [];
 
+  const canvasSizeW = templateMeta?.size?.width ?? 1;
+  const canvasSizeH = templateMeta?.size?.height ?? 1;
+  const defaultImageAiAspectRatio = useMemo(
+    () =>
+      detectClosestAiImageAspectRatio(
+        computePosterImageAreaAspectRatio(content, canvasSizeW, canvasSizeH)
+      ),
+    [
+      content.posterImagePlacementMode,
+      content.posterBackgroundImageRect,
+      content.posterRoundBoxImageRect,
+      canvasSizeW,
+      canvasSizeH,
+    ]
+  );
+  const [imageAiAspectRatio, setImageAiAspectRatio] = useState<AiImageAspectRatioId>("16:9");
+  useEffect(() => {
+    setImageAiAspectRatio(defaultImageAiAspectRatio);
+  }, [defaultImageAiAspectRatio]);
+
   // RCS 20종 문구 선택 UI (우측 패널 전용)
   const [rcsProduct, setRcsProduct] = useState<keyof typeof rcsTemplates | null>(null);
   const [rcsMessageType, setRcsMessageType] = useState<keyof (typeof rcsTemplates)["요금제"] | null>(null);
@@ -312,14 +346,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const { getRootProps:getImageRP,  getInputProps:getImageIP,  isDragActive:isImageDrag  } = useDropzone({ onDrop:(f)=>{ if(f[0]){
     void (async () => {
       const dataUrl = await readFileAsDataUrl(f[0]);
-      onContentChange({
-        ...content,
-        image: dataUrl,
-        posterBackgroundImageRect: content.posterBackgroundImageRect ?? DEFAULT_POSTER_BG_RECT,
-        posterImageOpacity: 100,
-        posterImagePosX: 50,
-        posterImagePosY: 50,
-      });
+      onContentChange((prev) => applyPosterImageToContent(prev, dataUrl));
       setImagePreview(dataUrl);
     })();
   }}, accept:{"image/*":[".png",".jpg",".jpeg",".webp"]}, multiple:false });
@@ -454,14 +481,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const applyGeneratedImage = useCallback(
     (name: string, dataUri: string) => {
       void name;
-      onContentChange((prev) => ({
-        ...prev,
-        image: dataUri,
-        posterBackgroundImageRect: prev.posterBackgroundImageRect ?? DEFAULT_POSTER_BG_RECT,
-        posterImageOpacity: 100,
-        posterImagePosX: 50,
-        posterImagePosY: 50,
-      }));
+      onContentChange((prev) => applyPosterImageToContent(prev, dataUri));
       setImagePreview(dataUri);
     },
     [onContentChange],
@@ -588,6 +608,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         direction,
         templateLabel: templateMeta?.name ?? templateId ?? "template",
         creativeTopic: content.title?.trim() || undefined,
+        imageAspectRatio: imageAiAspectRatio,
       });
       showAiAlternatives("image", out.alternatives, { direction });
     } catch (e) {
@@ -599,6 +620,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     content.title,
     imageAiBusy,
     imageAiDirection,
+    imageAiAspectRatio,
     showAiAlternatives,
     templateId,
     templateMeta?.name,
@@ -607,40 +629,69 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const aiAltTitle =
     aiAltDialog?.assetType === "pictogram"
       ? "AI 픽토그램 대안"
-      : aiAltDialog?.assetType === "image"
-        ? "AI 이미지 대안"
-        : "AI 일러스트 대안";
+      : "AI 일러스트 대안";
 
-  const aiAlternativesDialog = (
-    <AiAssetAlternativesDialog
-      open={aiAltDialog != null}
-      onOpenChange={(open) => {
-        if (!open) setAiAltDialog(null);
-      }}
-      title={aiAltTitle}
-      assetType={aiAltDialog?.assetType ?? "illustration"}
-      alternatives={aiAltDialog?.alternatives ?? []}
-      onPick={(item) => {
-        if (!aiAltDialog) return;
-        if (aiAltDialog.assetType === "image") {
-          void applyGeneratedImage(item.name, item.src);
-        } else {
+  const aiImageAlternativesDialog =
+    aiAltDialog?.assetType === "image" ? (
+      <AiImageAlternativesDialog
+        open
+        onOpenChange={(open) => {
+          if (!open) setAiAltDialog(null);
+        }}
+        alternatives={aiAltDialog.alternatives}
+        templateLabel={templateMeta?.name ?? templateId ?? "template"}
+        creativeTopic={content.title?.trim() || undefined}
+        onApply={(item, developHistory) => {
+          if (!aiAltDialog) return;
+          applyGeneratedImage(item.name, item.src);
+          void persistMyGeneratedAsset({
+            assetType: "image",
+            name: item.name,
+            direction: aiAltDialog.direction,
+            imageMime: item.mimeType,
+            imageBase64: item.imageBase64,
+          });
+          for (const step of developHistory.slice(1)) {
+            void persistMyGeneratedAsset({
+              assetType: "image",
+              name: step.label,
+              direction: step.developPrompt ?? aiAltDialog.direction,
+              imageMime: step.mimeType,
+              imageBase64: step.imageBase64,
+            });
+          }
+          setAiAltDialog(null);
+        }}
+      />
+    ) : null;
+
+  const aiAlternativesDialog =
+    aiAltDialog != null && aiAltDialog.assetType !== "image" ? (
+      <AiAssetAlternativesDialog
+        open
+        onOpenChange={(open) => {
+          if (!open) setAiAltDialog(null);
+        }}
+        title={aiAltTitle}
+        assetType={aiAltDialog.assetType}
+        alternatives={aiAltDialog.alternatives}
+        onPick={(item) => {
+          if (!aiAltDialog) return;
           appendGeneratedAsset(aiAltDialog.assetType, item.name, item.src);
-        }
-        void persistMyGeneratedAsset({
-          assetType: aiAltDialog.assetType,
-          name: item.name,
-          direction: aiAltDialog.direction,
-          illustrationStyle: aiAltDialog.illustrationStyle,
-          svg: item.svg,
-          imageMime: item.mimeType,
-          imageBase64: item.imageBase64,
-        });
-        setAiAltDialog(null);
-      }}
-      onPickAll={aiAltDialog?.assetType === "image" ? undefined : pickAllAiAlternatives}
-    />
-  );
+          void persistMyGeneratedAsset({
+            assetType: aiAltDialog.assetType,
+            name: item.name,
+            direction: aiAltDialog.direction,
+            illustrationStyle: aiAltDialog.illustrationStyle,
+            svg: item.svg,
+            imageMime: item.mimeType,
+            imageBase64: item.imageBase64,
+          });
+          setAiAltDialog(null);
+        }}
+        onPickAll={pickAllAiAlternatives}
+      />
+    ) : null;
 
   const myGeneratedImagePicker = (
     <MyGeneratedImagePickerDialog
@@ -653,6 +704,43 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
       onPick={(item) => void applyGeneratedImage(item.name, item.src)}
       onDelete={(id) => void handleDeleteMyGeneratedAsset(id)}
     />
+  );
+
+  const imagePlacementMode = getPosterImagePlacementMode(content);
+
+  const imagePlacementModeSelector = (
+    <div className="space-y-2">
+      <Label className="text-xs font-semibold text-gray-600">이미지 배치 방식</Label>
+      <div className="grid grid-cols-2 gap-2">
+        {(
+          [
+            { key: "round-box" as const, label: "라운드 박스형", desc: "지정 영역 안" },
+            { key: "full-background" as const, label: "배경 전체형", desc: "캔버스 전체" },
+          ] as const
+        ).map((opt) => {
+          const active = imagePlacementMode === opt.key;
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() =>
+                onContentChange((prev) => setPosterImagePlacementMode(prev, opt.key))
+              }
+              className={`rounded-xl border-2 px-2 py-2.5 text-left transition-all ${
+                active ? "border-[#FF7F66] bg-[#FF7F66]/6" : "border-gray-200 hover:border-gray-300 bg-white"
+              }`}
+            >
+              <p
+                className={`text-[12px] font-bold leading-tight ${active ? "text-[#FF7F66]" : "text-gray-800"}`}
+              >
+                {opt.label}
+              </p>
+              <p className="mt-0.5 text-[10px] text-gray-400">{opt.desc}</p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 
   const imageAiBlock = (
@@ -671,6 +759,32 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         >
           내 AI 이미지
         </Button>
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-[11px] font-semibold text-gray-600">생성 비율</Label>
+        <div className="grid grid-cols-6 gap-1">
+          {AI_IMAGE_ASPECT_RATIO_OPTIONS.map((opt) => {
+            const active = imageAiAspectRatio === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                disabled={imageAiBusy}
+                onClick={() => setImageAiAspectRatio(opt.id)}
+                className={`rounded-lg border px-2 py-1.5 text-center transition-all ${
+                  active
+                    ? "border-[#FF7F66] bg-[#FF7F66]/8 text-[#FF7F66] font-semibold"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                }`}
+              >
+                <span className="text-[11px]">{opt.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        {defaultImageAiAspectRatio === imageAiAspectRatio ? (
+          <p className="text-[10px] text-gray-400">현재 이미지 영역 비율과 일치하는 옵션이 자동 선택됨</p>
+        ) : null}
       </div>
       <Textarea
         value={imageAiDirection}
@@ -1039,6 +1153,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           onDropFiles={(files) => onAssetDrop(files, "pictogram")}
         />
         {aiAlternativesDialog}
+        {aiImageAlternativesDialog}
         {myGeneratedImagePicker}
         <div>
           <h2 className="font-semibold text-gray-900 mb-1">브랜드 디자인 콘텐츠</h2>
@@ -1685,9 +1800,10 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         {!isRcs ? (
         <div ref={refImage} className="border-t border-gray-100 pt-4 space-y-2">
           <Label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5"><ImageIcon className="w-3.5 h-3.5 text-gray-500"/>이미지</Label>
+          {imagePlacementModeSelector}
           <div {...getImageRP()} className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${isImageDrag?"border-[#FF7F66] bg-[#FF7F66]/5":"border-gray-300 hover:border-gray-400"}`}>
             <input {...getImageIP()}/>
-            {imagePreview?(<div className="space-y-2"><img src={imagePreview} alt="Preview" className="max-h-24 mx-auto rounded"/><p className="text-xs text-gray-500">클릭하여 교체 · 캔버스에서 위치·크기 조절</p></div>):(<div className="space-y-1"><ImageIcon className="w-8 h-8 mx-auto text-gray-400"/><p className="text-xs text-gray-600">이미지 드래그 또는 클릭하여 업로드</p><p className="text-xs text-gray-400">캔버스에서 위치·크기 조절 · 모서리 라운드 자동</p></div>)}
+            {imagePreview?(<div className="space-y-2"><img src={imagePreview} alt="Preview" className="max-h-24 mx-auto rounded"/><p className="text-xs text-gray-500">클릭하여 교체 · 캔버스에서 위치·크기 조절</p></div>):(<div className="space-y-1"><ImageIcon className="w-8 h-8 mx-auto text-gray-400"/><p className="text-xs text-gray-600">이미지 드래그 또는 클릭하여 업로드</p><p className="text-xs text-gray-400">{imagePlacementMode === "full-background" ? "배경 전체형 · 텍스트는 위에 오버레이" : "라운드 박스형 · 모서리 라운드 자동"}</p></div>)}
           </div>
           {imagePreview ? (
             <div className="flex justify-end">
@@ -1704,6 +1820,10 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                     posterImageOpacity: 0,
                     posterImagePosX: undefined,
                     posterImagePosY: undefined,
+                    posterImageBrightness: undefined,
+                    posterImageContrast: undefined,
+                    posterImageSaturation: undefined,
+                    posterImageLocked: undefined,
                   });
                   setImagePreview(null);
                 }}
@@ -1713,21 +1833,17 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
             </div>
           ) : null}
           {imageAiBlock}
-          <div className="pt-1">
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={content.image != null ? (content.posterImageOpacity ?? 100) : (content.posterImageOpacity ?? 0)}
-              onChange={(e) => onContentChange({ ...content, posterImageOpacity: Number(e.target.value) })}
-              className="h-2 w-full cursor-pointer accent-[#FF7F66]"
-            />
-            <p className="text-xs text-gray-500">
-              투명도 · <span className="font-mono tabular-nums">{content.posterImageOpacity ?? 100}%</span> (기본 100%)
-            </p>
-          </div>
           {content.image ? (
+            <>
+              <CanvasElementLockToggle
+                locked={Boolean(content.posterImageLocked)}
+                onToggle={() =>
+                  onContentChange({
+                    ...content,
+                    posterImageLocked: !content.posterImageLocked,
+                  })
+                }
+              />
             <div className="flex flex-col gap-2 rounded-lg border border-gray-100 bg-gray-50/80 p-3">
               <p className="text-xs font-semibold text-gray-700">박스 안 이미지 위치</p>
               <Button
@@ -1742,7 +1858,11 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                 위치 초기화 (중앙)
               </Button>
             </div>
+            </>
           ) : null}
+          <p className="text-xs text-gray-400">
+            캔버스에서 이미지를 선택하면 좌측 「이미지 보정」에서 밝기·대비·채도·투명도를 조절할 수 있습니다.
+          </p>
           <p className="text-xs text-gray-400">
             캔버스에서 이미지 박스를 <span className="font-semibold">더블클릭</span>한 뒤 드래그하면 안쪽 이미지 위치를 조절할 수 있습니다. 빈 캔버스 클릭 또는 Esc로 종료합니다.
           </p>
@@ -1751,7 +1871,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
 
         {/* 모든 템플릿: 이미지 옵션 아래 배경 라운드 박스 (RCS에서는 제거) */}
         {!isRcs ? (
-          <div className="border-t border-gray-100 pt-4 space-y-3">
+          <div ref={refPanelBg} className="border-t border-gray-100 pt-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
               <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                 라운드 배경 박스
@@ -1766,7 +1886,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                   variant="outline"
                   size="sm"
                   className="h-8 text-[12px] shrink-0"
-                  onClick={() => onContentChange({ ...content, panelBgOnCanvas: false })}
+                  onClick={() => onContentChange({ ...content, panelBgOnCanvas: false, panelBgLocked: undefined })}
                 >
                   제거
                 </Button>
@@ -1791,6 +1911,16 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
             </div>
             {content.panelBgOnCanvas ? (
               <>
+                <CanvasElementLockToggle
+                  locked={Boolean(content.panelBgLocked)}
+                  label="배경 박스 잠금"
+                  onToggle={() =>
+                    onContentChange({
+                      ...content,
+                      panelBgLocked: !content.panelBgLocked,
+                    })
+                  }
+                />
                 <p className="text-xs text-gray-400">
                   추가 후 캔버스에서 선택해 드래그·리사이즈로 조절할 수 있습니다. (항상 맨 뒤)
                 </p>
@@ -1855,6 +1985,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         onChange={handleLogoFileChange}
       />
       {aiAlternativesDialog}
+      {aiImageAlternativesDialog}
       {myGeneratedImagePicker}
       <AssetPresetPickerDialog
         open={illustDialogOpen}

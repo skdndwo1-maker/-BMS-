@@ -6,7 +6,7 @@ import {
   shouldTryNextTextModel,
   textModelCandidates,
 } from "./shared.js";
-import { generateImageFromTextPrompt, generateRevisedBrandingImage } from "./inspection.js";
+import { generateImageFromTextPrompt, generateRevisedBrandingImage, generateImageDevelopFromReference } from "./inspection.js";
 
 /** 브랜드 제작(디자인 에디터) 캔버스 — 위반 항목별 수정 힌트 포함 */
 const designEditorInspectionSchema = {
@@ -652,6 +652,38 @@ const IMAGE_VARIANT_HINTS = [
   "대각선·역동적 구도, 그라데이션·소프트 배경",
 ] as const;
 
+const VALID_IMAGE_ASPECT_IDS = new Set(["4:3", "3:4", "16:9", "9:16", "5:5", "20:8"]);
+
+/** 클라이언트 비율 ID → Gemini imageConfig.aspectRatio */
+export function resolveGeminiImageAspectRatio(aspectRatioId: string | undefined): {
+  geminiAspectRatio: string;
+  promptLabel: string;
+} {
+  const id = aspectRatioId?.trim() ?? "16:9";
+  switch (id) {
+    case "4:3":
+      return { geminiAspectRatio: "4:3", promptLabel: "4:3 (가로)" };
+    case "3:4":
+      return { geminiAspectRatio: "3:4", promptLabel: "3:4 (세로)" };
+    case "16:9":
+      return { geminiAspectRatio: "16:9", promptLabel: "16:9 (와이드)" };
+    case "9:16":
+      return { geminiAspectRatio: "9:16", promptLabel: "9:16 (세로 와이드)" };
+    case "5:5":
+      return { geminiAspectRatio: "1:1", promptLabel: "5:5 (정사각형)" };
+    case "20:8":
+      return { geminiAspectRatio: "21:9", promptLabel: "20:8 (울트라 와이드)" };
+    default:
+      return { geminiAspectRatio: "16:9", promptLabel: "16:9 (와이드)" };
+  }
+}
+
+export function normalizeImageAspectRatioId(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const id = raw.trim();
+  return VALID_IMAGE_ASPECT_IDS.has(id) ? id : undefined;
+}
+
 /**
  * 디자인 에디터: 사용자 생성방향에 맞는 브랜드 마케팅 이미지 생성 (PNG/JPEG)
  */
@@ -660,10 +692,12 @@ export async function runDesignEditorImageGeneration(opts: {
   templateLabel?: string;
   creativeTopic?: string;
   guidelineContext?: string;
+  imageAspectRatio?: string;
 }): Promise<{ alternatives: Array<{ name: string; mimeType: string; base64: string }> } | null> {
   const direction = opts.direction.trim();
   if (!direction || !getKey()) return null;
 
+  const { geminiAspectRatio, promptLabel } = resolveGeminiImageAspectRatio(opts.imageAspectRatio);
   const alternatives: Array<{ name: string; mimeType: string; base64: string }> = [];
 
   for (let i = 0; i < IMAGE_VARIANT_HINTS.length; i++) {
@@ -671,6 +705,9 @@ export async function runDesignEditorImageGeneration(opts: {
     const prompt = `역할: LG U+ 브랜드 마케팅·디자인 템플릿용 고품질 히어로/배경 이미지 생성 전문가.
 
 작업: 아래 [생성방향]에 맞는 **마케팅 이미지 1장**을 생성하세요. (대안 ${i + 1}/3 — ${variantHint})
+
+[출력 비율 — 필수]
+- 반드시 **${promptLabel}** 비율로 생성하세요. 다른 비율·크롭·여백 금지.
 
 [브랜드 스타일]
 - LG U+ 마젠타 포인트 #F43182, 파스텔 핑크·보라 보조
@@ -688,7 +725,7 @@ ${direction}
 ${variantHint}`;
 
     try {
-      const result = await generateImageFromTextPrompt(prompt);
+      const result = await generateImageFromTextPrompt(prompt, { aspectRatio: geminiAspectRatio });
       if (result) {
         alternatives.push({
           name: `대안${i + 1}`,
@@ -705,6 +742,17 @@ ${variantHint}`;
     return { alternatives: alternatives.slice(0, 3) };
   }
   return null;
+}
+
+/** 디자인 에디터: 선택 이미지 + 추가 프롬프트로 디벨롭 */
+export async function runDesignEditorImageDevelop(opts: {
+  imageBase64: string;
+  imageMime: string;
+  developPrompt: string;
+  templateLabel?: string;
+  creativeTopic?: string;
+}): Promise<{ mimeType: string; base64: string; caption: string } | null> {
+  return generateImageDevelopFromReference(opts);
 }
 
 const normRectSchema = {
