@@ -48,6 +48,7 @@ import {
   serializeDesignContentForStorage,
 } from "@/lib/designContentPersistence";
 import { registerGlobalNavPersist } from "@/lib/globalNavPersistence";
+import { useLeavePageGuard } from "@/hooks/useLeavePageGuard";
 import { InspectionSectionTitle } from "@/components/InspectionSectionTitle";
 import {
   applySafetyCautionMaintenanceContent,
@@ -59,12 +60,17 @@ import { resolveTemplateDefaultLogoPosition } from "@/design/canvasLogoLayout";
 import { PLACARD_BODY_TEXT_ALIGN } from "@/design/placardCanvasLayout";
 import {
   applyAxisLayoutGuide,
+  migratePosterFooterForTemplate,
   shouldApplyAxisLayoutGuide,
 } from "@/design/axisLayoutGuide";
 
 const ExportDialog = lazy(() => import("./ExportDialog").then((m) => ({ default: m.ExportDialog })));
 
 const DESIGN_EDITOR_NAV_DRAFT_KEY = "brandAxis:designEditorNavDraft";
+
+function designContentFingerprint(c: DesignContent): string {
+  return JSON.stringify(c);
+}
 
 /** RCS 카드·우측 목업(높이 동기화) 기준 표시 — 10% 축소 시 0.9 */
 const RCS_WORKSPACE_DISPLAY_SCALE = 0.9;
@@ -313,6 +319,40 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   zoomSnapRef.current = zoom;
   const searchParamsStrRef = useRef(searchParams.toString());
   searchParamsStrRef.current = searchParams.toString();
+  const urlDesignId = searchParams.get("designId")?.trim() ?? "";
+
+  const [savedContentFingerprint, setSavedContentFingerprint] = useState<string | null>(null);
+  const currentContentFingerprint = useMemo(() => designContentFingerprint(content), [content]);
+
+  const markContentSaved = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      setSavedContentFingerprint(designContentFingerprint(contentSnapRef.current));
+    });
+  }, []);
+
+  useEffect(() => {
+    setSavedContentFingerprint(null);
+  }, [actualTemplateId, urlDesignId]);
+
+  useEffect(() => {
+    if (bootBusy || !template) return;
+    if (savedContentFingerprint !== null) return;
+    const t = window.setTimeout(() => markContentSaved(), 80);
+    return () => window.clearTimeout(t);
+  }, [bootBusy, template, actualTemplateId, urlDesignId, savedContentFingerprint, markContentSaved]);
+
+  const hasUnsavedDesignWork =
+    Boolean(template) &&
+    !bootBusy &&
+    savedContentFingerprint !== null &&
+    currentContentFingerprint !== savedContentFingerprint;
+
+  const { leaveConfirmDialog } = useLeavePageGuard({
+    enabled: hasUnsavedDesignWork,
+    description: "작업 중인 내용이 저장되지 않을 수 있습니다. 페이지를 나가시겠습니까?",
+    confirmLabel: "나가기",
+  });
+
   /** VI 12분할 정렬 그리드 (캔버스 위 오버레이) */
   const [showViGrid, setShowViGrid] = useState(true);
   const prevShowViGridRef = useRef<boolean>(true);
@@ -365,6 +405,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     let cancelled = false;
     (async () => {
       setBootBusy(true);
+      setSavedContentFingerprint(null);
       try {
         const userId = await requireAuthedUserId(sb);
         const row = await getDesignById(sb, { userId, id });
@@ -534,6 +575,23 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     });
   }, [template, bootBusy, actualTemplateId, setContentWithHistory]);
 
+  /** 레거시·저장 드래프트: 유의사항 숨김(posterFooterOnCanvas:false) 및 깨진 rect 복구 */
+  useEffect(() => {
+    if (!template?.size?.width || !template.size.height) return;
+    if (bootBusy) return;
+    if (actualTemplateId === "rcs-568x368") return;
+    if (isSafetyCautionTemplate(actualTemplateId)) return;
+
+    setContentWithHistory((prev) => {
+      const next = migratePosterFooterForTemplate(prev, {
+        templateId: actualTemplateId,
+        templateCategory: template.category,
+        canvasSize: template.size,
+      });
+      return next === prev ? prev : next;
+    });
+  }, [template, bootBusy, actualTemplateId, setContentWithHistory]);
+
   /** document scroll 잠금 — focus/scrollIntoView 후 상태바 아래 회색 띠 방지 */
   useEffect(() => {
     if (!template) return;
@@ -672,6 +730,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
         },
         { replace: true }
       );
+      markContentSaved();
       toast.success("저장 완료");
     } finally {
       setSaveBusy(false);
@@ -701,6 +760,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
       } catch {
         /* ignore */
       }
+      markContentSaved();
       toast.success("덮어쓰기 완료");
     } finally {
       setSaveBusy(false);
@@ -903,6 +963,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   };
 
   return (
+    <>
     <TooltipProvider>
       <div className="fixed inset-0 z-0 flex min-h-0 flex-col overflow-hidden bg-[#F5F5F5]">
 
@@ -1426,6 +1487,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                               { replace: true }
                             );
                             setContentWithHistory(() => normalizeDesignContentFromStorage(row.canvas_data));
+                            markContentSaved();
                             toast.success("불러오기 완료");
                             setActiveDialog("none");
                           } catch (e) {
@@ -1503,5 +1565,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
 
       </div>
     </TooltipProvider>
+    {leaveConfirmDialog}
+    </>
   );
 }

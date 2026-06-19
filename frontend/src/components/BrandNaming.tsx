@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect, type ChangeEvent } from "react";
+import { useState, useRef, useEffect, useMemo, type ChangeEvent } from "react";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 import { GlobalBrandNav } from "@/components/GlobalBrandNav";
 import { registerGlobalNavPersist } from "@/lib/globalNavPersistence";
+import { useLeavePageGuard } from "@/hooks/useLeavePageGuard";
 import {
   Upload,
   FileText,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  ensureGuidelineSlot,
   fetchHealth,
   runBrandNaming,
   syncGuidelineFromFixed,
@@ -64,6 +66,7 @@ import {
   generateStyleTabIdle,
   generateLanguageTabActive,
   generateLanguageTabIdle,
+  hasNamingOverviewInput,
   namingMinorTabActive,
   namingMinorTabIdle,
   passFail,
@@ -229,11 +232,11 @@ export function BrandNaming() {
     void Promise.all(
       docs.map(async (doc) => {
         try {
-          const synced = await syncGuidelineFromFixed(doc.id);
+          const ensured = await ensureGuidelineSlot(doc.id);
           if (cancelled) return;
           setFixedGuidelineStatus((prev) => ({
             ...prev,
-            [doc.id]: { loading: false, connected: Boolean(synced.guideline?.hasFile) },
+            [doc.id]: { loading: false, connected: Boolean(ensured.guideline?.hasFile) },
           }));
         } catch {
           if (!cancelled) {
@@ -249,6 +252,25 @@ export function BrandNaming() {
       cancelled = true;
     };
   }, []);
+
+  const handleResyncFixedGuideline = async (docId: string) => {
+    setFixedGuidelineStatus((prev) => ({
+      ...prev,
+      [docId]: { loading: true, connected: prev[docId]?.connected ?? false },
+    }));
+    try {
+      const synced = await syncGuidelineFromFixed(docId);
+      setFixedGuidelineStatus((prev) => ({
+        ...prev,
+        [docId]: { loading: false, connected: Boolean(synced.guideline?.hasFile) },
+      }));
+    } catch {
+      setFixedGuidelineStatus((prev) => ({
+        ...prev,
+        [docId]: { loading: false, connected: false },
+      }));
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -288,6 +310,37 @@ export function BrandNaming() {
             (auditCategoryMajor === "etc." || auditCategoryMinor.trim()) &&
             (generateFormat !== "collaboration" || collaborationBrand.trim())
         );
+
+  const hasNamingSessionWork = useMemo(() => {
+    if (isRunning) return true;
+    if (showResults && namingResult) return true;
+    if (referenceFile) return true;
+    if (auditName.trim()) return true;
+    if (auditCategoryMajor) return true;
+    if (auditCategoryMinor.trim()) return true;
+    if (hasNamingOverviewInput(auditOverview)) return true;
+    if (hasNamingOverviewInput(generateOverview)) return true;
+    if (collaborationBrand.trim()) return true;
+    return false;
+  }, [
+    isRunning,
+    showResults,
+    namingResult,
+    referenceFile,
+    auditName,
+    auditCategoryMajor,
+    auditCategoryMinor,
+    auditOverview,
+    generateOverview,
+    collaborationBrand,
+  ]);
+
+  const { leaveConfirmDialog } = useLeavePageGuard({
+    enabled: hasNamingSessionWork,
+    description: "생성된 내용이 사라집니다. 계속하시겠습니까?",
+    confirmLabel: "계속",
+  });
+
   const overallScore = namingResult?.overallScore ?? null;
   const finalVerdict = namingResult?.goRecommendation === "go" ? "go" : "no-go";
 
@@ -841,22 +894,32 @@ export function BrandNaming() {
                             <FileCheck className="h-4 w-4 shrink-0 text-[#FF7F66]" />
                             <span className="truncate text-[13px] font-medium text-gray-900">{doc.name}</span>
                           </div>
-                          <div className="shrink-0 pl-2">
+                          <div className="flex shrink-0 items-center gap-1.5 pl-2">
                             {status?.loading ? (
                               <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500">
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                 확인 중
                               </span>
                             ) : (
-                              <span
-                                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                                  status?.connected
-                                    ? "bg-[#c8d9c4] font-bold text-[#2f4a38]"
-                                    : "bg-gray-200 text-gray-600"
-                                }`}
-                              >
-                                {status?.connected ? "연결됨" : "미연결"}
-                              </span>
+                              <>
+                                <span
+                                  className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                                    status?.connected
+                                      ? "bg-[#c8d9c4] font-bold text-[#2f4a38]"
+                                      : "bg-gray-200 text-gray-600"
+                                  }`}
+                                >
+                                  {status?.connected ? "연결됨" : "미연결"}
+                                </span>
+                                <button
+                                  type="button"
+                                  title="재동기화 (AI 요약 포함)"
+                                  onClick={() => void handleResyncFixedGuideline(doc.id)}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-gray-800"
+                                >
+                                  <RefreshCw className="h-3.5 w-3.5" />
+                                </button>
+                              </>
                             )}
                           </div>
                         </li>
@@ -1665,6 +1728,7 @@ export function BrandNaming() {
           </div>
         </div>
       )}
+      {leaveConfirmDialog}
     </div>
   );
 }

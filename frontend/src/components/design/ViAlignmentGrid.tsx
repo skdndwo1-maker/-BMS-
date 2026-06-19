@@ -1,22 +1,9 @@
+import { buildSymmetricAxisStops } from "@/design/viGridGeometry";
+
 /**
  * VI 그리드 — 캔버스 픽셀(width×height)에 맞춰 끝선이 정확히 맞도록 그립니다.
- * step: 인접 격자선 간격(px). 기본 1X의 1/2(2배 세분화) 권장.
+ * step: 인접 격자선 간격(px). 캔버스 중앙 기준 좌우·상하 대칭.
  */
-function buildAxisStops(size: number, step: number): number[] {
-  const S = Math.max(size, 0);
-  const st = Math.max(step, 0.25);
-  if (S <= 0) return [0];
-  const out: number[] = [0];
-  let p = 0;
-  const eps = 1e-4;
-  while (p + st < S - eps) {
-    p += st;
-    out.push(Math.min(S, Math.round(p * 1000) / 1000));
-  }
-  if (out[out.length - 1] < S - eps) out.push(S);
-  return [...new Set(out)].sort((a, b) => a - b);
-}
-
 export function ViAlignmentGrid({
   width,
   height,
@@ -31,8 +18,8 @@ export function ViAlignmentGrid({
   const H = Math.round(height);
   if (W <= 0 || H <= 0 || step <= 0) return null;
 
-  const xs = buildAxisStops(W, step);
-  const ys = buildAxisStops(H, step);
+  const xs = buildSymmetricAxisStops(W, step);
+  const ys = buildSymmetricAxisStops(H, step);
   const stroke = "rgba(0, 102, 255, 0.16)";
 
   return (

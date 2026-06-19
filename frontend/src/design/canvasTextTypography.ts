@@ -1,7 +1,11 @@
 import type { CSSProperties } from "react";
 import type { DesignContent } from "./types";
 import type { CanvasTextAlign } from "./types";
+import { getPosterBodyBlockTypography } from "./posterBodyDisplay";
 import { SUBTITLE_DEFAULT_FONT_WEIGHT, TITLE_DEFAULT_FONT_WEIGHT } from "./viCanvasConstants";
+
+export const BODY_DEFAULT_LINE_HEIGHT = 1.75;
+export const SAFETY_BODY_DEFAULT_LINE_HEIGHT = 1.45;
 
 export type CanvasTextEditTarget =
   | { kind: "title" }
@@ -104,8 +108,15 @@ export function subtitleTextStyle(
   };
 }
 
-export function bodyTextStyle(c: DesignContent, id: string, bodyFontSizePx: number, bodyColor: string): CSSProperties {
-  const t = c.posterBodyTypography?.[id] ?? {};
+export function bodyTextStyle(
+  c: DesignContent,
+  id: string,
+  bodyFontSizePx: number,
+  bodyColor: string,
+  opts?: { safetyCaution?: boolean }
+): CSSProperties {
+  const t = getPosterBodyBlockTypography(c, id);
+  const defaultLineHeight = opts?.safetyCaution ? SAFETY_BODY_DEFAULT_LINE_HEIGHT : BODY_DEFAULT_LINE_HEIGHT;
   return {
     fontFamily: resolveFontFamily(t.fontFamily),
     fontSize: `${bodyFontSizePx}px`,
@@ -114,7 +125,7 @@ export function bodyTextStyle(c: DesignContent, id: string, bodyFontSizePx: numb
     textDecoration: t.textDecoration ?? "none",
     textTransform: (t.textTransform ?? "none") as CSSProperties["textTransform"],
     letterSpacing: `${t.letterSpacingEm ?? 0}em`,
-    lineHeight: t.lineHeight ?? 1.75,
+    lineHeight: t.lineHeight ?? defaultLineHeight,
     color: bodyColor,
     whiteSpace: "pre-wrap",
     wordBreak: "keep-all",

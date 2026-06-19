@@ -179,7 +179,7 @@ async function buildNamingGuidelineBlock(queryText?: string): Promise<string> {
   const blocks: string[] = [];
   for (const id of NAMING_FIXED_GUIDELINE_IDS) {
     try {
-      copyFixedGuidelineToSlot(id);
+      await ensureFixedGuidelineSlotAsync(id);
     } catch (e) {
       blocks.push(
         `[${NAMING_FIXED_GUIDELINE_DISPLAY[id]}]\n고정 PDF 동기화 실패: ${e instanceof Error ? e.message : String(e)}`
@@ -700,6 +700,39 @@ app.post("/api/guidelines/:id/sync-supabase", async (req, res) => {
     res.json({
       ok: true,
       source: "supabase",
+      guideline: {
+        id: record.id,
+        displayName: record.displayName,
+        originalName: record.originalName,
+        mimeType: record.mimeType,
+        size: record.size,
+        uploadedAt: record.uploadedAt,
+        aiSummary: record.aiSummary,
+        aiAnalyzedAt: record.aiAnalyzedAt,
+        hasFile: existsSync(absPath),
+      },
+    });
+  } catch (e) {
+    res.status(400).json({ error: String(e) });
+  }
+});
+
+/** 슬롯이 비어 있으면 Supabase 또는 레포 고정 PDF로 채우기 (AI 요약 없음) */
+app.post("/api/guidelines/:id/ensure", async (req, res) => {
+  const id = req.params.id;
+  if (!FIXED_GUIDELINE_SOURCES[id]) {
+    res.status(400).json({ error: `unknown_guideline: ${id}` });
+    return;
+  }
+  try {
+    const record = await ensureFixedGuidelineSlotAsync(id);
+    if (!record) {
+      res.status(404).json({ error: "not_found" });
+      return;
+    }
+    const absPath = resolveStoredPath(record.storedRelativePath);
+    res.json({
+      ok: true,
       guideline: {
         id: record.id,
         displayName: record.displayName,

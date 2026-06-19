@@ -16,7 +16,6 @@ import type { DesignContent } from "@/design/types";
 import {
   applyDesignEditorViolation,
   applyImageDataUrl,
-  applyViTypographyToContent,
 } from "@/design/applyViPatch";
 import { applyDesignDraftProposal } from "@/design/applyDesignDraftProposal";
 import {
@@ -353,7 +352,6 @@ export function DesignAssistantChat({
       next = { ...next, posterSubtitles: subs };
     }
 
-    next = applyViTypographyToContent(next);
     onApplyContent(next);
     setTextPreview(null);
     toast.success("캔버스에 적용했습니다.");

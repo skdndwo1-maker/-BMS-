@@ -1,12 +1,20 @@
 import type { DesignContent } from "@/design/types";
 import type { CanvasTextAlign, PosterElementTypography, PosterTextCase } from "@/design/types";
 import {
+  BODY_DEFAULT_LINE_HEIGHT,
   CANVAS_FONT_OPTIONS,
   FONT_FAMILY_GEIST,
   FONT_FAMILY_PRETENDARD,
   resolveFontFamily,
   type CanvasTextEditTarget,
 } from "@/design/canvasTextTypography";
+import {
+  getPosterBodyBlockTypography,
+  resolvePosterBodyTypographyBlockId,
+  getPosterBodyFontScale,
+  getPosterBodyAlign,
+  getPosterBodyColor,
+} from "@/design/posterBodyDisplay";
 import {
   Bold,
   Italic,
@@ -39,8 +47,15 @@ export const SCALE_MAX = 300;
 export const SCALE_PRESETS = [50, 60, 75, 80, 90, 100, 110, 125, 150, 200, 250] as const;
 const LS_MIN = -0.08;
 const LS_MAX = 0.35;
-const LH_MIN = 1;
+const LH_MIN = 0.5;
 const LH_MAX = 2.6;
+const LH_STEP = 0.01;
+
+function clampLineHeight(value: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return LH_MIN;
+  return Math.min(LH_MAX, Math.max(LH_MIN, Math.round(n / LH_STEP) * LH_STEP));
+}
 
 /** 문자 색 빠른 선택 + 커스텀 컬러 */
 export const TEXT_COLOR_PRESETS: { hex: string; label: string }[] = [
@@ -61,7 +76,7 @@ export function patchTypo(
 type SharedProps = {
   target: CanvasTextEditTarget;
   content: DesignContent;
-  onDraft: (next: DesignContent) => void;
+  onDraft: (next: DesignContent | ((prev: DesignContent) => DesignContent)) => void;
   templateId?: string;
   selectionRenderTick?: number;
   getSelection?: () => [number, number] | null;
@@ -88,7 +103,8 @@ export function CanvasTextFormatControls({
 
   const typoTitle = content.posterTitleTypography;
   const typoFooter = content.posterFooterTypography;
-  const typoBody = kind === "body" ? content.posterBodyTypography?.[target.id] : undefined;
+  const typoBody =
+    kind === "body" ? getPosterBodyBlockTypography(content, target.id) : undefined;
   const typoSub = kind === "subtitle" ? content.posterSubtitleTypography?.[target.id] : undefined;
 
   const fontValue =
@@ -100,6 +116,8 @@ export function CanvasTextFormatControls({
           ? typoBody?.fontFamily ?? ""
           : typoSub?.fontFamily ?? "";
 
+  const bodyBlockId = kind === "body" ? resolvePosterBodyTypographyBlockId(content, target.id) : "";
+
   const scale =
     kind === "title"
       ? isSafetyFixedScale
@@ -110,7 +128,7 @@ export function CanvasTextFormatControls({
         : kind === "body"
           ? isSafetyFixedScale
             ? SAFETY_CAUTION_BODY_FONT_SCALE
-            : content.posterBodyFontScale ?? 100
+            : getPosterBodyFontScale(content, bodyBlockId)
           : content.posterSubtitleFontScale ?? 100;
 
   const align: CanvasTextAlign =
@@ -121,7 +139,7 @@ export function CanvasTextFormatControls({
         : kind === "body"
           ? isPlacardFixedBodyAlign
             ? PLACARD_BODY_TEXT_ALIGN
-            : content.posterBodyAlign ?? "left"
+            : getPosterBodyAlign(content, bodyBlockId)
           : content.posterSubtitleAlign?.[target.id] ?? content.posterTitleAlign ?? "left";
 
   const letterEm =
@@ -139,7 +157,7 @@ export function CanvasTextFormatControls({
       : kind === "footer"
         ? typoFooter?.lineHeight ?? 1.6
         : kind === "body"
-          ? typoBody?.lineHeight ?? 1.75
+          ? typoBody?.lineHeight ?? BODY_DEFAULT_LINE_HEIGHT
           : typoSub?.lineHeight ?? 1.35;
 
   const fw =
@@ -182,7 +200,7 @@ export function CanvasTextFormatControls({
       : kind === "footer"
         ? content.posterFooterColor ?? "#B0B0B0"
         : kind === "body"
-          ? content.bodyColor ?? "#5A5A5A"
+          ? getPosterBodyColor(content, bodyBlockId)
           : content.subtitleColor ?? content.titleColor ?? "#1A1A1A";
 
   const boldThreshold =
@@ -195,22 +213,38 @@ export function CanvasTextFormatControls({
   const setScale = (n: number) => {
     if (isSafetyFixedScale) return;
     const v = Math.round(Math.min(SCALE_MAX, Math.max(SCALE_MIN, n)));
-    if (kind === "title") onDraft({ ...content, posterTitleFontScale: v });
-    else if (kind === "footer") onDraft({ ...content, posterFooterFontScale: v });
-    else if (kind === "body") onDraft({ ...content, posterBodyFontScale: v });
-    else onDraft({ ...content, posterSubtitleFontScale: v });
+    if (kind === "title") onDraft((prev) => ({ ...prev, posterTitleFontScale: v }));
+    else if (kind === "footer") onDraft((prev) => ({ ...prev, posterFooterFontScale: v }));
+    else if (kind === "body") {
+      const id = resolvePosterBodyTypographyBlockId(content, target.id);
+      onDraft((prev) => {
+        const resolvedId = resolvePosterBodyTypographyBlockId(prev, id);
+        return {
+          ...prev,
+          posterBodyFontScales: { ...(prev.posterBodyFontScales ?? {}), [resolvedId]: v },
+        };
+      });
+    } else onDraft((prev) => ({ ...prev, posterSubtitleFontScale: v }));
   };
 
   const setAlign = (a: CanvasTextAlign) => {
     if (isPlacardFixedBodyAlign) return;
-    if (kind === "title") onDraft({ ...content, posterTitleAlign: a });
-    else if (kind === "footer") onDraft({ ...content, posterFooterAlign: a });
-    else if (kind === "body") onDraft({ ...content, posterBodyAlign: a });
-    else
-      onDraft({
-        ...content,
-        posterSubtitleAlign: { ...(content.posterSubtitleAlign ?? {}), [target.id]: a },
+    if (kind === "title") onDraft((prev) => ({ ...prev, posterTitleAlign: a }));
+    else if (kind === "footer") onDraft((prev) => ({ ...prev, posterFooterAlign: a }));
+    else if (kind === "body") {
+      const id = resolvePosterBodyTypographyBlockId(content, target.id);
+      onDraft((prev) => {
+        const resolvedId = resolvePosterBodyTypographyBlockId(prev, id);
+        return {
+          ...prev,
+          posterBodyAligns: { ...(prev.posterBodyAligns ?? {}), [resolvedId]: a },
+        };
       });
+    } else
+      onDraft((prev) => ({
+        ...prev,
+        posterSubtitleAlign: { ...(prev.posterSubtitleAlign ?? {}), [target.id]: a },
+      }));
   };
 
   /**
@@ -226,31 +260,52 @@ export function CanvasTextFormatControls({
     }
     if (kind === "title") onDraft({ ...content, titleColor: hex });
     else if (kind === "footer") onDraft({ ...content, posterFooterColor: hex });
-    else if (kind === "body") onDraft({ ...content, bodyColor: hex });
-    else onDraft({ ...content, subtitleColor: hex });
+    else if (kind === "body") {
+      const id = resolvePosterBodyTypographyBlockId(content, target.id);
+      onDraft((prev) => {
+        const resolvedId = resolvePosterBodyTypographyBlockId(prev, id);
+        const colors = { ...(prev.posterBodyColors ?? {}), [resolvedId]: hex };
+        const first = resolvePosterBodyTypographyBlockId(prev, "body-1");
+        return {
+          ...prev,
+          posterBodyColors: colors,
+          ...(resolvedId === first || first === resolvedId ? { bodyColor: hex } : {}),
+        };
+      });
+    } else onDraft((prev) => ({ ...prev, subtitleColor: hex }));
   };
 
   const applyTypo = (patch: Partial<PosterElementTypography>) => {
     if (kind === "title")
-      onDraft({ ...content, posterTitleTypography: patchTypo(content.posterTitleTypography, patch) });
+      onDraft((prev) => ({
+        ...prev,
+        posterTitleTypography: patchTypo(prev.posterTitleTypography, patch),
+      }));
     else if (kind === "footer")
-      onDraft({ ...content, posterFooterTypography: patchTypo(content.posterFooterTypography, patch) });
-    else if (kind === "body")
-      onDraft({
-        ...content,
-        posterBodyTypography: {
-          ...(content.posterBodyTypography ?? {}),
-          [target.id]: patchTypo(content.posterBodyTypography?.[target.id], patch),
-        },
+      onDraft((prev) => ({
+        ...prev,
+        posterFooterTypography: patchTypo(prev.posterFooterTypography, patch),
+      }));
+    else if (kind === "body") {
+      const bodyId = resolvePosterBodyTypographyBlockId(content, target.id);
+      onDraft((prev) => {
+        const resolvedId = resolvePosterBodyTypographyBlockId(prev, bodyId);
+        return {
+          ...prev,
+          posterBodyTypography: {
+            ...(prev.posterBodyTypography ?? {}),
+            [resolvedId]: patchTypo(getPosterBodyBlockTypography(prev, resolvedId), patch),
+          },
+        };
       });
-    else
-      onDraft({
-        ...content,
+    } else
+      onDraft((prev) => ({
+        ...prev,
         posterSubtitleTypography: {
-          ...(content.posterSubtitleTypography ?? {}),
-          [target.id]: patchTypo(content.posterSubtitleTypography?.[target.id], patch),
+          ...(prev.posterSubtitleTypography ?? {}),
+          [target.id]: patchTypo(prev.posterSubtitleTypography?.[target.id], patch),
         },
-      });
+      }));
   };
 
   const partialRange = getSelection?.();
@@ -489,28 +544,24 @@ export function CanvasTextFormatControls({
           type="button"
           className={iconBtn}
           title="행간 줄임"
-          onClick={() => applyTypo({ lineHeight: Math.max(LH_MIN, Math.round((lineH - 0.05) * 100) / 100) })}
+          onClick={() => applyTypo({ lineHeight: clampLineHeight(lineH - LH_STEP) })}
         >
           <Minus className="h-3 w-3" />
         </button>
         <Input
-          className="h-8 w-12 border-gray-200 px-1 text-[10px] tabular-nums"
+          className="h-8 w-14 border-gray-200 px-1 text-[10px] tabular-nums"
           type="number"
-          step={0.05}
+          step={LH_STEP}
           min={LH_MIN}
           max={LH_MAX}
-          value={lineH}
-          onChange={(e) =>
-            applyTypo({
-              lineHeight: Math.min(LH_MAX, Math.max(LH_MIN, Number(e.target.value) || LH_MIN)),
-            })
-          }
+          value={Number(lineH.toFixed(2))}
+          onChange={(e) => applyTypo({ lineHeight: clampLineHeight(Number(e.target.value)) })}
         />
         <button
           type="button"
           className={iconBtn}
           title="행간 늘림"
-          onClick={() => applyTypo({ lineHeight: Math.min(LH_MAX, Math.round((lineH + 0.05) * 100) / 100) })}
+          onClick={() => applyTypo({ lineHeight: clampLineHeight(lineH + LH_STEP) })}
         >
           <Plus className="h-3 w-3" />
         </button>

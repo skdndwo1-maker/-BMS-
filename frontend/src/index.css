@@ -27,6 +27,25 @@ body {
   background: #f5f5f5;
 }
 
+/*보내기 캡처: 편집용 외곽선·그림자·선택 UI는 결과물에서 제외 */
+#design-canvas[data-export-capture="true"] {
+  box-shadow: none !important;
+}
+
+#design-canvas[data-export-capture="true"] [data-canvas-overlay-root] {
+  outline: none !important;
+  outline-offset: 0 !important;
+}
+
+#design-canvas[data-export-capture="true"] [data-canvas-selection-chrome] {
+  outline: none !important;
+  border-radius: 0 !important;
+}
+
+#design-canvas[data-export-capture="true"] [data-canvas-inline-edit] {
+  display: none !important;
+}
+
 /* Option 페이지 — 4타일 호버: 오렌지 버튼 + 숨쉬는(breathe) glow */
 @keyframes optionCardBreathe {
   0%,

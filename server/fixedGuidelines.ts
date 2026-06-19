@@ -23,7 +23,8 @@ export type FixedGuidelineSpec = {
  */
 export const FIXED_GUIDELINE_SOURCES: Record<string, FixedGuidelineSpec> = {
   "uplus-brand-guideline": {
-    relativeSource: "data/guidelines/U+ 브랜드 가이드라인/U+ 브랜드 가이드라인.pdf",
+    relativeSource: "data/guidelines/U+_Brand_Guidelines.pdf",
+    legacyRelativeSources: ["data/guidelines/U+ 브랜드 가이드라인/U+ 브랜드 가이드라인.pdf"],
     displayName: "U+ 브랜드 가이드라인"
   },
   "uplus-vi-guideline": {

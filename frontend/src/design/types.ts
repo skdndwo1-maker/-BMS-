@@ -166,6 +166,8 @@ export interface DesignContent {
   posterTitleFontScale?: number;
   posterBodyFontScale?: number;
   posterFooterFontScale?: number;
+  /** 본문 블록별 크기 배율 % (미지정 시 posterBodyFontScale → 100) */
+  posterBodyFontScales?: Record<string, number>;
   /** 부제 블록 공통 크기 배율 (메인 타이틀 대비 기본 비율에 곱함) */
   posterSubtitleFontScale?: number;
 
@@ -213,6 +215,8 @@ export interface DesignContent {
   posterTitleOnCanvas?: boolean;
   posterBodyOnCanvas?: boolean;
   posterFooterOnCanvas?: boolean;
+  /** 사용자가 캔버스에서 유의사항을 삭제한 경우 true — 자동 복구 제외 */
+  posterFooterUserDismissed?: boolean;
 
   /** 부제 (메인 타이틀 외, 최대 3) — 캔버스별 rect */
   posterSubtitles?: Array<{ id: string; text: string }>;
@@ -256,12 +260,16 @@ export interface DesignContent {
   /** 포스터: 메인 타이틀/본문/하단 유의사항 정렬 */
   posterTitleAlign?: CanvasTextAlign;
   posterBodyAlign?: CanvasTextAlign;
+  /** 본문 블록별 정렬 (미지정 시 posterBodyAlign → left) */
+  posterBodyAligns?: Record<string, CanvasTextAlign>;
   posterFooterAlign?: CanvasTextAlign;
   /** 부제 블록별 정렬 (미지정 시 메인 타이틀 정렬과 동일하게 취급) */
   posterSubtitleAlign?: Record<string, CanvasTextAlign>;
 
   /** 하단 유의사항 글자색 (미지정 시 VI 회색 톤) */
   posterFooterColor?: string;
+  /** 본문 블록별 글자색 (미지정 시 bodyColor) */
+  posterBodyColors?: Record<string, string>;
 
   /** 캔버스 툴바 타이포 세부 */
   posterTitleTypography?: PosterElementTypography;

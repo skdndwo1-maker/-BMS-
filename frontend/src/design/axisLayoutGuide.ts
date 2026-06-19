@@ -176,7 +176,12 @@ function computeWebWideLayout(size: Pick<CanvasSize, "width" | "height">): AxisL
     bodyRect: rect(contentX, bodyY, textW, bodyH),
     badgeRect: rect(contentX, badgeY, textW, badgeH),
     imageRect: rect(imageX, imageY, imageW, imageH),
-    footerRect: rect(contentX, badgeY - normY(0.035, size), textW, normY(0.035, size)),
+    footerRect: rect(
+      contentX,
+      1 - marginBottom - normY(0.035, size),
+      textW,
+      normY(0.035, size)
+    ),
     imageCornerRadiusPx: scaleBrandCornerRadiusPx(IMAGE_RADIUS.wide.px, IMAGE_RADIUS.wide.refShort, size),
   };
 }
@@ -218,7 +223,12 @@ function computeWebBasicLayout(
     bodyRect: rect(contentX, bodyY, textW, bodyH),
     badgeRect: rect(contentX, badgeY, textW, badgeH),
     imageRect: rect(imageX, imageY, imageW, imageH),
-    footerRect: rect(contentX, badgeY - normY(0.04, size), textW, normY(0.04, size)),
+    footerRect: rect(
+      contentX,
+      1 - marginBottom - normY(0.04, size),
+      textW,
+      normY(0.04, size)
+    ),
     imageCornerRadiusPx: scaleBrandCornerRadiusPx(IMAGE_RADIUS.basic.px, IMAGE_RADIUS.basic.refShort, size),
   };
 }
@@ -232,6 +242,8 @@ function computeWebSquareLayout(size: Pick<CanvasSize, "width" | "height">): Axi
   const imageY = m + badgeH;
   const titleY = imageY + imageH;
   const titleH = Math.max(normY(0.1, size), 1 - m - titleY);
+  const footerH = normY(0.04, size);
+  const footerY = 1 - m - footerH;
 
   return {
     category: "square",
@@ -241,7 +253,7 @@ function computeWebSquareLayout(size: Pick<CanvasSize, "width" | "height">): Axi
     bodyRect: rect(m, titleY, innerW, 0.001),
     badgeRect: rect(m + innerW * 0.22, badgeY, innerW * 0.56, badgeH),
     imageRect: rect(m, imageY, innerW, imageH),
-    footerRect: rect(m, titleY, innerW, 0.001),
+    footerRect: rect(m, footerY, innerW, footerH),
     imageCornerRadiusPx: scaleBrandCornerRadiusPx(IMAGE_RADIUS.square.px, IMAGE_RADIUS.square.refShort, size),
   };
 }
@@ -363,7 +375,12 @@ function computePosterFullImageLayout(size: Pick<CanvasSize, "width" | "height">
     bodyRect: rect(margin, normY(oneXRatio * 8, size), 0.5, normY(oneXRatio * 4, size)),
     badgeRect: rect(margin, normY(oneXRatio * 1.3, size), 0.35, normY(oneXRatio * 1.5, size)),
     imageRect: rect(0, 0, 1, 1),
-    footerRect: rect(1 - margin - 0.15, 1 - normY(oneXRatio * 2.5, size), 0.15, normY(oneXRatio * 2, size)),
+    footerRect: rect(
+      margin,
+      1 - normY(oneXRatio * 2.5, size),
+      1 - margin * 2,
+      normY(oneXRatio * 2, size)
+    ),
     imageCornerRadiusPx: 0,
   };
 }
@@ -666,7 +683,9 @@ export function applyAxisLayoutGuide(
     posterBodyAlign:
       layout.category === "placard-wide" ? "center" : "left",
     posterFooterRect: layout.footerRect,
-    posterFooterOnCanvas: content.posterFooterOnCanvas ?? layout.category === "placard-wide",
+    posterFooterOnCanvas:
+      content.posterFooterOnCanvas ?? (content.posterFooterUserDismissed ? false : true),
+    posterFooterAlign: content.posterFooterAlign ?? "left",
     posterBackgroundImageRect: layout.imageRect,
     posterImagePlacementMode: isFullImagePoster ? "full-background" : content.posterImagePlacementMode ?? "round-box",
     posterBadgeRect: layout.badgeRect,
@@ -698,6 +717,81 @@ export function shouldApplyAxisLayoutGuide(
   if (id === "placard-vertical" || id === "placard-600x1800") return false;
 
   return true;
+}
+
+const MIN_VISIBLE_FOOTER_NORM_H = 0.012;
+
+function isPlacardManagedFooterTemplate(
+  templateId?: string,
+  templateCategory?: TemplateCategory
+): boolean {
+  const id = (templateId ?? "").trim();
+  return (
+    templateCategory === "placard" ||
+    id === "placard-wide-landscape" ||
+    id === "placard-1000x600" ||
+    id === "placard-2000x1000" ||
+    id === "placard-600x1800" ||
+    id === "placard-vertical"
+  );
+}
+
+function isDegenerateFooterRect(r?: NormalizedRect): boolean {
+  if (!r) return true;
+  return r.height < MIN_VISIBLE_FOOTER_NORM_H || r.width < 0.02;
+}
+
+/**
+ * 레거시 저장값 복구: posterFooterOnCanvas=false·거의 0 높이 rect 등으로
+ * 유의사항이 안 보이던 디자인을 템플릿 기준 하단 좌측 영역으로 되돌린다.
+ */
+export function migratePosterFooterForTemplate(
+  content: DesignContent,
+  opts: {
+    templateId?: string;
+    templateCategory?: TemplateCategory;
+    canvasSize: Pick<CanvasSize, "width" | "height">;
+  }
+): DesignContent {
+  const id = (opts.templateId ?? "").trim();
+  if (id === "rcs-568x368" || id === "safety-caution-maintenance") return content;
+  if (opts.templateCategory === "rcs" || opts.templateCategory === "safety-caution") return content;
+  if (content.posterFooterUserDismissed) return content;
+
+  const placardManaged = isPlacardManagedFooterTemplate(id, opts.templateCategory);
+  const layout = placardManaged
+    ? null
+    : computeBrandLayoutRectsForTemplate(opts.templateCategory, opts.templateId, opts.canvasSize);
+
+  let next = content;
+  let touched = false;
+
+  if (content.posterFooterOnCanvas === false) {
+    next = { ...next, posterFooterOnCanvas: true };
+    if (layout && !next.posterFooterRectLocked) {
+      next = { ...next, posterFooterRect: layout.footerRect };
+    }
+    touched = true;
+  }
+
+  const defaultAlign =
+    placardManaged || layout?.category === "placard-wide" ? "center" : "left";
+
+  if (next.posterFooterAlign == null) {
+    next = { ...next, posterFooterAlign: defaultAlign };
+    touched = true;
+  }
+
+  if (
+    layout &&
+    !next.posterFooterRectLocked &&
+    isDegenerateFooterRect(next.posterFooterRect)
+  ) {
+    next = { ...next, posterFooterRect: layout.footerRect };
+    touched = true;
+  }
+
+  return touched ? next : content;
 }
 
 export { SUBTITLE_DEFAULT_FONT_WEIGHT, BADGE_DEFAULT_FONT_WEIGHT };

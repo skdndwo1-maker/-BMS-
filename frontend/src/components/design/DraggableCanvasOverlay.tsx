@@ -5,6 +5,8 @@
 import { useRef, useCallback, useState, type ReactNode } from "react";
 import { Lock, Unlock, X } from "lucide-react";
 import { computeCanvasRoundedBoxRadiusPx } from "@/design/canvasRoundedBox";
+import { snapPxToSymmetricGrid, snapSizeToSymmetricGrid } from "@/design/viGridGeometry";
+import { CANVAS_DRAG_THRESHOLD_PX, clampPxRectInCanvas } from "@/design/canvasRectClamp";
 
 export type NormalizedRect = { x: number; y: number; width: number; height: number };
 
@@ -46,6 +48,8 @@ interface Props {
   minWidthPx?: number;
   /** 리사이즈 최소 높이(px). 미지정 시 24 */
   minHeightPx?: number;
+  /** 캔버스 가장자리 안쪽 여백(px). 텍스트 박스 등 경계 제한에 사용 */
+  canvasInsetPx?: number;
   onOverlayDoubleClick?: (e: React.MouseEvent) => void;
   /** 선택 시 라벨 옆에 표시 — 캔버스에서 해당 박스 제거 */
   onRequestDelete?: () => void;
@@ -72,6 +76,7 @@ export function DraggableCanvasOverlay({
   snapStepPx,
   minWidthPx,
   minHeightPx,
+  canvasInsetPx = 0,
   onOverlayDoubleClick,
   onRequestDelete,
   onToggleLock,
@@ -99,6 +104,29 @@ export function DraggableCanvasOverlay({
 
   const dragStart = useRef<{ mx: number; my: number; ox: number; oy: number } | null>(null);
 
+  const emitClampedRect = useCallback(
+    (xPx: number, yPx: number, wPx: number, hPx: number) => {
+      const clamped = clampPxRectInCanvas(
+        xPx,
+        yPx,
+        wPx,
+        hPx,
+        canvasW,
+        canvasH,
+        minW,
+        minH,
+        canvasInsetPx
+      );
+      onRectChange({
+        x: clamped.x / canvasW,
+        y: clamped.y / canvasH,
+        width: clamped.width / canvasW,
+        height: clamped.height / canvasH,
+      });
+    },
+    [canvasW, canvasH, canvasInsetPx, minW, minH, onRectChange]
+  );
+
   const onMouseDownMove = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -106,27 +134,37 @@ export function DraggableCanvasOverlay({
       if (locked) return;
       dragStart.current = { mx: e.clientX, my: e.clientY, ox: px.x, oy: px.y };
       let didInnerPan = false;
+      let dragging = false;
       const onMove = (ev: MouseEvent) => {
         if (!dragStart.current) return;
         const dx = ev.clientX - dragStart.current.mx;
         const dy = ev.clientY - dragStart.current.my;
         if (onPan && !locked && (ev.altKey || panDragInsteadOfMove)) {
+          if (!dragging) {
+            if (Math.abs(dx) < CANVAS_DRAG_THRESHOLD_PX && Math.abs(dy) < CANVAS_DRAG_THRESHOLD_PX) return;
+            dragging = true;
+          }
           didInnerPan = true;
           onPan({ dx, dy }, ev);
           return;
         }
+        if (!dragging) {
+          if (Math.abs(dx) < CANVAS_DRAG_THRESHOLD_PX && Math.abs(dy) < CANVAS_DRAG_THRESHOLD_PX) return;
+          dragging = true;
+        }
         const fine = snapStepPx ?? 1;
         const snap = ev.shiftKey ? 10 : fine;
-        const sx = Math.round((dragStart.current.ox + dx) / snap) * snap;
-        const sy = Math.round((dragStart.current.oy + dy) / snap) * snap;
-        const newX = Math.max(0, Math.min(canvasW - Math.max(minW, px.width), sx));
-        const newY = Math.max(0, Math.min(canvasH - Math.max(minH, px.height), sy));
-        onRectChange({
-          x: newX / canvasW,
-          y: newY / canvasH,
-          width: rect.width,
-          height: rect.height,
-        });
+        const rawX = dragStart.current.ox + dx;
+        const rawY = dragStart.current.oy + dy;
+        const sx =
+          snap > 1
+            ? snapPxToSymmetricGrid(rawX, canvasW, snap)
+            : Math.round(rawX / snap) * snap;
+        const sy =
+          snap > 1
+            ? snapPxToSymmetricGrid(rawY, canvasH, snap)
+            : Math.round(rawY / snap) * snap;
+        emitClampedRect(sx, sy, px.width, px.height);
       };
       const onUp = () => {
         if (didInnerPan) onPanEnd?.();
@@ -137,7 +175,7 @@ export function DraggableCanvasOverlay({
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     },
-    [rect, px, canvasW, canvasH, onRectChange, onSelect, snapStepPx, onPan, onPanEnd, panDragInsteadOfMove, minW, minH, locked]
+    [px, onSelect, snapStepPx, onPan, onPanEnd, panDragInsteadOfMove, locked, emitClampedRect, canvasW, canvasH]
   );
 
   const resizeStart = useRef<{
@@ -197,18 +235,24 @@ export function DraggableCanvasOverlay({
         }
 
         // 스냅
-        nw = Math.max(minW, Math.round(nw / snap) * snap);
-        nh = Math.max(minH, Math.round(nh / snap) * snap);
-        nx = Math.round(nx / snap) * snap;
-        ny = Math.round(ny / snap) * snap;
+        if (snap > 1) {
+          nw = snapSizeToSymmetricGrid(nw, snap, minW);
+          nh = snapSizeToSymmetricGrid(nh, snap, minH);
+          nx = snapPxToSymmetricGrid(nx, canvasW, snap);
+          ny = snapPxToSymmetricGrid(ny, canvasH, snap);
+        } else {
+          nw = Math.max(minW, Math.round(nw / snap) * snap);
+          nh = Math.max(minH, Math.round(nh / snap) * snap);
+          nx = Math.round(nx / snap) * snap;
+          ny = Math.round(ny / snap) * snap;
+        }
 
-        nx = Math.max(0, Math.min(canvasW - nw, nx));
-        ny = Math.max(0, Math.min(canvasH - nh, ny));
+        const clamped = clampPxRectInCanvas(nx, ny, nw, nh, canvasW, canvasH, minW, minH, canvasInsetPx);
         onRectChange({
-          x: nx / canvasW,
-          y: ny / canvasH,
-          width: nw / canvasW,
-          height: nh / canvasH,
+          x: clamped.x / canvasW,
+          y: clamped.y / canvasH,
+          width: clamped.width / canvasW,
+          height: clamped.height / canvasH,
         });
       };
       const onUp = () => {
@@ -219,7 +263,7 @@ export function DraggableCanvasOverlay({
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     },
-    [rect, px, canvasW, canvasH, onRectChange, onSelect, snapStepPx, minW, minH, locked]
+    [px, canvasW, canvasH, onRectChange, onSelect, snapStepPx, minW, minH, locked, canvasInsetPx]
   );
 
   const handles: { key: ResizeHandle; style: React.CSSProperties }[] = [
@@ -235,6 +279,7 @@ export function DraggableCanvasOverlay({
 
   return (
     <div
+      data-canvas-overlay-root
       style={{
         position: "absolute",
         left: `${px.x}px`,
@@ -286,6 +331,7 @@ export function DraggableCanvasOverlay({
         handles.map((h) => (
           <div
             key={h.key}
+            data-canvas-export-exclude="true"
             style={{
               position: "absolute",
               width: `${HANDLE}px`,
@@ -302,6 +348,7 @@ export function DraggableCanvasOverlay({
         ))}
       {(isSelected || hover) && (label || onRequestDelete || onToggleLock) ? (
         <div
+          data-canvas-export-exclude="true"
           style={{
             position: "absolute",
             top: "-28px",

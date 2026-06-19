@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import { LoginScreen } from "@/components/LoginScreen";
 import { OptionSelection } from "@/components/OptionSelection";
 import { BrandInspection } from "@/components/BrandInspection";
@@ -10,20 +10,17 @@ import { AdminReview } from "@/components/AdminReview";
 import { MyDesignsDashboard } from "@/components/MyDesignsDashboard";
 import { SimplyHeart } from "@/components/SimplyHeart";
 
-export default function AppGate() {
-  return (
-    <Routes>
-      <Route path="/" element={<LoginScreen />} />
-      <Route path="/options" element={<OptionSelection />} />
-      <Route path="/brand-graphics" element={<TemplateGallery />} />
-      <Route path="/create/:templateId" element={<DesignEditor />} />
-      <Route path="/dashboard" element={<MyDesignsDashboard />} />
-      <Route path="/inspection" element={<BrandInspection />} />
-      <Route path="/naming" element={<BrandNaming />} />
-      <Route path="/simply-heart" element={<SimplyHeart />} />
-      <Route path="/library" element={<BrandLibrary />} />
-      <Route path="/admin/review" element={<AdminReview />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  );
-}
+/** useBlocker 등 data router API를 쓰기 위해 createBrowserRouter 사용 */
+export const appRouter = createBrowserRouter([
+  { path: "/", element: <LoginScreen /> },
+  { path: "/options", element: <OptionSelection /> },
+  { path: "/brand-graphics", element: <TemplateGallery /> },
+  { path: "/create/:templateId", element: <DesignEditor /> },
+  { path: "/dashboard", element: <MyDesignsDashboard /> },
+  { path: "/inspection", element: <BrandInspection /> },
+  { path: "/naming", element: <BrandNaming /> },
+  { path: "/simply-heart", element: <SimplyHeart /> },
+  { path: "/library", element: <BrandLibrary /> },
+  { path: "/admin/review", element: <AdminReview /> },
+  { path: "*", element: <Navigate to="/" replace /> },
+]);

@@ -13,11 +13,16 @@ import { FIXED_GUIDELINE_SOURCES } from "./fixedGuidelines.js";
 
 const LIBRARY_BUCKET = "brand-library";
 
-/** Supabase library_assets.file_name 기준 (category=guide) */
-export const SUPABASE_GUIDELINE_FILE_NAMES: Record<string, string> = {
+/** Supabase library_assets.file_name 기준 (category=guide). 복수 후보는 앞에서부터 조회합니다. */
+export const SUPABASE_GUIDELINE_FILE_NAMES: Record<string, string | string[]> = {
+  "uplus-brand-guideline": ["U+_Brand_Guidelines.pdf", "U+ 브랜드 가이드라인.pdf"],
   "uplus-vi-guideline": "U+_VI_Guidelines.pdf",
   "simply-uplus-guideline": "Simply_U+_Guidelines.pdf",
 };
+
+function fileNameCandidates(spec: string | string[]): string[] {
+  return Array.isArray(spec) ? spec : [spec];
+}
 
 export function canSyncGuidelineFromSupabase(): boolean {
   return Boolean(
@@ -30,10 +35,11 @@ export function canSyncGuidelineFromSupabase(): boolean {
  */
 export async function syncGuidelineFromSupabaseLibrary(id: string): Promise<GuidelineRecord> {
   const spec = FIXED_GUIDELINE_SOURCES[id];
-  const fileName = SUPABASE_GUIDELINE_FILE_NAMES[id];
-  if (!spec || !fileName) {
+  const fileNameSpec = SUPABASE_GUIDELINE_FILE_NAMES[id];
+  if (!spec || !fileNameSpec) {
     throw new Error(`supabase_guideline_not_configured: ${id}`);
   }
+  const fileNames = fileNameCandidates(fileNameSpec);
   if (!canSyncGuidelineFromSupabase()) {
     throw new Error("SUPABASE_URL 또는 SUPABASE_SERVICE_ROLE_KEY가 설정되어 있지 않습니다.");
   }
@@ -43,7 +49,7 @@ export async function syncGuidelineFromSupabaseLibrary(id: string): Promise<Guid
     .from("library_assets")
     .select("file_path,file_name,name,mime_type,file_size")
     .eq("category", "guide")
-    .eq("file_name", fileName)
+    .in("file_name", fileNames)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -51,7 +57,7 @@ export async function syncGuidelineFromSupabaseLibrary(id: string): Promise<Guid
   if (qErr) throw new Error(qErr.message);
   if (!row?.file_path) {
     throw new Error(
-      `Supabase library_assets에 guide / ${fileName} 가 없습니다. Brand Library에 업로드해 주세요.`
+      `Supabase library_assets에 guide / ${fileNames.join(" 또는 ")} 가 없습니다. Brand Library에 업로드해 주세요.`
     );
   }
 
@@ -71,7 +77,8 @@ export async function syncGuidelineFromSupabaseLibrary(id: string): Promise<Guid
   }
 
   mkdirSync(GUIDELINES_DIR, { recursive: true });
-  const safe = fileName.replace(/[^a-zA-Z0-9._+-]/g, "_");
+  const storedName = row.file_name ?? fileNames[0];
+  const safe = storedName.replace(/[^a-zA-Z0-9._+-]/g, "_");
   const fname = `${id}-${Date.now()}-${safe}`;
   const destAbs = join(GUIDELINES_DIR, fname);
   const buf = Buffer.from(await blob.arrayBuffer());
@@ -80,7 +87,7 @@ export async function syncGuidelineFromSupabaseLibrary(id: string): Promise<Guid
   const record: GuidelineRecord = {
     id,
     displayName: spec.displayName,
-    originalName: row.file_name ?? fileName,
+    originalName: storedName,
     storedRelativePath: join("data", "guidelines", fname).replace(/\\/g, "/"),
     mimeType: row.mime_type || "application/pdf",
     size: row.file_size ?? buf.length,

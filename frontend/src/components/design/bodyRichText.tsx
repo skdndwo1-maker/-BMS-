@@ -90,7 +90,7 @@ export function renderPlainWithTriStyleRanges(
       </span>
     );
   }
-  return <>{nodes}</>;
+  return <span style={baseStyle}>{nodes}</span>;
 }
 
 export function renderBodyWithBold(text: string, baseStyle: CSSProperties): ReactNode {

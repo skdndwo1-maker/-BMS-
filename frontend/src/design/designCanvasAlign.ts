@@ -13,10 +13,45 @@ import {
 
 export type NormalizedRect = { x: number; y: number; width: number; height: number };
 
-export function clampNormRect(r: NormalizedRect): NormalizedRect {
-  const x = Math.max(0, Math.min(1 - r.width, r.x));
-  const y = Math.max(0, Math.min(1 - r.height, r.y));
-  return { ...r, x, y };
+/** 텍스트 자동 맞춤·드래그 시 캔버스 안쪽 여백(정규화, 양쪽 합 4% ≈ maxWidth 96%) */
+export const TEXT_CANVAS_MARGIN_N = 0.02;
+
+export type ClampNormRectOptions = {
+  margin?: number;
+  marginX?: number;
+  marginY?: number;
+  minWidth?: number;
+  minHeight?: number;
+};
+
+/** 캔버스 [0,1] 안으로 위치·크기를 강제. 넘치면 크기를 줄이고 위치를 보정 */
+export function clampNormRect(r: NormalizedRect, opts?: ClampNormRectOptions): NormalizedRect {
+  const mx = opts?.marginX ?? opts?.margin ?? 0;
+  const my = opts?.marginY ?? opts?.margin ?? 0;
+  const minW = opts?.minWidth ?? 0.001;
+  const minH = opts?.minHeight ?? 0.001;
+  const maxW = Math.max(minW, 1 - 2 * mx);
+  const maxH = Math.max(minH, 1 - 2 * my);
+  const width = Math.max(minW, Math.min(maxW, r.width));
+  const height = Math.max(minH, Math.min(maxH, r.height));
+  const x = Math.max(mx, Math.min(1 - mx - width, r.x));
+  const y = Math.max(my, Math.min(1 - my - height, r.y));
+  return { x, y, width, height };
+}
+
+export function isTextCanvasRectKey(key: string): boolean {
+  return (
+    key === "title" ||
+    key === "footer" ||
+    key === "body" ||
+    key.startsWith("body:") ||
+    key.startsWith("subtitle:") ||
+    key.startsWith("badge:")
+  );
+}
+
+export function clampPosterRectForKey(key: string, r: NormalizedRect): NormalizedRect {
+  return isTextCanvasRectKey(key) ? clampNormRect(r, { margin: TEXT_CANVAS_MARGIN_N }) : clampNormRect(r);
 }
 
 /**
@@ -124,7 +159,7 @@ export function applyGroupRectDelta(c: DesignContent, keys: string[], dx: number
       }
     } else {
       const r = getPosterRectByKey(next, key);
-      if (r) next = setPosterRectByKey(next, key, clampNormRect({ ...r, x: r.x + dx, y: r.y + dy }));
+      if (r) next = setPosterRectByKey(next, key, clampPosterRectForKey(key, { ...r, x: r.x + dx, y: r.y + dy }));
     }
   }
   if (assetMut) next = { ...next, assetLayers: assets };
@@ -184,14 +219,14 @@ export function applyGroupRectLeaderResize(
     if (!r) continue;
 
     if (key === leaderKey) {
-      next = setPosterRectByKey(next, key, clampNormRect(nextLeader));
+      next = setPosterRectByKey(next, key, clampPosterRectForKey(key, nextLeader));
     } else {
       const nw = Math.max(GROUP_RESIZE_MIN, r.width + dw);
       const nh = Math.max(GROUP_RESIZE_MIN, r.height + dh);
       next = setPosterRectByKey(
         next,
         key,
-        clampNormRect({
+        clampPosterRectForKey(key, {
           x: r.x + dx,
           y: r.y + dy,
           width: nw,
@@ -255,7 +290,7 @@ export function applyMultiAlign(c: DesignContent, keys: string[], mode: AlignMod
   let assets = [...(next.assetLayers ?? [])];
 
   const setPoster = (it: AlignItem, r: NormalizedRect) => {
-    if (it.kind === "poster") next = setPosterRectByKey(next, it.key, clampNormRect(r));
+    if (it.kind === "poster") next = setPosterRectByKey(next, it.key, clampPosterRectForKey(it.key, r));
     else {
       const idx = assets.findIndex((a) => a.id === it.assetId);
       if (idx >= 0) assets[idx] = { ...assets[idx], ...r };

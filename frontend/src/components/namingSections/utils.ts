@@ -6,6 +6,10 @@ import type {
 import { DEFAULT_TIER_LABELS, NAMING_OVERVIEW_FIELDS } from "./constants";
 import type { NamingOverviewFields } from "./types";
 
+export function hasNamingOverviewInput(fields: NamingOverviewFields): boolean {
+  return NAMING_OVERVIEW_FIELDS.some(({ key }) => String(fields[key] ?? "").trim().length > 0);
+}
+
 /** 작명 개요 6필드를 프롬프트용 멀티라인 텍스트로 변환 */
 export function buildNamingOverviewForPrompt(fields: NamingOverviewFields): string {
   const rows = NAMING_OVERVIEW_FIELDS.map(({ key, label }) => {

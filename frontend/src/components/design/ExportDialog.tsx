@@ -168,7 +168,7 @@ export function ExportDialog({ open, onOpenChange, templateName, canvasSize }: E
         <DialogHeader>
           <DialogTitle>디자인 내보내기</DialogTitle>
           <DialogDescription>
-            작업 중인 템플릿 비율·규격을 유지한 채 해상도만 조절합니다. VI 그리드는 파일에 포함되지 않습니다.
+            작업 중인 템플릿 비율·규격을 유지한 채 해상도만 조절합니다. VI 그리드·선택 UI·편집 가이드는 파일에 포함되지 않습니다.
           </DialogDescription>
         </DialogHeader>
 
