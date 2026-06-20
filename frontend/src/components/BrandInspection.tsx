@@ -2,10 +2,10 @@ import { Fragment, useState, useRef, useEffect, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   analyzeGuideline,
-  ensureGuidelineSlot,
   fetchGuideline,
   fetchHealth,
   runInspection,
+  syncGuidelineFromFixed,
   type GuidelineInfo,
 } from "@/lib/guidelineApi";
 import { GUIDELINE_REFERENCE_OPTIONS, DESIGN_EDITOR_INSPECTION_GUIDELINE_ID } from "@/constants/guidelineReferences";
