@@ -256,6 +256,8 @@ export interface DesignContent {
   posterBodyRectLocked?: Record<string, boolean>;
   /** 부제 블록별 자동 크기 일시 중단 */
   posterSubtitleRectLocked?: Record<string, boolean>;
+  /** 뱃지 블록별 자동 크기·로고 회피 일시 중단 */
+  posterBadgeRectLocked?: Record<string, boolean>;
 
   /** 포스터: 메인 타이틀/본문/하단 유의사항 정렬 */
   posterTitleAlign?: CanvasTextAlign;

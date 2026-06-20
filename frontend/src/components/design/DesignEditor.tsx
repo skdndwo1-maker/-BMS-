@@ -1319,7 +1319,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                       </div>
                       <div className="min-w-0 flex-1">
                         <h3 className="text-sm font-semibold text-gray-900">AI 디자인 어시스턴트</h3>
-                        <p className="text-xs text-gray-500">AI 디자인 제안 · 텍스트 제안 · VI 검수 · 시각 교정</p>
+                        <p className="text-xs text-gray-500">AI 디자인 제안 · 텍스트 제안 · 브랜드 검수 · 시각 교정</p>
                       </div>
                     </div>
                     <DesignAssistantChat

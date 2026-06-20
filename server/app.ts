@@ -32,9 +32,11 @@ import {
 } from "./gemini.js";
 import {
   copyFixedGuidelineToSlot,
+  DESIGN_EDITOR_INSPECTION_GUIDELINE_ID,
   ensureFixedGuidelineSlot,
   ensureFixedGuidelineSlotAsync,
   FIXED_GUIDELINE_SOURCES,
+  LEGACY_LIBRARY_ONLY_GUIDELINE_ID,
   NAMING_FIXED_GUIDELINE_DISPLAY,
   NAMING_FIXED_GUIDELINE_IDS
 } from "./fixedGuidelines.js";
@@ -115,7 +117,11 @@ app.use(express.json({ limit: "50mb" }));
 
 ensureDataDirs();
 
-for (const id of ["uplus-brand-guideline", "uplus-vi-guideline", "simply-uplus-guideline"] as const) {
+for (const id of [
+  "uplus-vi-guideline",
+  "simply-uplus-guideline",
+  DESIGN_EDITOR_INSPECTION_GUIDELINE_ID,
+] as const) {
   void ensureFixedGuidelineSlotAsync(id).catch((e) => {
     console.warn(
       `[guideline] startup ensure ${id}:`,
@@ -207,15 +213,15 @@ async function buildMandatoryViPdfContextForDesignEditor(
       ok: false,
       status: 400,
       error: known
-        ? `VI 가이드라인 PDF("${known.displayName}")를 서버에서 불러오지 못했습니다. 레포에 고정 PDF가 포함되어 있는지 확인해 주세요.`
-        : "VI 가이드라인 PDF가 등록되어 있지 않습니다. 브랜드 검수 화면에서 PDF 가이드를 동기화·업로드한 뒤 다시 시도해 주세요."
+        ? `브랜드 가이드라인 PDF("${known.displayName}")를 서버에서 불러오지 못했습니다. 레포에 고정 PDF가 포함되어 있는지 확인해 주세요.`
+        : "브랜드 가이드라인 PDF가 등록되어 있지 않습니다. 브랜드 검수 화면에서 PDF 가이드를 동기화·업로드한 뒤 다시 시도해 주세요."
     };
   }
   if (g.mimeType !== "application/pdf") {
     return {
       ok: false,
       status: 400,
-      error: `디자인 검수·교정은 VI 가이드라인 PDF가 필요합니다. 현재 슬롯 "${g.displayName}"은(는) PDF가 아닙니다.`
+      error: `디자인 검수·교정은 브랜드 가이드라인 PDF가 필요합니다. 현재 슬롯 "${g.displayName}"은(는) PDF가 아닙니다.`
     };
   }
   const abs = resolveStoredPath(g.storedRelativePath);
@@ -223,7 +229,7 @@ async function buildMandatoryViPdfContextForDesignEditor(
     return {
       ok: false,
       status: 400,
-      error: "VI 가이드라인 PDF 파일을 서버에서 찾을 수 없습니다. 가이드를 다시 등록해 주세요."
+      error: "브랜드 가이드라인 PDF 파일을 서버에서 찾을 수 없습니다. 가이드를 다시 등록해 주세요.",
     };
   }
   const excerpt = (await excerptGuidelineForInspection(g)).trim();
@@ -238,11 +244,11 @@ async function buildMandatoryViPdfContextForDesignEditor(
       ok: false,
       status: 400,
       error:
-        "VI 가이드라인 PDF에서 추론용 텍스트를 추출하지 못했습니다. 텍스트가 포함된 PDF인지 확인하거나 가이드를 다시 등록해 주세요."
+        "브랜드 가이드라인 PDF에서 추론용 텍스트를 추출하지 못했습니다. 텍스트가 포함된 PDF인지 확인하거나 가이드를 다시 등록해 주세요."
     };
   }
 
-  let block = `[VI 가이드라인 PDF — 필수 추론 근거]\n문서: ${g.displayName ?? guidelineId}\n\n${excerpt}`;
+  let block = `[브랜드 가이드라인 PDF — 필수 추론 근거]\n문서: ${g.displayName ?? guidelineId}\n\n${excerpt}`;
 
   if (queryText?.trim() && process.env.GEMINI_API_KEY?.trim() && process.env.SUPABASE_URL?.trim()) {
     try {
@@ -255,7 +261,7 @@ async function buildMandatoryViPdfContextForDesignEditor(
           (m, i) =>
             `(${i + 1}) [${m.source_title}] (sim=${m.similarity!.toFixed(3)})\n${String(m.content).trim()}`
         );
-        block += `\n\n[관련 VI 가이드라인 구절 — RAG]\n${lines.join("\n\n---\n")}`;
+        block += `\n\n[관련 브랜드 가이드라인 구절 — RAG]\n${lines.join("\n\n---\n")}`;
       }
     } catch (e) {
       console.error(
@@ -266,10 +272,35 @@ async function buildMandatoryViPdfContextForDesignEditor(
   }
 
   if (g.aiSummary?.trim()) {
-    block = `[VI 가이드라인 AI 요약 — 참고]\n${g.aiSummary.trim()}\n\n---\n\n${block}`;
+    block = `[브랜드 가이드라인 AI 요약 — 참고]\n${g.aiSummary.trim()}\n\n---\n\n${block}`;
   }
 
   return { ok: true, block };
+}
+
+/** 디자인 에디터 텍스트 제안·텍스트 검수 — Jason B2C PDF + Simply U+ */
+async function buildDesignEditorTextGuidelineBlock(
+  queryText?: string
+): Promise<{ ok: true; block: string } | { ok: false; error: string; status: number }> {
+  await ensureFixedGuidelineSlotAsync(DESIGN_EDITOR_INSPECTION_GUIDELINE_ID);
+  await ensureFixedGuidelineSlotAsync("simply-uplus-guideline");
+  const jason = await buildMandatoryViPdfContextForDesignEditor(
+    DESIGN_EDITOR_INSPECTION_GUIDELINE_ID,
+    queryText
+  );
+  if (!jason.ok) return jason;
+  const simply = await buildPrimaryGuidelineBlock("simply-uplus-guideline", queryText);
+  return {
+    ok: true,
+    block: `[텍스트 제안·검수 — B2C Brand Guidelines(Jason) + Simply U+]\n\n${jason.block}\n\n---\n\n${simply}`,
+  };
+}
+
+/** V1.1(라이브러리 전용) 등 AI 추론 금지 슬롯 → Jason PDF로 대체 */
+function resolveAiGuidelineId(raw: unknown, fallback: string = DESIGN_EDITOR_INSPECTION_GUIDELINE_ID): string {
+  const id = typeof raw === "string" && raw.trim() ? raw.trim() : fallback;
+  if (id === LEGACY_LIBRARY_ONLY_GUIDELINE_ID) return DESIGN_EDITOR_INSPECTION_GUIDELINE_ID;
+  return id;
 }
 
 const storage = multer.diskStorage({
@@ -720,6 +751,30 @@ app.post("/api/guidelines/:id/sync-supabase", async (req, res) => {
 /** 슬롯이 비어 있으면 Supabase 또는 레포 고정 PDF로 채우기 (AI 요약 없음) */
 app.post("/api/guidelines/:id/ensure", async (req, res) => {
   const id = req.params.id;
+
+  // 사용자가 업로드한 가이드라인이 이미 있으면 sync 없이 바로 반환
+  const existing = getGuideline(id);
+  if (existing) {
+    const absPath = resolveStoredPath(existing.storedRelativePath);
+    if (existsSync(absPath)) {
+      res.json({
+        ok: true,
+        guideline: {
+          id: existing.id,
+          displayName: existing.displayName,
+          originalName: existing.originalName,
+          mimeType: existing.mimeType,
+          size: existing.size,
+          uploadedAt: existing.uploadedAt,
+          aiSummary: existing.aiSummary,
+          aiAnalyzedAt: existing.aiAnalyzedAt,
+          hasFile: true,
+        },
+      });
+      return;
+    }
+  }
+
   if (!FIXED_GUIDELINE_SOURCES[id]) {
     res.status(400).json({ error: `unknown_guideline: ${id}` });
     return;
@@ -809,7 +864,7 @@ app.post(
     { name: "supplementaryReference", maxCount: 1 }
   ]),
   async (req, res) => {
-    const guidelineId = (req.body?.guidelineId as string) || "uplus-brand-guideline";
+    const guidelineId = resolveAiGuidelineId(req.body?.guidelineId);
     const businessCategory =
       typeof req.body?.businessCategory === "string" ? req.body.businessCategory.trim() : "";
     const designGroupRaw = typeof req.body?.designGroup === "string" ? req.body.designGroup.trim() : "";
@@ -1158,7 +1213,7 @@ app.post(
 
 app.post("/api/inspection/followup", async (req, res) => {
   try {
-    const guidelineId = (req.body?.guidelineId as string) || "uplus-brand-guideline";
+    const guidelineId = resolveAiGuidelineId(req.body?.guidelineId);
     const message = String(req.body?.message ?? "").trim();
     const designMime = String(req.body?.designMime ?? "");
     const designBase64 = String(req.body?.designBase64 ?? "");
@@ -1240,7 +1295,7 @@ app.post("/api/inspection/followup", async (req, res) => {
 
 app.post("/api/inspection/additional-revision", async (req, res) => {
   try {
-    const guidelineId = (req.body?.guidelineId as string) || "uplus-brand-guideline";
+    const guidelineId = resolveAiGuidelineId(req.body?.guidelineId);
     const designMime = String(req.body?.designMime ?? "");
     const designBase64 = String(req.body?.designBase64 ?? "");
     const revisionBase64 =
@@ -1357,7 +1412,6 @@ app.post("/api/inspection/additional-revision", async (req, res) => {
 
 app.post("/api/design-editor/suggest-text", async (req, res) => {
   try {
-    const guidelineId = (req.body?.guidelineId as string) || "simply-uplus-guideline";
     const contentJson = String(req.body?.contentJson ?? "");
     const templateLabel = String(req.body?.templateLabel ?? "template");
     const rawTargets = req.body?.targets;
@@ -1382,10 +1436,15 @@ app.post("/api/design-editor/suggest-text", async (req, res) => {
     }
     const creativeTopic =
       typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
-    await ensureFixedGuidelineSlotAsync(guidelineId);
-    const guidelineSummary = await buildPrimaryGuidelineBlock(guidelineId, [templateLabel, creativeTopic].filter(Boolean).join("\n\n"));
+    const textGuide = await buildDesignEditorTextGuidelineBlock(
+      [templateLabel, creativeTopic].filter(Boolean).join("\n\n")
+    );
+    if (!textGuide.ok) {
+      res.status(textGuide.status).json({ error: textGuide.error });
+      return;
+    }
     const out = await runDesignEditorTextSuggestion({
-      guidelineSummary,
+      guidelineSummary: textGuide.block,
       contentJson,
       targets,
       templateLabel,
@@ -1396,11 +1455,17 @@ app.post("/api/design-editor/suggest-text", async (req, res) => {
       req,
       type: "design_editor_text_suggestion",
       status: "pending_review",
-      guidelineId,
+      guidelineId: `${DESIGN_EDITOR_INSPECTION_GUIDELINE_ID},simply-uplus-guideline`,
       templateId: templateLabel || null,
-      inputJson: { guidelineId, templateLabel, targets, creativeTopic: creativeTopic || null, contentJsonBytes: contentJson.length },
+      inputJson: {
+        guidelineIds: [DESIGN_EDITOR_INSPECTION_GUIDELINE_ID, "simply-uplus-guideline"],
+        templateLabel,
+        targets,
+        creativeTopic: creativeTopic || null,
+        contentJsonBytes: contentJson.length,
+      },
       outputJson: out as unknown as Record<string, unknown>,
-      inputText: guidelineSummary,
+      inputText: textGuide.block,
       outputText: JSON.stringify(out),
       model: process.env.GEMINI_MODEL?.trim() || null,
     });
@@ -1412,7 +1477,6 @@ app.post("/api/design-editor/suggest-text", async (req, res) => {
 
 app.post("/api/design-editor/propose-draft", async (req, res) => {
   try {
-    const guidelineId = "uplus-vi-guideline";
     const contentJson = String(req.body?.contentJson ?? "");
     const templateLabel = String(req.body?.templateLabel ?? "template");
     const creativeTopic =
@@ -1441,18 +1505,16 @@ app.post("/api/design-editor/propose-draft", async (req, res) => {
       return;
     }
 
-    await ensureFixedGuidelineSlotAsync(guidelineId);
-    const viPdf = await buildMandatoryViPdfContextForDesignEditor(
-      guidelineId,
+    const textGuide = await buildDesignEditorTextGuidelineBlock(
       [templateLabel, creativeTopic].filter(Boolean).join("\n\n")
     );
-    if (!viPdf.ok) {
-      res.status(viPdf.status).json({ error: viPdf.error });
+    if (!textGuide.ok) {
+      res.status(textGuide.status).json({ error: textGuide.error });
       return;
     }
 
     const proposal = await runDesignEditorDraftProposal({
-      guidelineSummary: viPdf.block,
+      guidelineSummary: textGuide.block,
       contentJson,
       templateLabel,
       templateMeta,
@@ -1468,11 +1530,19 @@ app.post("/api/design-editor/propose-draft", async (req, res) => {
     let generatedAsset: { name: string; svg: string } | null = null;
 
     if (proposal.image.include && proposal.image.brief) {
+      const visualGuide = await buildMandatoryViPdfContextForDesignEditor(
+        DESIGN_EDITOR_INSPECTION_GUIDELINE_ID,
+        [templateLabel, creativeTopic, proposal.image.brief].filter(Boolean).join("\n\n")
+      );
+      if (!visualGuide.ok) {
+        res.status(visualGuide.status).json({ error: visualGuide.error });
+        return;
+      }
       const imgOut = await runDesignEditorImageGeneration({
         direction: proposal.image.brief,
         templateLabel,
         creativeTopic,
-        guidelineContext: viPdf.block.slice(0, 12_000),
+        guidelineContext: visualGuide.block.slice(0, 12_000),
       });
       const first = imgOut?.alternatives[0];
       if (first) {
@@ -1488,7 +1558,6 @@ app.post("/api/design-editor/propose-draft", async (req, res) => {
         direction: proposal.asset.brief,
         templateLabel,
         creativeTopic,
-        guidelineContext: viPdf.block.slice(0, 12_000),
       });
       const first = assetOut?.alternatives[0];
       if (first) {
@@ -1500,10 +1569,11 @@ app.post("/api/design-editor/propose-draft", async (req, res) => {
       req,
       type: "design_editor_draft_proposal",
       status: "pending_review",
-      guidelineId,
+      guidelineId: DESIGN_EDITOR_INSPECTION_GUIDELINE_ID,
       templateId: templateLabel || null,
       inputJson: {
-        guidelineId,
+        guidelineId: DESIGN_EDITOR_INSPECTION_GUIDELINE_ID,
+        textGuidelineIds: [DESIGN_EDITOR_INSPECTION_GUIDELINE_ID, "simply-uplus-guideline"],
         templateLabel,
         creativeTopic,
         templateMeta: templateMeta ?? null,
@@ -1671,7 +1741,7 @@ app.post("/api/design-editor/develop-image", async (req, res) => {
 
 app.post("/api/design-editor/correct-canvas", async (req, res) => {
   try {
-    const guidelineId = (req.body?.guidelineId as string) || "uplus-vi-guideline";
+    const guidelineId = DESIGN_EDITOR_INSPECTION_GUIDELINE_ID;
     const designBase64 = String(req.body?.designBase64 ?? "").replace(/^data:image\/\w+;base64,/, "");
     const designMime = String(req.body?.designMime ?? "image/png");
     const mode = req.body?.mode === "holistic" ? "holistic" : "inspection_followup";
@@ -1751,7 +1821,7 @@ app.post("/api/design-editor/correct-canvas", async (req, res) => {
 
 app.post("/api/design-editor/inspect", async (req, res) => {
   try {
-    const guidelineId = (req.body?.guidelineId as string) || "uplus-vi-guideline";
+    const guidelineId = DESIGN_EDITOR_INSPECTION_GUIDELINE_ID;
     const imageBase64 = String(req.body?.imageBase64 ?? "").replace(/^data:image\/\w+;base64,/, "");
     const imageMime = String(req.body?.imageMime ?? "image/png");
     const templateId = String(req.body?.templateId ?? "");
@@ -1808,7 +1878,6 @@ app.post("/api/design-editor/inspect", async (req, res) => {
 
 app.post("/api/design-editor/replace-image", async (req, res) => {
   try {
-    const guidelineId = (req.body?.guidelineId as string) || "uplus-vi-guideline";
     const designBase64 = String(req.body?.designBase64 ?? "").replace(/^data:image\/\w+;base64,/, "");
     const designMime = String(req.body?.designMime ?? "");
     const imageBrief = String(req.body?.imageBrief ?? "").trim();
@@ -1825,7 +1894,7 @@ app.post("/api/design-editor/replace-image", async (req, res) => {
 
     const creativeTopic =
       typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
-    const guidelineContext = await buildPrimaryGuidelineBlock(guidelineId, [imageBrief, creativeTopic].filter(Boolean).join("\n\n"));
+    const guidelineContext = creativeTopic ? `[제작 주제]\n${creativeTopic}` : "";
     const out = await generateDesignEditorReplacementImage({
       designBase64,
       designMime,

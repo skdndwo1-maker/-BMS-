@@ -193,19 +193,19 @@ export async function runDesignEditorCanvasInspection(opts: {
   const guideBlock = opts.guidelineSummary.slice(0, 72_000);
   const contentBlock = opts.designContentJson.slice(0, 24_000);
 
-  const basePrompt = `역할: LG U+ VI·브랜드 가이드라인을 준수하는 시니어 디자인 QA입니다.
+  const basePrompt = `역할: LG U+ B2C Brand Guidelines(Jason)를 준수하는 시니어 디자인 QA입니다.
 
 작업:
 1) 첨부 이미지는 브랜드 제작 에디터의 캔버스 화면 캡처입니다.
-2) 아래 [캔버스 텍스트/설정 JSON]과 이미지가 일치한다고 가정하고, VI(로고·컬러·타이포·여백·톤)를 평가하세요.
-3) 텍스트 수정이 필요하면 U+ Simple 톤(간결·고객 친화·불필요한 수식어 배제)으로 proposed* 필드에 한국어 문안을 제안하세요. 변경이 필요 없으면 해당 필드는 빈 문자열("")입니다.
+2) 아래 [캔버스 텍스트/설정 JSON]과 이미지가 일치한다고 가정하고, **Jason B2C Brand Guidelines PDF** 기준으로 로고·컬러·타이포·여백·톤·레이아웃을 평가하세요.
+3) 텍스트 수정이 필요하면 간결·고객 친화 톤으로 proposed* 필드에 한국어 문안을 제안하세요. 변경이 필요 없으면 해당 필드는 빈 문자열("")입니다.
 4) 이미지/일러스트가 부적절하면 fixKind=image, imageReplacementBrief에 교체 방향을 구체적으로 적으세요.
 5) 배치·그리드·여백 문제는 fixKind=layout, layoutReset을 poster_defaults(포스터형 템플릿) 또는 clear_text_overrides(사용자 임의 폰트크기 초기화) 등으로 제안하세요.
 6) violations는 실제 개선점만 나열하고, fixKind를 반드시 채우세요.
 
 템플릿: ${opts.templateLabel}
 ${opts.creativeTopic?.trim() ? `\n[제작 주제·의도]\n${opts.creativeTopic.trim()}\n` : ""}
-[참조 가이드라인]
+[참조 가이드라인 — Jason B2C Brand Guidelines PDF]
 ${guideBlock}
 
 [캔버스 텍스트/설정 JSON]
@@ -401,18 +401,18 @@ export async function runDesignEditorTextSuggestion(opts: {
 요청된 슬롯: ${targetStr}
 [제작 주제]에 「부제2만」「본문2만」「부제1·본문1만」「전체」처럼 원하는 슬롯만 지정할 수 있습니다. 지정이 없으면 요청된 슬롯 전부에 맞춥니다.`;
 
-  const prompt = `역할: LG U+ 브랜드 카피라이터. **Simply U+ 가이드라인**의 표현·톤·금지 사항을 따릅니다.
+  const prompt = `역할: LG U+ 브랜드 카피라이터. **B2C Brand Guidelines(Jason)** 의 브랜드 규정과 **Simply U+ 가이드라인**의 표현·톤·금지 사항을 함께 따릅니다.
 
 작업:
 1) 아래 [캔버스 JSON]의 목적·톤·메시지 방향을 파악하세요.
-2) [참조 Simply U+ 가이드라인]의 Simple 톤(간결·명료·고객 중심)과 실천 과제를 반영하세요.
+2) [참조 가이드라인]의 Simple 톤(간결·명료·고객 중심), B2C 브랜드 규정, 실천 과제를 반영하세요.
 3) 요청된 슬롯만 채우고, 요청되지 않은 필드는 반드시 빈 문자열 "" 입니다.
 ${slotHelp}
 4) JSON만 출력합니다.
 
 템플릿: ${opts.templateLabel}
 ${opts.creativeTopic?.trim() ? `\n[제작 주제·의도]\n${opts.creativeTopic.trim()}\n` : ""}
-[참조 Simply U+ 가이드라인]
+[참조 가이드라인 — Jason B2C + Simply U+]
 ${guide}
 
 [캔버스 JSON]
@@ -489,20 +489,20 @@ export async function runDesignEditorCanvasVisualCorrection(opts: {
     ? `[제작 주제]\n${opts.creativeTopic.trim()}\n\n`
     : "";
 
-  const viPdfFirst = `[VI 가이드라인 PDF — 절대 우선]
-프롬프트의 [참조 가이드라인 및 검수 맥락] 블록은 PDF에서 추출한 필수 근거입니다. 색상·로고·타이포·여백·톤·금지 사항 등은 PDF와 아래 규칙이 충돌할 경우 **항상 PDF를 따르세요**.`;
+  const viPdfFirst = `[B2C Brand Guidelines PDF (Jason) — 절대 우선]
+프롬프트의 [참조 가이드라인 및 검수 맥락] 블록은 Jason For Parsing PDF에서 추출한 필수 근거입니다. 색상·로고·타이포·여백·톤·금지 사항 등은 PDF와 아래 규칙이 충돌할 경우 **항상 PDF를 따르세요**.`;
 
   const typographyRules = `[디자인 에디터 텍스트 교정 규칙 — PDF 다음 우선순위]
-첨부 캔버스 이미지의 한국어 카피를 손볼 때(문구·줄 수·상대 크기), VI PDF 요구를 만족하는 범위에서 반드시:
+첨부 캔버스 이미지의 한국어 카피를 손볼 때(문구·줄 수·상대 크기), Jason B2C PDF 요구를 만족하는 범위에서 반드시:
 1) **메인 타이틀**: 상대 글자 크기를 **150% 스케일(기준 대비 1.5배 느낌)**로 잡고, **줄 수는 2줄을 절대 넘기지 않음**. 장황한 표현은 줄이고 간결한 문구로 교정.
 2) **부제1(첫 번째 부제)**: **현재와 비슷한 글자 크기 관계**를 유지하되, **1줄을 넘기지 않음**(자동 줄바꿈 없이 한 줄). 길면 의미를 유지하며 축약.
 3) **본문(주 본문 블록)**: **기본형(100%) 대비 약 60% 크기**로 작고 단정하게 보이게 하고, **줄 수는 2줄을 넘기지 않음**. 핵심만 남기도록 다듬음.
 
-레이아웃·비율·이미지 구도는 원본 의도를 해치지 않되, 위 텍스트 규칙과 VI PDF를 동시에 만족하는 **단일 교정 이미지**를 출력하세요.`;
+레이아웃·비율·이미지 구도는 원본 의도를 해치지 않되, 위 텍스트 규칙과 Jason B2C PDF를 동시에 만족하는 **단일 교정 이미지**를 출력하세요.`;
 
   const modeNotes =
     opts.mode === "holistic"
-      ? `[디자인 교정 모드 — 전체]\n캔버스 전체를 브랜드 VI에 맞게 시각적으로 다듬은 단일 이미지를 생성하세요.`
+      ? `[디자인 교정 모드 — 전체]\n캔버스 전체를 Jason B2C Brand Guidelines에 맞게 시각적으로 다듬은 단일 이미지를 생성하세요.`
       : `[디자인 교정 모드 — 검수 반영]\n아래 검수 지적을 우선 반영하여 수정 이미지를 생성하세요.`;
 
   const notes = `${viPdfFirst}\n\n${typographyRules}\n\n${topicBlock}${modeNotes}`;
@@ -1065,11 +1065,10 @@ export async function runDesignEditorDraftProposal(opts: {
   const guide = opts.guidelineSummary.slice(0, 72_000);
   const ctx = opts.contentJson.slice(0, 28_000);
 
-  const prompt = `역할: LG U+ 브랜드 디자인 에디터 AI. **VI 가이드라인 PDF**의 색·타이포·여백·톤·무드를 **절대 우선**합니다.
+  const prompt = `역할: LG U+ 브랜드 디자인 에디터 AI. 텍스트·레이아웃은 **Jason B2C + Simply U+** 가이드를, 이미지 시안은 **Jason B2C**만 참조합니다.
 
 작업: [제작 주제]와 [캔버스 정보]에 맞는 **완성형 디자인 초안**을 JSON으로 설계하세요.
-로고 위치·메인 타이틀·부제(0~3)·본문(1~3)·유의사항·배경/히어로 이미지·픽토그램/일러스트를 **VI 규정 범위 안에서** 배치하되, 캔버스 비율 안에서 겹치지 않게 합니다.
-프롬프트의 [참조 VI 가이드라인]과 충돌 시 **항상 VI PDF를 따르세요**.
+로고 위치·메인 타이틀·부제(0~3)·본문(1~3)·유의사항·배경/히어로 이미지·픽토그램/일러스트를 **Jason B2C + Simply 규정 범위 안에서** 배치하되, 캔버스 비율 안에서 겹치지 않게 합니다.
 
 [캔버스 정보]
 - 템플릿 ID: ${opts.templateLabel}
@@ -1093,7 +1092,7 @@ export async function runDesignEditorDraftProposal(opts: {
 [제작 주제]
 ${topic}
 
-[참조 VI 가이드라인]
+[참조 가이드라인 — Jason B2C + Simply U+ (텍스트·레이아웃)]
 ${guide}
 
 [현재 캔버스 JSON]

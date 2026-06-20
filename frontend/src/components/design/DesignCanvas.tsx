@@ -16,6 +16,7 @@ import { DraggableCanvasOverlay } from "./DraggableCanvasOverlay";
 
 import { defaultCI, defaultBI, defaultSLOGAN } from "@/design/defaultLogos";
 import {
+  applyLogoCollisionAvoidance,
   computeCanvasLogoHeightPx,
   computeCanvasLogoPositionStyle,
   computeDefaultCustomUploadedLogoRect,
@@ -1265,7 +1266,11 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           onContentChange(merged);
           return;
         }
-        const u = { ...c, posterBadgeRects: { ...(c.posterBadgeRects ?? {}), [id]: next } };
+        const u = {
+          ...c,
+          posterBadgeRects: { ...(c.posterBadgeRects ?? {}), [id]: next },
+          posterBadgeRectLocked: { ...(c.posterBadgeRectLocked ?? {}), [id]: true },
+        };
         contentRef.current = u;
         onContentChange(u);
         return;
@@ -1280,7 +1285,11 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           return;
         }
       }
-      const u = { ...c, posterBadgeRects: { ...(c.posterBadgeRects ?? {}), [id]: next } };
+      const u = {
+        ...c,
+        posterBadgeRects: { ...(c.posterBadgeRects ?? {}), [id]: next },
+        posterBadgeRectLocked: { ...(c.posterBadgeRectLocked ?? {}), [id]: true },
+      };
       contentRef.current = u;
       onContentChange(u);
     },
@@ -1316,7 +1325,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           return;
         }
       }
-      const u = { ...c, posterTitleRect: next };
+      const u = { ...c, posterTitleRect: next, posterTitleRectLocked: true };
       contentRef.current = u;
       onContentChange(u);
     },
@@ -1362,7 +1371,13 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         }
       }
       const rects = { ...(c.posterBodyRects ?? {}), [id]: next };
-      const u = { ...c, posterBodyRects: rects, ...(id === "body-1" ? { posterBodyRect: next } : {}) };
+      const lockedMap = { ...(c.posterBodyRectLocked ?? {}), [id]: true };
+      const u = {
+        ...c,
+        posterBodyRects: rects,
+        posterBodyRectLocked: lockedMap,
+        ...(id === "body-1" ? { posterBodyRect: next } : {}),
+      };
       contentRef.current = u;
       onContentChange(u);
     },
@@ -1403,7 +1418,11 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           return;
         }
       }
-      const u = { ...c, posterSubtitleRects: { ...(c.posterSubtitleRects ?? {}), [id]: next } };
+      const u = {
+        ...c,
+        posterSubtitleRects: { ...(c.posterSubtitleRects ?? {}), [id]: next },
+        posterSubtitleRectLocked: { ...(c.posterSubtitleRectLocked ?? {}), [id]: true },
+      };
       contentRef.current = u;
       onContentChange(u);
     },
@@ -1439,7 +1458,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           return;
         }
       }
-      const u = { ...c, posterFooterRect: next };
+      const u = { ...c, posterFooterRect: next, posterFooterRectLocked: true };
       contentRef.current = u;
       onContentChange(u);
     },
@@ -1788,6 +1807,60 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     onContentDraftChange,
     fitNormalizedRect,
     fontReadyTick,
+  ]);
+
+  /** 로고(BI/CI/Slogan·업로드)와 겹치는 자동 배치 요소를 실시간 재배치 — 수동 드래그(*Locked) 제외 */
+  useLayoutEffect(() => {
+    const draft = onContentDraftChange;
+    if (!draft) return;
+    if (isPlacard || isSafetyCaution) return;
+    if (!content.logoOption && !content.logo) return;
+
+    const patch = applyLogoCollisionAvoidance({
+      content,
+      displayW,
+      displayH,
+      logoPosition,
+      logoHeightPx,
+      customUploadedLogoRect: uploadedLogoRect,
+      isPlacard,
+      placardMaxWidthPx: placardLogoLayout?.maxWidthPx,
+    });
+    if (patch) draft(patch);
+  }, [
+    content,
+    content.title,
+    content.emphasizedTitle,
+    content.bodyText,
+    content.posterBodies,
+    content.posterSubtitles,
+    content.subtitle,
+    content.posterBadges,
+    content.posterTitleRect,
+    content.posterFooterRect,
+    content.posterBodyRect,
+    content.posterBodyRects,
+    content.posterSubtitleRects,
+    content.posterBadgeRect,
+    content.posterBadgeRects,
+    content.posterTitleRectLocked,
+    content.posterFooterRectLocked,
+    content.posterBodyRectLocked,
+    content.posterSubtitleRectLocked,
+    content.posterBadgeRectLocked,
+    content.logoOption,
+    content.logo,
+    content.logoPosition,
+    content.customUploadedLogoRect,
+    logoPosition,
+    logoHeightPx,
+    uploadedLogoRect,
+    placardLogoLayout?.maxWidthPx,
+    displayW,
+    displayH,
+    isPlacard,
+    isSafetyCaution,
+    onContentDraftChange,
   ]);
 
   /** VI 1칸 높이의 30%까지 축소 허용(높이·폭 동일 기준의 최소 단계) */

@@ -10,10 +10,11 @@ import {
   textModelCandidates,
 } from "./shared.js";
 import { excerptGuidelineForInspection } from "./guideline.js";
+import { DESIGN_EDITOR_INSPECTION_GUIDELINE_ID } from "../fixedGuidelines.js";
 
 /** 옵션 하단 채팅: 브랜드·VI 두 축을 항상 별도 블록으로 주입 (단일 자료 편향 방지) */
 const OPTIONS_PAGE_CORE_GUIDELINE_IDS: readonly { id: string; title: string }[] = [
-  { id: "uplus-brand-guideline", title: "브랜드 가이드라인" },
+  { id: DESIGN_EDITOR_INSPECTION_GUIDELINE_ID, title: "B2C Brand Guidelines (Jason)" },
   { id: "uplus-vi-guideline", title: "VI 가이드라인" },
 ];
 

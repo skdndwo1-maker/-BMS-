@@ -11,6 +11,7 @@ type AnyRec = Record<string, unknown>;
 const GUIDELINE_LABELS: Record<string, string> = {
   "uplus-brand-guideline": "U+ 브랜드 가이드라인",
   "uplus-vi-guideline": "U+ VI 가이드라인",
+  "design-editor-brand-guideline": "LG U+ B2C Brand Guidelines (디자인 검수·교정)",
   "simply-uplus-guideline": "Simply U+ 가이드라인",
   "simply-uplus-job-guide": "직무별 Simply U+ 실행 가이드",
 };

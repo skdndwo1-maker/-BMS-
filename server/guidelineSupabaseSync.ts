@@ -18,6 +18,10 @@ export const SUPABASE_GUIDELINE_FILE_NAMES: Record<string, string | string[]> = 
   "uplus-brand-guideline": ["U+_Brand_Guidelines.pdf", "U+ 브랜드 가이드라인.pdf"],
   "uplus-vi-guideline": "U+_VI_Guidelines.pdf",
   "simply-uplus-guideline": "Simply_U+_Guidelines.pdf",
+  "design-editor-brand-guideline": [
+    "LG_U+_B2C_Brand_Guidelines_Jason_For_Parsing_low.pdf",
+    "LG U+ B2C Brand Guidelines Jason For Parsing low.pdf",
+  ],
 };
 
 function fileNameCandidates(spec: string | string[]): string[] {

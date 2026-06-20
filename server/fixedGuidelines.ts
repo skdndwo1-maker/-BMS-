@@ -25,12 +25,17 @@ export const FIXED_GUIDELINE_SOURCES: Record<string, FixedGuidelineSpec> = {
   "uplus-brand-guideline": {
     relativeSource: "data/guidelines/U+_Brand_Guidelines.pdf",
     legacyRelativeSources: ["data/guidelines/U+ 브랜드 가이드라인/U+ 브랜드 가이드라인.pdf"],
-    displayName: "U+ 브랜드 가이드라인"
+    displayName: "U+ 브랜드 가이드라인 (V1.1 — 라이브러리 보관용, AI 추론 미사용)",
   },
   "uplus-vi-guideline": {
     relativeSource: "data/guidelines/U+_VI_Guidelines.pdf",
     legacyRelativeSources: ["data/guidelines/U+ VI 가이드라인/U+ VI 가이드라인.pdf"],
     displayName: "U+ VI 가이드라인"
+  },
+  /** 디자인 에디터 AI 검수·교정·이미지 시안 — Jason B2C PDF만 */
+  "design-editor-brand-guideline": {
+    relativeSource: "data/guidelines/LG_U+_B2C_Brand_Guidelines_Jason_For_Parsing_low.pdf",
+    displayName: "LG U+ B2C Brand Guidelines (Jason For Parsing)",
   },
   "simply-uplus-guideline": {
     relativeSource: "data/guidelines/Simply_U+_Guidelines.pdf",
@@ -51,14 +56,20 @@ export const SIMPLY_HEART_FIXED_GUIDE_IDS: readonly string[] = [
 ];
 
 /** 브랜드 네이밍 생성·검수 — 항상 자동 참조(VI 제외) */
+/** 디자인 제작 — 시각(검수·교정·이미지 시안) AI 전용 Jason PDF 슬롯 */
+export const DESIGN_EDITOR_INSPECTION_GUIDELINE_ID = "design-editor-brand-guideline" as const;
+
+/** AI 추론에 사용 금지 — Brand Library(V1.1) 슬롯 id */
+export const LEGACY_LIBRARY_ONLY_GUIDELINE_ID = "uplus-brand-guideline" as const;
+
 export const NAMING_FIXED_GUIDELINE_IDS = [
   "simply-uplus-guideline",
-  "uplus-brand-guideline",
+  DESIGN_EDITOR_INSPECTION_GUIDELINE_ID,
 ] as const;
 
 export const NAMING_FIXED_GUIDELINE_DISPLAY: Record<(typeof NAMING_FIXED_GUIDELINE_IDS)[number], string> = {
   "simply-uplus-guideline": "Simply. U+ Guidebook",
-  "uplus-brand-guideline": "Brand Guideline",
+  [DESIGN_EDITOR_INSPECTION_GUIDELINE_ID]: "B2C Brand Guidelines (Jason)",
 };
 
 function resolveLocalSourcePath(spec: FixedGuidelineSpec): string | null {

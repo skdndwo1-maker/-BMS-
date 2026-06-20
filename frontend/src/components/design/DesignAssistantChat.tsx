@@ -30,6 +30,7 @@ import {
   type DesignEditorTextSuggestionTarget,
   type DesignEditorTextSuggestionResult,
 } from "@/lib/designEditorApi";
+import { DESIGN_EDITOR_INSPECTION_GUIDELINE_ID, DESIGN_EDITOR_JASON_PDF_LABEL } from "@/constants/guidelineReferences";
 import {
   DEFAULT_POSTER_SUBTITLE_RECT,
   DEFAULT_POSTER_SUBTITLE_OFFSET_Y,
@@ -165,7 +166,7 @@ export function DesignAssistantChat({
   onCorrectionReference,
   templateId,
   templateMeta,
-  guidelineId = "uplus-vi-guideline",
+  guidelineId = DESIGN_EDITOR_INSPECTION_GUIDELINE_ID,
   /** false: RCS 고정(메인·본문 1) · true: 우측 패널 부제·본문 슬롯 수와 동기(최대 각 3) */
   panelSyncedTextSuggest = false,
 }: {
@@ -293,7 +294,6 @@ export function DesignAssistantChat({
         contentJson: JSON.stringify(sanitizeDesignContent(content)),
         templateLabel: templateId,
         targets: [target],
-        guidelineId: "simply-uplus-guideline",
         creativeTopic: creativeTopic.trim() || undefined,
       });
       const text = pickTextForTarget(target, out);
@@ -499,7 +499,6 @@ export function DesignAssistantChat({
         designBase64: cap.base64,
         designMime: cap.mime,
         imageBrief: brief,
-        guidelineId,
         creativeTopic: creativeTopic.trim() || undefined,
       });
       const url = `data:${out.mimeType};base64,${out.data}`;
@@ -550,8 +549,10 @@ export function DesignAssistantChat({
   return (
     <div className="space-y-3">
       <p className="text-[10px] leading-snug text-gray-500">
-        검수·교정·AI 디자인 제안은 <span className="font-medium text-gray-700">VI 가이드라인 PDF</span>,
-        텍스트 제안은 <span className="font-medium text-gray-700">Simply U+ 가이드라인</span>을 반영합니다.
+        <span className="font-medium text-gray-700">디자인 시안(이미지)·검수·교정</span>은{" "}
+        <span className="font-medium text-gray-700">{DESIGN_EDITOR_JASON_PDF_LABEL}</span>만 참조합니다.{" "}
+        <span className="font-medium text-gray-700">텍스트 제안</span>은 동일 PDF와 Simply U+ 가이드라인을 함께 반영합니다.
+        픽토그램·일러스트 생성에는 별도 PDF를 사용하지 않습니다. (V1.1 브랜드 가이드는 AI 추론에 사용하지 않습니다.)
       </p>
 
       <div className="space-y-1.5">
@@ -586,8 +587,8 @@ export function DesignAssistantChat({
         AI 디자인 제안
       </Button>
       <p className="text-[10px] leading-snug text-gray-500">
-        캔버스 규격·유형·주제에 맞는 로고·타이틀·본문·유의사항·이미지·일러스트 초안을 제안합니다. 적용 후
-        직접 수정하고 재제안할 수 있습니다.
+        캔버스 규격·유형·주제에 맞는 로고·타이틀·본문·유의사항·이미지·일러스트 초안을 제안합니다. 텍스트는 Jason+Simply,
+        이미지 시안은 Jason PDF만 참조합니다. 적용 후 직접 수정하고 재제안할 수 있습니다.
       </p>
 
       <div className="flex gap-1 rounded-xl bg-gray-100/90 p-1">
@@ -600,7 +601,7 @@ export function DesignAssistantChat({
         <div className="space-y-2">
           <div className="flex items-start gap-1.5">
             <p className="min-w-0 flex-1 text-[11px] leading-snug text-gray-600">
-              전체 문맥·목적을 반영한 브랜드 Simple 톤 문안을 제안합니다.
+              전체 문맥·목적을 반영한 브랜드 톤 문안을 제안합니다 (Jason B2C + Simply U+).
             </p>
             <Button
               type="button"
@@ -671,7 +672,8 @@ export function DesignAssistantChat({
         <div className="space-y-2">
           <p className="text-[11px] text-gray-600">
             캔버스 캡처를 서버에 등록된{" "}
-            <span className="font-medium text-gray-800">VI 가이드라인 PDF</span>와 비교해 검수합니다. 결과는 팝업으로
+            <span className="font-medium text-gray-800">{DESIGN_EDITOR_JASON_PDF_LABEL}</span>만 기준으로
+            시각·레이아웃을 검수합니다. 결과는 팝업으로
             표시됩니다. (PDF 미등록·텍스트 추출 불가 시 검수를 실행할 수 없습니다.)
           </p>
           <Button
@@ -701,7 +703,7 @@ export function DesignAssistantChat({
       {tab === "correct" && (
         <div className="space-y-2">
           <p className="text-[11px] text-gray-600">
-            뱃지·타이틀·본문·유의·이미지 등을 VI PDF 기준으로 시각 교정한 이미지를{" "}
+            뱃지·타이틀·본문·유의·이미지 등을 {DESIGN_EDITOR_JASON_PDF_LABEL} 기준으로 시각 교정한 이미지를{" "}
             <span className="font-medium text-gray-800">캔버스 오른쪽</span>에 같은 크기·비율로 띄웁니다. 참고하며 왼쪽
             캔버스에서 따라 그리듯 수정할 수 있습니다.
           </p>
@@ -713,7 +715,7 @@ export function DesignAssistantChat({
             onClick={() => void runHolisticCorrection()}
           >
             {loading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Wand2 className="mr-2 h-3.5 w-3.5" />}
-            전체 VI 교정 실행
+            전체 브랜드 교정 실행
           </Button>
         </div>
       )}

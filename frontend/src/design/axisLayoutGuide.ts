@@ -662,6 +662,7 @@ export function applyAxisLayoutGuide(
     displayH: canvasSize.height,
     logoPosition,
     logoHeightPx,
+    logoOption: content.logoOption,
   });
 
   return {

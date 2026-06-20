@@ -2,13 +2,13 @@ import { Fragment, useState, useRef, useEffect, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   analyzeGuideline,
+  ensureGuidelineSlot,
   fetchGuideline,
   fetchHealth,
   runInspection,
-  syncGuidelineFromFixed,
   type GuidelineInfo,
 } from "@/lib/guidelineApi";
-import { GUIDELINE_REFERENCE_OPTIONS } from "@/constants/guidelineReferences";
+import { GUIDELINE_REFERENCE_OPTIONS, DESIGN_EDITOR_INSPECTION_GUIDELINE_ID } from "@/constants/guidelineReferences";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 import { GlobalBrandNav } from "@/components/GlobalBrandNav";
 import { registerGlobalNavPersist } from "@/lib/globalNavPersistence";
@@ -99,7 +99,9 @@ export function BrandInspection() {
   const [designPreview, setDesignPreview] = useState<string | null>(null);
   const [guidelineFile, setGuidelineFile] = useState<File | null>(null);
   const [guidelineText, setGuidelineText] = useState("");
-  const [selectedGuidelineLibrary, setSelectedGuidelineLibrary] = useState<string>("uplus-brand-guideline");
+  const [selectedGuidelineLibrary, setSelectedGuidelineLibrary] = useState<string>(
+    DESIGN_EDITOR_INSPECTION_GUIDELINE_ID
+  );
   const [currentStep, setCurrentStep] = useState<InspectionStep>("idle");
   const [brandScore, setBrandScore] = useState<number | null>(null);
   const [showResults, setShowResults] = useState(false);
@@ -203,9 +205,21 @@ export function BrandInspection() {
         const h = await fetchHealth();
         if (cancelled) return;
         setGeminiConfigured(h.gemini);
-        const synced = await syncGuidelineFromFixed(selectedGuidelineLibrary);
+
+        // 먼저 기존 가이드라인 파일이 있는지 확인 (사용자 업로드 포함)
+        let guidelineInfo = await fetchGuideline(selectedGuidelineLibrary);
+        // 파일이 없는 경우에만 고정 PDF 동기화 시도
+        if (!guidelineInfo?.hasFile) {
+          try {
+            const synced = await syncGuidelineFromFixed(selectedGuidelineLibrary);
+            guidelineInfo = synced.guideline;
+          } catch {
+            // 고정 PDF 동기화 실패 시 현재 상태 유지 (미연동 표시)
+          }
+        }
+
         if (cancelled) return;
-        setServerGuideline(synced.guideline);
+        setServerGuideline(guidelineInfo);
       } catch (e) {
         if (!cancelled) {
           setGeminiConfigured(null);

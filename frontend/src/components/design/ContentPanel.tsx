@@ -1519,6 +1519,10 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                           onContentChange({
                             ...content,
                             posterBadges: badges.map((x) => (x.id === b.id ? { ...x, text: v } : x)),
+                            posterBadgeRectLocked: {
+                              ...(content.posterBadgeRectLocked ?? {}),
+                              [b.id]: false,
+                            },
                           });
                         }}
                         placeholder="예) 2025 신제품 출시"
