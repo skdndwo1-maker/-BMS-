@@ -1200,6 +1200,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                       getSelection={() => designCanvasRef.current?.getInlineTextSelection() ?? null}
                       onTogglePartialStyle={(w) => designCanvasRef.current?.handleTogglePartialStyle(w)}
                       onApplyPartialColor={(hex) => designCanvasRef.current?.handleApplyPartialColor(hex)}
+                      onApplyPartialWeight={(w) => designCanvasRef.current?.handleApplyPartialWeight(w)}
                       onClose={() => setTextOptionsPanelOpen(false)}
                     />
                   )

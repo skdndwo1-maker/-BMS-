@@ -168,8 +168,12 @@ export interface DesignContent {
   posterFooterFontScale?: number;
   /** 본문 블록별 크기 배율 % (미지정 시 posterBodyFontScale → 100) */
   posterBodyFontScales?: Record<string, number>;
-  /** 부제 블록 공통 크기 배율 (메인 타이틀 대비 기본 비율에 곱함) */
+  /** 부제 블록 공통 크기 배율 (레거시) — 미지정 시 posterSubtitleFontScales → 100 */
   posterSubtitleFontScale?: number;
+  /** 부제 블록별 크기 배율 % */
+  posterSubtitleFontScales?: Record<string, number>;
+  /** 부제 블록별 글자색 */
+  posterSubtitleColors?: Record<string, string>;
 
   /** 포스터: 배경 이미지 / 뱃지 영역 — 캔버스 대비 정규화 좌표 (0~1), 중앙 캔버스에서 드래그·리사이즈 */
   posterBackgroundImageRect?: { x: number; y: number; width: number; height: number };
@@ -222,7 +226,7 @@ export interface DesignContent {
   posterSubtitles?: Array<{ id: string; text: string }>;
   posterSubtitleRects?: Record<string, { x: number; y: number; width: number; height: number }>;
 
-  /** 본문 블록 (최대 3) — 첫 블록은 bodyText와 동기화 */
+  /** 본문 블록 (최대 4) — 첫 블록은 bodyText와 동기화 */
   posterBodies?: Array<{ id: string; text: string }>;
   posterBodyRects?: Record<string, { x: number; y: number; width: number; height: number }>;
   /** 본문 블록별 굵게 구간 [start,end) — plain 텍스트 기준 */
@@ -241,6 +245,9 @@ export interface DesignContent {
   posterSubtitleBoldRanges?: Record<string, Array<{ start: number; end: number }>>;
   posterSubtitleItalicRanges?: Record<string, Array<{ start: number; end: number }>>;
   posterSubtitleUnderlineRanges?: Record<string, Array<{ start: number; end: number }>>;
+  /** 부제·본문 블록별 부분 굵기 (plain 기준) */
+  posterSubtitleWeightRanges?: Record<string, Array<{ start: number; end: number; weight: number }>>;
+  posterBodyWeightRanges?: Record<string, Array<{ start: number; end: number; weight: number }>>;
 
   /** 부분 글자색 — plain 기준 [start,end)에 hex 색상을 보관(전체 색상에 우선) */
   posterTitleColorRanges?: Array<{ start: number; end: number; color: string }>;

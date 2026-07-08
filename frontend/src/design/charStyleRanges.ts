@@ -7,6 +7,9 @@ export type CharRange = { start: number; end: number };
 /** 부분 색상 — 같은 [start,end) 범위에 색상값을 함께 보관 */
 export type ColorRange = { start: number; end: number; color: string };
 
+/** 부분 굵기 — plain 텍스트 기준 [start,end) + fontWeight */
+export type WeightRange = { start: number; end: number; weight: number };
+
 export function sanitizeCharRanges(len: number, ranges: CharRange[] | undefined): CharRange[] {
   if (!ranges?.length) return [];
   return ranges
@@ -116,6 +119,51 @@ export function applyColorOnSelection(
   for (const r of out) {
     const last = merged[merged.length - 1];
     if (last && last.end === r.start && last.color === r.color) last.end = r.end;
+    else merged.push({ ...r });
+  }
+  return merged;
+}
+
+export function sanitizeWeightRanges(len: number, ranges: WeightRange[] | undefined): WeightRange[] {
+  if (!ranges?.length) return [];
+  return ranges
+    .map((r) => ({
+      start: Math.max(0, Math.min(len, Math.min(r.start, r.end))),
+      end: Math.max(0, Math.min(len, Math.max(r.start, r.end))),
+      weight: Math.min(900, Math.max(100, Math.round(Number(r.weight) || 400))),
+    }))
+    .filter((r) => r.end > r.start);
+}
+
+/** 선택 구간 [a,b)에 굵기를 적용 */
+export function applyWeightOnSelection(
+  plain: string,
+  ranges: WeightRange[] | undefined,
+  selStart: number,
+  selEnd: number,
+  weight: number
+): WeightRange[] {
+  const len = plain.length;
+  const a = Math.max(0, Math.min(len, Math.min(selStart, selEnd)));
+  const b = Math.max(0, Math.min(len, Math.max(selStart, selEnd)));
+  const w = Math.min(900, Math.max(100, Math.round(weight)));
+  if (a === b) return sanitizeWeightRanges(len, ranges);
+  const cur = sanitizeWeightRanges(len, ranges);
+  const out: WeightRange[] = [];
+  for (const r of cur) {
+    if (r.end <= a || r.start >= b) {
+      out.push(r);
+      continue;
+    }
+    if (r.start < a) out.push({ start: r.start, end: a, weight: r.weight });
+    if (r.end > b) out.push({ start: b, end: r.end, weight: r.weight });
+  }
+  out.push({ start: a, end: b, weight: w });
+  out.sort((x, y) => x.start - y.start);
+  const merged: WeightRange[] = [];
+  for (const r of out) {
+    const last = merged[merged.length - 1];
+    if (last && last.end === r.start && last.weight === r.weight) last.end = r.end;
     else merged.push({ ...r });
   }
   return merged;

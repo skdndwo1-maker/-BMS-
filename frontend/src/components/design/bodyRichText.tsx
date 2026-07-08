@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { BoldRange } from "@/design/bodyBoldRanges";
-import type { CharRange, ColorRange } from "@/design/charStyleRanges";
+import type { CharRange, ColorRange, WeightRange } from "@/design/charStyleRanges";
 
 /**
  * plain 텍스트 + 굵게 구간(문자 오프셋)으로 렌더 (입력란에 ** 없음)
@@ -47,7 +47,12 @@ export function renderPlainWithTriStyleRanges(
   italic: CharRange[] | undefined,
   underline: CharRange[] | undefined,
   baseStyle: CSSProperties,
-  opts?: { defaultWeight?: number; strongWeight?: number; colors?: ColorRange[] }
+  opts?: {
+    defaultWeight?: number;
+    strongWeight?: number;
+    colors?: ColorRange[];
+    weights?: WeightRange[];
+  }
 ): ReactNode {
   const dw =
     opts?.defaultWeight ??
@@ -56,6 +61,7 @@ export function renderPlainWithTriStyleRanges(
       : Number(baseStyle.fontWeight) || 400);
   const sw = opts?.strongWeight ?? 700;
   const colors = opts?.colors;
+  const weights = opts?.weights;
   const pts = new Set<number>([0, plain.length]);
   const pushPts = (rs: { start: number; end: number }[] | undefined) => {
     for (const r of rs ?? []) {
@@ -67,6 +73,7 @@ export function renderPlainWithTriStyleRanges(
   pushPts(italic);
   pushPts(underline);
   pushPts(colors);
+  pushPts(weights);
   const arr = [...pts].sort((a, b) => a - b);
   const nodes: ReactNode[] = [];
   let k = 0;
@@ -79,8 +86,9 @@ export function renderPlainWithTriStyleRanges(
     const isI = italic?.some((r) => mid >= r.start && mid < r.end) ?? false;
     const isU = underline?.some((r) => mid >= r.start && mid < r.end) ?? false;
     const cr = colors?.find((r) => mid >= r.start && mid < r.end);
+    const wr = weights?.find((r) => mid >= r.start && mid < r.end);
     const style: CSSProperties = { ...baseStyle };
-    style.fontWeight = isB ? Math.max(dw, sw) : dw;
+    style.fontWeight = wr ? wr.weight : isB ? Math.max(dw, sw) : dw;
     style.fontStyle = isI ? "italic" : baseStyle.fontStyle ?? "normal";
     style.textDecoration = isU ? "underline" : baseStyle.textDecoration ?? "none";
     if (cr) style.color = cr.color;

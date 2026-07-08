@@ -27,3 +27,9 @@ export const DEFAULT_POSTER_BODY_EXTRA_2 = {
   width: BASIC.bodyRect.width,
   height: BASIC.bodyRect.height * 0.22,
 };
+export const DEFAULT_POSTER_BODY_EXTRA_3 = {
+  x: BASIC.bodyRect.x,
+  y: Math.min(0.95, BASIC.bodyRect.y + BASIC.bodyRect.height * 0.92),
+  width: BASIC.bodyRect.width,
+  height: BASIC.bodyRect.height * 0.18,
+};

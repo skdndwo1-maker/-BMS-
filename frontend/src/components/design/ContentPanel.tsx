@@ -19,6 +19,7 @@ import {
   DEFAULT_POSTER_SUBTITLE_OFFSET_Y,
   DEFAULT_POSTER_BODY_EXTRA_1,
   DEFAULT_POSTER_BODY_EXTRA_2,
+  DEFAULT_POSTER_BODY_EXTRA_3,
 } from "@/design/posterDefaults";
 import { adjustBoldRangesOnPlainReplace } from "@/design/bodyBoldRanges";
 import {
@@ -1639,11 +1640,25 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                   className="h-7 text-[11px] text-red-600"
                   onClick={() => {
                     const nextSubs = (content.posterSubtitles ?? []).filter((x) => x.id !== s.id);
-                    const { [s.id]: _removed, ...restRects } = content.posterSubtitleRects ?? {};
+                    const omitId = <T extends Record<string, unknown>>(m: T | undefined) => {
+                      if (!m) return {};
+                      const { [s.id]: _r, ...rest } = m;
+                      return rest;
+                    };
                     onContentChange({
                       ...content,
                       posterSubtitles: nextSubs,
-                      posterSubtitleRects: restRects,
+                      posterSubtitleRects: omitId(content.posterSubtitleRects),
+                      posterSubtitleRectLocked: omitId(content.posterSubtitleRectLocked),
+                      posterSubtitleTypography: omitId(content.posterSubtitleTypography),
+                      posterSubtitleFontScales: omitId(content.posterSubtitleFontScales),
+                      posterSubtitleColors: omitId(content.posterSubtitleColors),
+                      posterSubtitleAlign: omitId(content.posterSubtitleAlign),
+                      posterSubtitleBoldRanges: omitId(content.posterSubtitleBoldRanges),
+                      posterSubtitleItalicRanges: omitId(content.posterSubtitleItalicRanges),
+                      posterSubtitleUnderlineRanges: omitId(content.posterSubtitleUnderlineRanges),
+                      posterSubtitleWeightRanges: omitId(content.posterSubtitleWeightRanges),
+                      posterSubtitleColorRanges: omitId(content.posterSubtitleColorRanges),
                     });
                   }}
                 >
@@ -1674,7 +1689,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           {/* 기능부연설명(점선 박스) 제거 */}
         </div>
 
-        {/* 본문 (최대 3블록) */}
+        {/* 본문 (최대 4블록) */}
         <div ref={refBody} className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
@@ -1687,15 +1702,20 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               variant="outline"
               size="sm"
               className="h-8 text-[12px] shrink-0"
-              disabled={(content.posterBodies?.length ?? 1) >= 3}
+              disabled={(content.posterBodies?.length ?? 1) >= 4}
               onClick={() => {
                 const blocks = content.posterBodies?.length
                   ? [...content.posterBodies]
                   : [{ id: "body-1", text: content.bodyText ?? "" }];
-                if (blocks.length >= 3) return;
+                if (blocks.length >= 4) return;
                 const id = `body-${Date.now()}`;
                 const idx = blocks.length;
-                const rect = idx === 1 ? DEFAULT_POSTER_BODY_EXTRA_1 : DEFAULT_POSTER_BODY_EXTRA_2;
+                const rect =
+                  idx === 1
+                    ? DEFAULT_POSTER_BODY_EXTRA_1
+                    : idx === 2
+                      ? DEFAULT_POSTER_BODY_EXTRA_2
+                      : DEFAULT_POSTER_BODY_EXTRA_3;
                 onContentChange({
                   ...content,
                   posterBodies: [...blocks, { id, text: "" }],
@@ -1721,16 +1741,29 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                     className="h-7 text-[11px] text-red-600"
                     onClick={() => {
                       const blocks = (content.posterBodies ?? []).filter((x) => x.id !== b.id);
-                      const { [b.id]: _r, ...rest } = content.posterBodyRects ?? {};
-                      const { [b.id]: _rb, ...restBold } = content.posterBodyBoldRanges ?? {};
+                      const omitId = <T extends Record<string, unknown>>(m: T | undefined) => {
+                        if (!m) return {};
+                        const { [b.id]: _r, ...rest } = m;
+                        return rest;
+                      };
                       const nextBt = blocks[0]?.text ?? "";
                       onContentChange({
                         ...content,
                         posterBodies: blocks.length ? blocks : [{ id: "body-1", text: "" }],
-                        posterBodyRects: rest,
-                        posterBodyBoldRanges: restBold,
+                        posterBodyRects: omitId(content.posterBodyRects),
+                        posterBodyRectLocked: omitId(content.posterBodyRectLocked),
+                        posterBodyTypography: omitId(content.posterBodyTypography),
+                        posterBodyFontScales: omitId(content.posterBodyFontScales),
+                        posterBodyColors: omitId(content.posterBodyColors),
+                        posterBodyAligns: omitId(content.posterBodyAligns),
+                        posterBodyBoldRanges: omitId(content.posterBodyBoldRanges),
+                        posterBodyItalicRanges: omitId(content.posterBodyItalicRanges),
+                        posterBodyUnderlineRanges: omitId(content.posterBodyUnderlineRanges),
+                        posterBodyWeightRanges: omitId(content.posterBodyWeightRanges),
+                        posterBodyColorRanges: omitId(content.posterBodyColorRanges),
                         bodyText: nextBt,
-                        posterBodyRect: content.posterBodyRects?.[blocks[0]?.id ?? "body-1"] ?? content.posterBodyRect,
+                        posterBodyRect:
+                          content.posterBodyRects?.[blocks[0]?.id ?? "body-1"] ?? content.posterBodyRect,
                       });
                     }}
                   >

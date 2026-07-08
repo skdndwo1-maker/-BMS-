@@ -15,6 +15,7 @@ type Props = {
   getSelection?: () => [number, number] | null;
   onTogglePartialStyle?: (which: "bold" | "italic" | "underline") => void;
   onApplyPartialColor?: (hex: string) => void;
+  onApplyPartialWeight?: (weight: number) => void;
   onClose: () => void;
 };
 
@@ -26,7 +27,12 @@ function targetLabel(t: CanvasTextEditTarget, content: DesignContent): string {
     const idx = blocks.findIndex((b) => b.id === t.id);
     return idx >= 0 ? `본문 ${idx + 1}` : "본문";
   }
-  return "부제";
+  if (t.kind === "subtitle") {
+    const subs = content.posterSubtitles ?? [];
+    const idx = subs.findIndex((s) => s.id === t.id);
+    return idx >= 0 ? `부제 ${idx + 1}` : "부제";
+  }
+  return "텍스트";
 }
 
 export function CanvasTextFormatPanel({
@@ -38,6 +44,7 @@ export function CanvasTextFormatPanel({
   getSelection,
   onTogglePartialStyle,
   onApplyPartialColor,
+  onApplyPartialWeight,
   onClose,
 }: Props) {
   return (
@@ -76,6 +83,7 @@ export function CanvasTextFormatPanel({
             getSelection={getSelection}
             onTogglePartialStyle={onTogglePartialStyle}
             onApplyPartialColor={onApplyPartialColor}
+            onApplyPartialWeight={onApplyPartialWeight}
           />
         )}
       </div>

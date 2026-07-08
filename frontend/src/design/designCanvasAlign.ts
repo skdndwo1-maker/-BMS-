@@ -4,6 +4,7 @@ import {
   DEFAULT_POSTER_BADGE_RECT,
   DEFAULT_POSTER_BODY_EXTRA_1,
   DEFAULT_POSTER_BODY_EXTRA_2,
+  DEFAULT_POSTER_BODY_EXTRA_3,
   DEFAULT_POSTER_BODY_RECT,
   DEFAULT_POSTER_FOOTER_RECT,
   DEFAULT_POSTER_SUBTITLE_OFFSET_Y,
@@ -74,6 +75,7 @@ export function getPosterRectByKey(c: DesignContent, key: string): NormalizedRec
     if (id === "body-1") return c.posterBodyRect ?? DEFAULT_POSTER_BODY_RECT;
     if (id === "body-2") return DEFAULT_POSTER_BODY_EXTRA_1;
     if (id === "body-3") return DEFAULT_POSTER_BODY_EXTRA_2;
+    if (id === "body-4") return DEFAULT_POSTER_BODY_EXTRA_3;
     return DEFAULT_POSTER_BODY_RECT;
   }
   switch (key) {

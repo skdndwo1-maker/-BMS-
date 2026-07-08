@@ -36,6 +36,7 @@ import {
   DEFAULT_POSTER_SUBTITLE_OFFSET_Y,
   DEFAULT_POSTER_BODY_EXTRA_1,
   DEFAULT_POSTER_BODY_EXTRA_2,
+  DEFAULT_POSTER_BODY_EXTRA_3,
 } from "@/design/posterDefaults";
 import { resolvePosterBodyBlocksForRender } from "@/design/posterBodyDisplay";
 
@@ -145,7 +146,12 @@ function ensureBodySlot(c: DesignContent, index: number): DesignContent {
   while (bodies.length <= index) {
     const idx = bodies.length;
     const id = `body-${Date.now()}-${idx}`;
-    const rect = idx === 1 ? DEFAULT_POSTER_BODY_EXTRA_1 : DEFAULT_POSTER_BODY_EXTRA_2;
+    const rect =
+      idx === 1
+        ? DEFAULT_POSTER_BODY_EXTRA_1
+        : idx === 2
+          ? DEFAULT_POSTER_BODY_EXTRA_2
+          : DEFAULT_POSTER_BODY_EXTRA_3;
     bodies.push({ id, text: "" });
     rects[id] = rect;
   }

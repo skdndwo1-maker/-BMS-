@@ -69,8 +69,10 @@ import {
 } from "./bodyRichText";
 import {
   applyColorOnSelection,
+  applyWeightOnSelection,
   sanitizeCharRanges,
   sanitizeColorRanges,
+  sanitizeWeightRanges,
   toggleCharRangesOnSelection,
   type CharRange,
 } from "@/design/charStyleRanges";
@@ -101,6 +103,8 @@ import {
   getPosterBodyFontScale,
   getPosterBodyAlign,
   getPosterBodyColor,
+  getPosterSubtitleFontScale,
+  getPosterSubtitleColor,
 } from "@/design/posterBodyDisplay";
 import { ViAlignmentGrid } from "./ViAlignmentGrid";
 import {
@@ -234,6 +238,8 @@ export type DesignCanvasHandle = {
   handleTogglePartialStyle: (which: "bold" | "italic" | "underline") => void;
   /** 인라인 편집 중 선택된 글자 구간에만 색상을 적용 */
   handleApplyPartialColor: (hex: string) => void;
+  /** 인라인 편집 중 선택된 글자 구간에만 굵기를 적용 (부제·본문) */
+  handleApplyPartialWeight: (weight: number) => void;
   getInlineEditActive: () => boolean;
 };
 
@@ -432,7 +438,6 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
 
   const bgColor = content.backgroundColor || "#FFFFFF";
   const titleColor = content.titleColor || VI_COLORS.textPrimary;
-  const subtitleColor = content.subtitleColor ?? titleColor;
 
   const getBrandLogo = () => {
     switch (content.logoOption) {
@@ -482,9 +487,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     ((isSafetyCaution ? SAFETY_CAUTION_BODY_FONT_SCALE : getPosterBodyFontScale(content, blockId)) /
       100);
   const disclaimerSize = Math.max(7, Math.min(W * 0.018, displayH * 0.10)) * footerScale;
-  /** 부제 크기는 메인 타이틀 배율과 독립(캔버스 너비·posterSubtitleFontScale만 사용)
-   * - autofit 효과에서도 참조해야 하므로 본문/타이틀과 같은 위치에서 선언 */
-  const subtitleFontSize = W * 0.045 * ((content.posterSubtitleFontScale ?? 100) / 100);
+  const computeSubtitleFontSize = (subtitleId: string) =>
+    W * 0.045 * (getPosterSubtitleFontScale(content, subtitleId) / 100);
 
   const hasUploadedLogo = Boolean(content.logo) && !isSafetyCaution;
   const fallbackCustomLogoRect = useMemo(
@@ -1071,6 +1075,35 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     [inlineEditTarget, onContentDraftChange, getInlineTextSelection]
   );
 
+  const handleApplyPartialWeight = useCallback(
+    (weight: number) => {
+      if (!onContentDraftChange || !inlineEditTarget) return;
+      const sel = getInlineTextSelection();
+      if (!sel) return;
+      const [a, b] = sel;
+      const c = contentRef.current;
+      const t = inlineEditTarget;
+      if (t.kind === "body") {
+        const id = t.id;
+        const block = c.posterBodies?.find((x) => x.id === id);
+        const plain = block?.text ?? "";
+        const map = { ...(c.posterBodyWeightRanges ?? {}) };
+        map[id] = applyWeightOnSelection(plain, map[id], a, b, weight);
+        onContentDraftChange({ ...c, posterBodyWeightRanges: map });
+        return;
+      }
+      if (t.kind === "subtitle") {
+        const id = t.id;
+        const sub = c.posterSubtitles?.find((x) => x.id === id);
+        const plain = sub?.text ?? "";
+        const map = { ...(c.posterSubtitleWeightRanges ?? {}) };
+        map[id] = applyWeightOnSelection(plain, map[id], a, b, weight);
+        onContentDraftChange({ ...c, posterSubtitleWeightRanges: map });
+      }
+    },
+    [inlineEditTarget, onContentDraftChange, getInlineTextSelection]
+  );
+
   /**
    * 인라인 편집 중 선택된 글자 구간에 색상을 적용.
    * 선택이 없거나 편집이 활성화되지 않았으면 호출자(좌측 패널)가 전체 색상으로 폴백 처리.
@@ -1122,9 +1155,10 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       getInlineTextSelection,
       handleTogglePartialStyle,
       handleApplyPartialColor,
+      handleApplyPartialWeight,
       getInlineEditActive: () => inlineEditTarget !== null,
     }),
-    [getInlineTextSelection, handleTogglePartialStyle, handleApplyPartialColor, inlineEditTarget]
+    [getInlineTextSelection, handleTogglePartialStyle, handleApplyPartialColor, handleApplyPartialWeight, inlineEditTarget]
   );
 
   useEffect(() => {
@@ -1751,13 +1785,14 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           ),
         };
       const t = next.posterSubtitleTypography?.[s.id] ?? {};
-      const padX = subtitleFontSize * 0.3;
-      const padY = subtitleFontSize * 0.28;
+      const blockSubtitleFontSize = W * 0.045 * (getPosterSubtitleFontScale(next, s.id) / 100);
+      const padX = blockSubtitleFontSize * 0.3;
+      const padY = blockSubtitleFontSize * 0.28;
       const maxWPx = displayW * 0.96;
       const m = measureAutoTextBox({
         text: s.text,
-        fontPx: subtitleFontSize,
-        fontWeight: t.fontWeight ?? 680,
+        fontPx: blockSubtitleFontSize,
+        fontWeight: t.fontWeight ?? 500,
         fontFamily: resolveFontFamily(t.fontFamily),
         fontStyle: t.fontStyle ?? "normal",
         letterSpacingEm: t.letterSpacingEm ?? -0.02,
@@ -1773,9 +1808,9 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         m.boxHeightPx,
         align === "center" ? "center" : align === "right" ? "right" : "left",
         {
-          minWPx: Math.max(40, subtitleFontSize * 3),
+          minWPx: Math.max(40, blockSubtitleFontSize * 3),
           maxWPx: displayW * 0.96,
-          minHPx: Math.max(16, subtitleFontSize * 1.2),
+          minHPx: Math.max(16, blockSubtitleFontSize * 1.2),
           maxHPx: displayH * 0.4,
         }
       );
@@ -1800,8 +1835,9 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     content.posterSubtitleRectLocked,
     content.posterSubtitleAlign,
     content.posterSubtitleTypography,
+    content.posterSubtitleFontScales,
     content.posterTitleAlign,
-    subtitleFontSize,
+    W,
     displayW,
     displayH,
     onContentDraftChange,
@@ -2286,6 +2322,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             };
           const subAlign = getSubtitleAlign(content, s.id);
           const subFlex = flexAlignFromCanvasAlign(subAlign);
+          const blockSubtitleFontSize = computeSubtitleFontSize(s.id);
+          const blockSubtitleColor = getPosterSubtitleColor(content, s.id);
           return (
             <DraggableCanvasOverlay
               key={s.id}
@@ -2320,7 +2358,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               >
                 <p
                   style={{
-                    ...subtitleTextStyle(content, s.id, subtitleFontSize, subtitleColor),
+                    ...subtitleTextStyle(content, s.id, blockSubtitleFontSize, blockSubtitleColor),
                     margin: 0,
                     width: "100%",
                     opacity:
@@ -2332,19 +2370,38 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                       s.text.length,
                       content.posterSubtitleColorRanges?.[s.id]
                     );
+                    const subWeights = sanitizeWeightRanges(
+                      s.text.length,
+                      content.posterSubtitleWeightRanges?.[s.id]
+                    );
                     const hasSubTri =
                       Boolean(content.posterSubtitleBoldRanges?.[s.id]?.length) ||
                       Boolean(content.posterSubtitleItalicRanges?.[s.id]?.length) ||
                       Boolean(content.posterSubtitleUnderlineRanges?.[s.id]?.length) ||
-                      subColors.length > 0;
+                      subColors.length > 0 ||
+                      subWeights.length > 0;
                     if (!hasSubTri) return s.text;
+                    const subBaseStyle = subtitleTextStyle(
+                      content,
+                      s.id,
+                      blockSubtitleFontSize,
+                      blockSubtitleColor
+                    );
                     return renderPlainWithTriStyleRanges(
                       s.text,
                       content.posterSubtitleBoldRanges?.[s.id],
                       content.posterSubtitleItalicRanges?.[s.id],
                       content.posterSubtitleUnderlineRanges?.[s.id],
-                      subtitleTextStyle(content, s.id, subtitleFontSize, subtitleColor),
-                      { defaultWeight: 680, strongWeight: 800, colors: subColors }
+                      subBaseStyle,
+                      {
+                        defaultWeight:
+                          (typeof subBaseStyle.fontWeight === "number"
+                            ? subBaseStyle.fontWeight
+                            : Number(subBaseStyle.fontWeight)) || 500,
+                        strongWeight: 700,
+                        colors: subColors,
+                        weights: subWeights,
+                      }
                     );
                   })()}
                 </p>
@@ -2369,11 +2426,16 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             b.text.length,
             content.posterBodyColorRanges?.[b.id]
           );
+          const bWeightRanges = sanitizeWeightRanges(
+            b.text.length,
+            content.posterBodyWeightRanges?.[b.id]
+          );
           const hasTri =
             Boolean(content.posterBodyBoldRanges?.[b.id]?.length) ||
             Boolean(content.posterBodyItalicRanges?.[b.id]?.length) ||
             Boolean(content.posterBodyUnderlineRanges?.[b.id]?.length) ||
-            bColorRanges.length > 0;
+            bColorRanges.length > 0 ||
+            bWeightRanges.length > 0;
           return (
             <DraggableCanvasOverlay
               key={b.id}
@@ -2431,7 +2493,15 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                       content.posterBodyItalicRanges?.[b.id],
                       content.posterBodyUnderlineRanges?.[b.id],
                       bStyle,
-                      { defaultWeight: 400, strongWeight: 700, colors: bColorRanges }
+                      {
+                        defaultWeight:
+                          (typeof bStyle.fontWeight === "number"
+                            ? bStyle.fontWeight
+                            : Number(bStyle.fontWeight)) || 400,
+                        strongWeight: 700,
+                        colors: bColorRanges,
+                        weights: bWeightRanges,
+                      }
                     )
                   ) : content.posterBodyBoldRanges?.[b.id]?.length ? (
                     renderPlainWithBoldRanges(b.text, content.posterBodyBoldRanges[b.id], bStyle)
@@ -2864,6 +2934,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                 ),
               };
             const subF = flexAlignFromCanvasAlign(getSubtitleAlign(content, s.id));
+            const blockSubtitleFontSize = computeSubtitleFontSize(s.id);
+            const blockSubtitleColor = getPosterSubtitleColor(content, s.id);
             return (
               <textarea
                 key={s.id}
@@ -2903,7 +2975,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                   outline: "2px solid #FF7F66",
                   boxSizing: "border-box",
                   background: "rgba(255,255,255,0.92)",
-                  ...subtitleTextStyle(content, s.id, subtitleFontSize, subtitleColor),
+                  ...subtitleTextStyle(content, s.id, blockSubtitleFontSize, blockSubtitleColor),
                   textAlign: subF.textAlign,
                 }}
               />

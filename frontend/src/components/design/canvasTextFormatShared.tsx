@@ -14,6 +14,8 @@ import {
   getPosterBodyFontScale,
   getPosterBodyAlign,
   getPosterBodyColor,
+  getPosterSubtitleFontScale,
+  getPosterSubtitleColor,
 } from "@/design/posterBodyDisplay";
 import {
   Bold,
@@ -31,7 +33,7 @@ import {
   Plus,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { VI_COLORS, TITLE_DEFAULT_FONT_WEIGHT } from "@/design/viCanvasConstants";
+import { VI_COLORS, TITLE_DEFAULT_FONT_WEIGHT, SUBTITLE_DEFAULT_FONT_WEIGHT } from "@/design/viCanvasConstants";
 import {
   isSafetyCautionTemplate,
   SAFETY_CAUTION_BODY_FONT_SCALE,
@@ -45,6 +47,14 @@ import {
 export const SCALE_MIN = 25;
 export const SCALE_MAX = 300;
 export const SCALE_PRESETS = [50, 60, 75, 80, 90, 100, 110, 125, 150, 200, 250] as const;
+
+/** 부제·본문 굵기 프리셋 */
+export const FONT_WEIGHT_PRESETS = [
+  { value: 400, label: "Regular" },
+  { value: 500, label: "Medium" },
+  { value: 600, label: "Semi-bold" },
+  { value: 700, label: "Bold" },
+] as const;
 const LS_MIN = -0.08;
 const LS_MAX = 0.35;
 const LH_MIN = 0.5;
@@ -83,6 +93,8 @@ type SharedProps = {
   onTogglePartialStyle?: (which: "bold" | "italic" | "underline") => void;
   /** 캔버스 인라인 편집 중 텍스트 일부만 색상 적용 */
   onApplyPartialColor?: (hex: string) => void;
+  /** 캔버스 인라인 편집 중 텍스트 일부만 굵기 적용 (부제·본문) */
+  onApplyPartialWeight?: (weight: number) => void;
 };
 
 export function CanvasTextFormatControls({
@@ -94,6 +106,7 @@ export function CanvasTextFormatControls({
   getSelection,
   onTogglePartialStyle,
   onApplyPartialColor,
+  onApplyPartialWeight,
 }: SharedProps) {
   void selectionRenderTick;
   const kind = target.kind;
@@ -118,6 +131,8 @@ export function CanvasTextFormatControls({
 
   const bodyBlockId = kind === "body" ? resolvePosterBodyTypographyBlockId(content, target.id) : "";
 
+  const subtitleId = kind === "subtitle" ? target.id : "";
+
   const scale =
     kind === "title"
       ? isSafetyFixedScale
@@ -129,7 +144,7 @@ export function CanvasTextFormatControls({
           ? isSafetyFixedScale
             ? SAFETY_CAUTION_BODY_FONT_SCALE
             : getPosterBodyFontScale(content, bodyBlockId)
-          : content.posterSubtitleFontScale ?? 100;
+          : getPosterSubtitleFontScale(content, subtitleId);
 
   const align: CanvasTextAlign =
     kind === "title"
@@ -167,7 +182,7 @@ export function CanvasTextFormatControls({
         ? typoFooter?.fontWeight ?? 400
         : kind === "body"
           ? typoBody?.fontWeight ?? 400
-          : typoSub?.fontWeight ?? 680;
+          : typoSub?.fontWeight ?? SUBTITLE_DEFAULT_FONT_WEIGHT;
 
   const fs =
     kind === "title"
@@ -201,7 +216,9 @@ export function CanvasTextFormatControls({
         ? content.posterFooterColor ?? "#B0B0B0"
         : kind === "body"
           ? getPosterBodyColor(content, bodyBlockId)
-          : content.subtitleColor ?? content.titleColor ?? "#1A1A1A";
+          : getPosterSubtitleColor(content, subtitleId);
+
+  const showWeightPresets = kind === "subtitle" || kind === "body";
 
   const boldThreshold =
     kind === "title"
@@ -224,7 +241,12 @@ export function CanvasTextFormatControls({
           posterBodyFontScales: { ...(prev.posterBodyFontScales ?? {}), [resolvedId]: v },
         };
       });
-    } else onDraft((prev) => ({ ...prev, posterSubtitleFontScale: v }));
+    } else if (kind === "subtitle") {
+      onDraft((prev) => ({
+        ...prev,
+        posterSubtitleFontScales: { ...(prev.posterSubtitleFontScales ?? {}), [target.id]: v },
+      }));
+    }
   };
 
   const setAlign = (a: CanvasTextAlign) => {
@@ -272,7 +294,15 @@ export function CanvasTextFormatControls({
           ...(resolvedId === first || first === resolvedId ? { bodyColor: hex } : {}),
         };
       });
-    } else onDraft((prev) => ({ ...prev, subtitleColor: hex }));
+    } else if (kind === "subtitle") {
+      onDraft((prev) => ({
+        ...prev,
+        posterSubtitleColors: { ...(prev.posterSubtitleColors ?? {}), [target.id]: hex },
+        ...(target.id === (prev.posterSubtitles?.[0]?.id ?? "subtitle-1")
+          ? { subtitleColor: hex }
+          : {}),
+      }));
+    }
   };
 
   const applyTypo = (patch: Partial<PosterElementTypography>) => {
@@ -338,6 +368,15 @@ export function CanvasTextFormatControls({
     } else {
       applyTypo({ textDecoration: td === "underline" ? "none" : "underline" });
     }
+  };
+
+  const applyWeight = (weight: number) => {
+    const sel = getSelection?.();
+    if (sel && sel[0] !== sel[1] && onApplyPartialWeight) {
+      onApplyPartialWeight(weight);
+      return;
+    }
+    applyTypo({ fontWeight: weight });
   };
 
   const setFont = (fam: string) => {
@@ -421,17 +460,34 @@ export function CanvasTextFormatControls({
       </div>
 
       <div className="flex flex-wrap gap-0.5">
-        <button
-          type="button"
-          className={`${iconBtn} ${fw >= boldThreshold ? iconActive : ""}`}
-          title={hasPartialRange ? "선택 구간 굵게" : "전체 굵게 토글"}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            tryPartial("bold");
-          }}
-        >
-          <Bold className="h-3.5 w-3.5" />
-        </button>
+        {showWeightPresets ? (
+          FONT_WEIGHT_PRESETS.map((p) => (
+            <button
+              key={p.value}
+              type="button"
+              className={`${iconBtn} h-8 min-w-[2.75rem] px-1 text-[9px] font-medium ${fw === p.value ? iconActive : ""}`}
+              title={hasPartialRange ? `선택 구간 ${p.label}` : `전체 ${p.label}`}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                applyWeight(p.value);
+              }}
+            >
+              {p.label}
+            </button>
+          ))
+        ) : (
+          <button
+            type="button"
+            className={`${iconBtn} ${fw >= boldThreshold ? iconActive : ""}`}
+            title={hasPartialRange ? "선택 구간 굵게" : "전체 굵게 토글"}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              tryPartial("bold");
+            }}
+          >
+            <Bold className="h-3.5 w-3.5" />
+          </button>
+        )}
         <button
           type="button"
           className={`${iconBtn} ${fs === "italic" ? iconActive : ""}`}

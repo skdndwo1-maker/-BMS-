@@ -58,6 +58,23 @@ export function getPosterBodyColor(c: DesignContent, blockId: string): string {
   );
 }
 
+export function getPosterSubtitleFontScale(c: DesignContent, subtitleId: string): number {
+  return (
+    c.posterSubtitleFontScales?.[subtitleId] ??
+    c.posterSubtitleFontScale ??
+    100
+  );
+}
+
+export function getPosterSubtitleColor(c: DesignContent, subtitleId: string): string {
+  return (
+    c.posterSubtitleColors?.[subtitleId] ??
+    c.subtitleColor ??
+    c.titleColor ??
+    "#1A1A1A"
+  );
+}
+
 /**
  * 본문 블록 표시용: 첫 블록(body-1)은 항상 `bodyText`와 동일하게 보이게 병합합니다.
  * (우측 패널은 bodyText 위주, 캔버스는 posterBodies 위주로 쓰이던 불일치 방지)
