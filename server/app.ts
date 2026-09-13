@@ -1932,7 +1932,9 @@ app.get("/api/admin/runs", async (req, res) => {
     const selectQuery = (sb: ReturnType<typeof getSupabaseServiceClient>) =>
       sb
         .from("runs")
-        .select("id,created_at,type,status,guideline_id,template_id,score,model,input_text,output_text,input_json,output_json")
+        .select(
+          "id,created_at,type,status,guideline_id,template_id,score,model,input_text,output_text,input_json,output_json,guidelines(title,type)"
+        )
         .eq("status", status)
         .order("created_at", { ascending: false })
         .limit(limit);

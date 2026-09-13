@@ -9,7 +9,8 @@
     "build:frontend": "npm run build --prefix frontend",
     "start": "tsx server/index.ts",
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
-    "analyze:guideline": "tsx scripts/analyze-lgu-guideline.ts"
+    "analyze:guideline": "tsx scripts/analyze-lgu-guideline.ts",
+    "migrate:guidelines": "tsx scripts/migrate-guidelines-json-to-supabase.ts"
   },
   "keywords": [],
   "author": "",
