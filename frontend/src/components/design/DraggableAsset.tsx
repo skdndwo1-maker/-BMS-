@@ -20,6 +20,8 @@ interface Props {
   onSelect: (id: string, opts?: { additive?: boolean }) => void;
   onUpdate: (id: string, patch: Partial<AssetLayer>) => void;
   onDelete: (id: string) => void;
+  /** 템플릿이 고정한 에셋 — 사용자 잠금 해제 불가 */
+  templateLocked?: boolean;
 }
 
 // 리사이즈 핸들 방향
@@ -29,8 +31,9 @@ type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 const HANDLE_SIZE = 10;
 
 export function DraggableAsset({
-  asset, canvasW, canvasH, snapStepPx, isSelected, onSelect, onUpdate, onDelete,
+  asset: assetProp, canvasW, canvasH, snapStepPx, isSelected, onSelect, onUpdate, onDelete, templateLocked,
 }: Props) {
+  const asset = templateLocked ? { ...assetProp, locked: true } : assetProp;
   const elRef = useRef<HTMLDivElement>(null);
 
   // % → px 변환
@@ -259,11 +262,13 @@ export function DraggableAsset({
           onMouseDown={(e) => e.stopPropagation()}
         >
           <Lock size={10} color="#FF7F66" />
-          <span style={{ color: '#fff', fontSize: '10px' }}>잠김</span>
-          <button
-            onClick={(e) => { e.stopPropagation(); onUpdate(asset.id, { locked: false }); }}
-            style={{ color: '#aaa', background: 'none', border: 'none', cursor: 'pointer', fontSize: '10px', padding: '0 2px' }}
-          >해제</button>
+          <span style={{ color: '#fff', fontSize: '10px' }}>{templateLocked ? '템플릿 고정' : '잠김'}</span>
+          {!templateLocked && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onUpdate(asset.id, { locked: false }); }}
+              style={{ color: '#aaa', background: 'none', border: 'none', cursor: 'pointer', fontSize: '10px', padding: '0 2px' }}
+            >해제</button>
+          )}
         </div>
       )}
     </div>

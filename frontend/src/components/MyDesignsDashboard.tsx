@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, Trash2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { templates } from "@/design/templates";
+import { useTemplateCatalog } from "@/design/templateCatalog";
 import { toast } from "sonner";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { deleteDesign, getDesignById, listDesignsForUser, requireAuthedUserId, type DesignListItem } from "@/lib/designsApi";
@@ -11,14 +11,13 @@ import { DesignCanvas } from "@/components/design/DesignCanvas";
 import type { DesignContent } from "@/design/types";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 
-function templateLabel(templateId: string): string {
-  return templates.find((t) => t.id === templateId)?.name ?? templateId;
-}
-
 type DesignWithCanvas = DesignListItem & { canvas_data?: unknown };
 
 export function MyDesignsDashboard() {
   const navigate = useNavigate();
+  const { templates } = useTemplateCatalog();
+  const templateLabel = (templateId: string) =>
+    templates.find((t) => t.id === templateId)?.name ?? templateId;
   const sb = useMemo(() => {
     try {
       return getSupabaseClient();

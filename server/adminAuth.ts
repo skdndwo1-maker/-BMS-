@@ -12,11 +12,15 @@ function getBearerToken(req: Request): string {
   return (m?.[1] ?? "").trim();
 }
 
-async function isAdminUserId(userId: string): Promise<boolean> {
+async function isAdminUserId(userId: string, email?: string | null): Promise<boolean> {
   const sb = getSupabaseServiceClient();
   const { data, error } = await sb.from("admin_users").select("user_id").eq("user_id", userId).maybeSingle();
   if (error) throw new Error(error.message);
-  return Boolean(data?.user_id);
+  if (data?.user_id) return true;
+  const mail = email?.trim().toLowerCase();
+  if (!mail) return false;
+  const byEmail = await sb.from("admin_users").select("user_id").ilike("email", mail).maybeSingle();
+  return !byEmail.error && Boolean(byEmail.data?.user_id);
 }
 
 /**
@@ -35,7 +39,7 @@ export async function requireAdmin(req: Request): Promise<AdminOk | AdminFail> {
       if (error) return { ok: false, status: 401, error: "not_logged_in" };
       const uid = data.user?.id;
       if (!uid) return { ok: false, status: 401, error: "not_logged_in" };
-      const ok = await isAdminUserId(uid);
+      const ok = await isAdminUserId(uid, data.user?.email);
       if (!ok) return { ok: false, status: 403, error: "forbidden" };
       return { ok: true, userId: uid };
     } catch (e) {

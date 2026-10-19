@@ -1,5 +1,6 @@
 // Core types for the design automation platform
 
+/** 기본 유형 + 관리자가 추가한 제작물 유형 id */
 export type TemplateCategory =
   | 'marketing-banner'
   | 'poster'
@@ -9,7 +10,8 @@ export type TemplateCategory =
   | 'presentation'
   | 'placard'
   | 'xbanner'
-  | 'rcs';
+  | 'rcs'
+  | (string & {});
 
 export type DesignStyle = 'basic' | 'informational' | 'no-limit';
 
@@ -85,12 +87,95 @@ export interface CanvasSize {
 export interface Template {
   id: string;
   name: string;
+  /** 기본 유형 외에 관리자가 추가한 유형 id도 들어올 수 있음 */
   category: TemplateCategory;
   size: CanvasSize;
   thumbnail: string;
   description: string;
   mediaType: 'online' | 'offline';
   customizable?: boolean;
+  /** 관리자 템플릿 빌더에서 만든 기본 배치 */
+  layout?: TemplateLayout;
+  /** 관리자가 새로 만든 템플릿 */
+  isCustom?: boolean;
+}
+
+export interface TemplateCategoryDef {
+  id: string;
+  label: string;
+  icon: string;
+}
+
+export type TemplateLayoutElementKind =
+  | 'title'
+  | 'subtitle'
+  | 'body'
+  | 'footer'
+  | 'colorBox'
+  | 'image'
+  | 'asset';
+
+/** 템플릿 빌더 요소 — 위치·크기는 캔버스 대비 0~1 */
+export interface TemplateLayoutElement {
+  id: string;
+  kind: TemplateLayoutElementKind;
+  name?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** 사용자 에디터에서 이동·크기 변경·삭제 불가 */
+  locked: boolean;
+  text?: string;
+  /** 텍스트 색 또는 컬러 박스 채움 */
+  color?: string;
+  /** 텍스트 크기 배율 % */
+  fontScale?: number;
+  align?: CanvasTextAlign;
+  /** 모서리 라운드 — 박스 짧은 변 대비 % (0~50) */
+  radiusPct?: number;
+  /** 0~1 */
+  opacity?: number;
+  src?: string;
+  assetType?: AssetType;
+}
+
+export interface TemplateLayoutGrid {
+  visible: boolean;
+  columns: number;
+  rows: number;
+  /** 바깥 여백 — 캔버스 짧은 변 대비 % */
+  marginPct: number;
+  /** 단 간격 — 캔버스 짧은 변 대비 % */
+  gutterPct: number;
+  snap: boolean;
+}
+
+export interface TemplateLayout {
+  version: 1;
+  backgroundColor: string;
+  grid: TemplateLayoutGrid;
+  logo: {
+    option: 'CI' | 'BI' | 'SLOGAN' | null;
+    position: LogoPosition;
+    /** 사용자 에디터에서 로고 위치 변경 불가 */
+    locked: boolean;
+  };
+  /** 배열 순서 = 쌓임 순서(뒤 → 앞) */
+  elements: TemplateLayoutElement[];
+}
+
+/** 템플릿 컬러 박스 — 사용자 캔버스에서 이동·리사이즈 */
+export interface CanvasShape {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+  radiusPct?: number;
+  opacity?: number;
+  locked?: boolean;
 }
 
 export interface BrandColors {
@@ -318,6 +403,17 @@ export interface DesignContent {
     | "placard-wide";
   /** 가이드 기준 이미지 모서리 R(px) — 캔버스 짧은 변 비례 스케일 */
   axisLayoutImageCornerRadiusPx?: number;
+
+  /** 관리자 템플릿 레이아웃이 적용된 템플릿 id */
+  templateLayoutApplied?: string;
+  /** 템플릿이 잠근 캔버스 요소 키 — title, footer, image, subtitle:<id>, body:<id> */
+  templateLockedKeys?: string[];
+  /** 템플릿이 로고 위치를 고정 */
+  templateLogoLocked?: boolean;
+  /** 이미지 미업로드 시 캔버스에 이미지 자리 안내 표시 */
+  templateImagePlaceholder?: boolean;
+  /** 템플릿 컬러 박스 (텍스트·이미지 뒤) */
+  canvasShapes?: CanvasShape[];
 }
 
 export interface ComplianceIssue {

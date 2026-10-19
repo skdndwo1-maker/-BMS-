@@ -9,12 +9,32 @@ import {
   Bell,
   Signpost,
   Presentation,
+  Pencil,
+  Plus,
+  Copy,
+  Trash2,
+  Settings2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { templates as designTemplates, templateCategories } from "@/design/templates";
+import { toast } from "sonner";
+import {
+  emptyTemplateCatalog,
+  removeCatalogTemplate,
+  saveTemplateCatalog,
+  setCatalogCategories,
+  upsertCatalogTemplate,
+  useTemplateCatalog,
+  newCustomTemplateId,
+} from "@/design/templateCatalog";
+import { createDefaultTemplateLayout } from "@/design/templateLayout";
+import type { Template, TemplateCategoryDef } from "@/design/types";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { useAuthSession } from "@/contexts/AuthSessionContext";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 import { GlobalBrandNav } from "@/components/GlobalBrandNav";
 import { InspectionSectionTitle } from "@/components/InspectionSectionTitle";
+import { TemplateMetaDialog } from "@/components/admin/TemplateMetaDialog";
+import { TemplateCategoryManagerDialog } from "@/components/admin/TemplateCategoryManagerDialog";
 
 type MediaType = "online" | "offline";
 
@@ -48,9 +68,12 @@ const categoryIconMap: Record<string, React.ComponentType<{ className?: string; 
   RectangleHorizontal,
 };
 
-function parseCategoryFromSearch(searchParams: URLSearchParams): string | "all" {
+function parseCategoryFromSearch(
+  searchParams: URLSearchParams,
+  categories: TemplateCategoryDef[],
+): string | "all" {
   const c = searchParams.get("category");
-  if (c && templateCategories.some((x) => x.id === c)) return c;
+  if (c && categories.some((x) => x.id === c)) return c;
   return "all";
 }
 
@@ -58,13 +81,40 @@ export function TemplateGallery() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const mediaType: MediaType = searchParams.get("media") === "offline" ? "offline" : "online";
+  const { catalog, templates: designTemplates, categories: templateCategories, reload } = useTemplateCatalog();
+  const { isAdmin, isReady: adminReady } = useIsAdmin();
+  const { session } = useAuthSession();
 
-  const [selectedCategory, setSelectedCategory] = useState<string | "all">(() => parseCategoryFromSearch(searchParams));
+  const [selectedCategory, setSelectedCategory] = useState<string | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [editMode, setEditMode] = useState(false);
+  const [categoryMgrOpen, setCategoryMgrOpen] = useState(false);
+  const [metaDialog, setMetaDialog] = useState<
+    | { mode: "create" }
+    | { mode: "edit"; template: Template }
+    | null
+  >(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setSelectedCategory(parseCategoryFromSearch(searchParams));
-  }, [searchParams]);
+    setSelectedCategory(parseCategoryFromSearch(searchParams, templateCategories));
+  }, [searchParams, templateCategories]);
+
+  const persistCatalog = async (next: typeof catalog) => {
+    setSaving(true);
+    try {
+      await saveTemplateCatalog(
+        { ...next, updatedAt: new Date().toISOString() },
+        session?.access_token ?? null,
+      );
+      toast.success("템플릿 카탈로그가 저장되었습니다.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "저장에 실패했습니다.");
+      void reload();
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const setMediaType = (next: MediaType) => {
     setSearchParams((prev) => {
@@ -103,7 +153,29 @@ export function TemplateGallery() {
   });
 
   const handleSelectTemplate = (templateId: string) => {
+    if (editMode) return;
     navigate(`/create/${templateId}`);
+  };
+
+  const handleDuplicate = async (template: Template) => {
+    const copy: Template = {
+      ...template,
+      id: newCustomTemplateId(),
+      name: `${template.name} 복사본`,
+      isCustom: true,
+      layout: template.layout
+        ? {
+            ...template.layout,
+            elements: template.layout.elements.map((el) => ({ ...el, id: `${el.id}-c` })),
+          }
+        : createDefaultTemplateLayout(),
+    };
+    await persistCatalog(upsertCatalogTemplate(catalog, copy));
+  };
+
+  const handleDelete = async (template: Template) => {
+    if (!window.confirm(`「${template.name}」템플릿을 삭제할까요?`)) return;
+    await persistCatalog(removeCatalogTemplate(catalog, template.id));
   };
 
   return (
@@ -282,8 +354,16 @@ export function TemplateGallery() {
           </div>
         </section>
 
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ position: "relative", maxWidth: 420 }}>
+        <div
+          style={{
+            marginBottom: 20,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ position: "relative", maxWidth: 420, flex: "1 1 240px" }}>
             <Search
               style={{
                 position: "absolute",
@@ -317,14 +397,73 @@ export function TemplateGallery() {
               }}
             />
           </div>
+          {adminReady && isAdmin ? (
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+              {editMode ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCategoryMgrOpen(true)}
+                  disabled={saving}
+                >
+                  <Settings2 className="mr-1 h-4 w-4" />
+                  제작물 유형
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                variant={editMode ? "default" : "outline"}
+                onClick={() => setEditMode((v) => !v)}
+                style={editMode ? { background: PAL.coral, borderColor: PAL.coral } : undefined}
+              >
+                <Pencil className="mr-1 h-4 w-4" />
+                {editMode ? "편집 종료" : "템플릿 편집"}
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <div
           className="grid w-full min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
           style={{ alignItems: "stretch" }}
         >
+          {editMode ? (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setMetaDialog({ mode: "create" })}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setMetaDialog({ mode: "create" });
+                }
+              }}
+              style={{
+                minWidth: 0,
+                cursor: "pointer",
+                background: PAL.card,
+                borderRadius: 20,
+                border: `2px dashed ${PAL.coral}`,
+                overflow: "hidden",
+                boxShadow: PAL.shadow,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                minHeight: 220,
+                gap: 10,
+                color: PAL.coral,
+              }}
+            >
+              <Plus style={{ width: 32, height: 32 }} />
+              <span style={{ fontSize: 14, fontWeight: 600 }}>새 템플릿</span>
+            </div>
+          ) : null}
           {filteredTemplates.map((template) => {
             const isPlacard = template.category === "placard";
+            const layoutEditable = template.category !== "rcs";
             return (
               <div
                 key={template.id}
@@ -340,15 +479,16 @@ export function TemplateGallery() {
                 className="group"
                 style={{
                   minWidth: 0,
-                  cursor: "pointer",
+                  cursor: editMode ? "default" : "pointer",
                   background: PAL.card,
                   borderRadius: 20,
-                  border: `1px solid ${PAL.borderSubtle}`,
+                  border: `1px solid ${editMode ? PAL.coral : PAL.borderSubtle}`,
                   overflow: "hidden",
                   boxShadow: PAL.shadow,
                   transition: "transform 0.2s, box-shadow 0.2s, border-color 0.2s",
                 }}
                 onMouseEnter={(e) => {
+                  if (editMode) return;
                   (e.currentTarget as HTMLDivElement).style.transform = "translateY(-3px)";
                   (e.currentTarget as HTMLDivElement).style.boxShadow = PAL.shadowHover;
                   (e.currentTarget as HTMLDivElement).style.border = `1px solid ${
@@ -358,7 +498,9 @@ export function TemplateGallery() {
                 onMouseLeave={(e) => {
                   (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
                   (e.currentTarget as HTMLDivElement).style.boxShadow = PAL.shadow;
-                  (e.currentTarget as HTMLDivElement).style.border = `1px solid ${PAL.borderSubtle}`;
+                  (e.currentTarget as HTMLDivElement).style.border = `1px solid ${
+                    editMode ? PAL.coral : PAL.borderSubtle
+                  }`;
                 }}
               >
                 <div
@@ -443,28 +585,111 @@ export function TemplateGallery() {
                     >
                       {template.size.width} × {template.size.height} {template.size.unit}
                     </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSelectTemplate(template.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100"
-                      style={{
-                        flexShrink: 0,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: isPlacard ? PAL.coral : PAL.ink,
-                        background: isPlacard ? PAL.coralSoft : "rgba(0,0,0,0.04)",
-                        border: "none",
-                        borderRadius: 999,
-                        padding: "4px 10px",
-                        cursor: "pointer",
-                        transition: "opacity 0.15s, background 0.15s",
-                      }}
-                    >
-                      사용하기
-                    </button>
+                    {editMode ? (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "flex-end" }}>
+                        {layoutEditable ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/admin/templates/${template.id}/builder`);
+                            }}
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: "#fff",
+                              background: PAL.coral,
+                              border: "none",
+                              borderRadius: 999,
+                              padding: "4px 8px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            레이아웃 편집
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: 10, color: PAL.mutedSoft }}>RCS는 레이아웃 편집 불가</span>
+                        )}
+                        <button
+                          type="button"
+                          title="정보 수정"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMetaDialog({ mode: "edit", template });
+                          }}
+                          style={{
+                            fontSize: 11,
+                            border: "1px solid rgba(0,0,0,0.08)",
+                            borderRadius: 999,
+                            padding: "4px 6px",
+                            background: "#fff",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <Pencil style={{ width: 12, height: 12 }} />
+                        </button>
+                        <button
+                          type="button"
+                          title="복제"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDuplicate(template);
+                          }}
+                          style={{
+                            fontSize: 11,
+                            border: "1px solid rgba(0,0,0,0.08)",
+                            borderRadius: 999,
+                            padding: "4px 6px",
+                            background: "#fff",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <Copy style={{ width: 12, height: 12 }} />
+                        </button>
+                        <button
+                          type="button"
+                          title="삭제"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDelete(template);
+                          }}
+                          style={{
+                            fontSize: 11,
+                            border: "1px solid rgba(255,0,0,0.15)",
+                            borderRadius: 999,
+                            padding: "4px 6px",
+                            background: "#fff",
+                            cursor: "pointer",
+                            color: "#dc2626",
+                          }}
+                        >
+                          <Trash2 style={{ width: 12, height: 12 }} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectTemplate(template.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100"
+                        style={{
+                          flexShrink: 0,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: isPlacard ? PAL.coral : PAL.ink,
+                          background: isPlacard ? PAL.coralSoft : "rgba(0,0,0,0.04)",
+                          border: "none",
+                          borderRadius: 999,
+                          padding: "4px 10px",
+                          cursor: "pointer",
+                          transition: "opacity 0.15s, background 0.15s",
+                        }}
+                      >
+                        사용하기
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -472,7 +697,7 @@ export function TemplateGallery() {
           })}
         </div>
 
-        {filteredTemplates.length === 0 && (
+        {filteredTemplates.length === 0 && !editMode && (
           <div
             style={{
               padding: "64px 24px",
@@ -489,6 +714,65 @@ export function TemplateGallery() {
           </div>
         )}
       </div>
+
+      <TemplateCategoryManagerDialog
+        open={categoryMgrOpen}
+        onOpenChange={setCategoryMgrOpen}
+        categories={templateCategories}
+        templates={designTemplates}
+        onSave={(cats) => void persistCatalog(setCatalogCategories(catalog, cats))}
+        onResetCatalog={() => void persistCatalog(emptyTemplateCatalog())}
+      />
+
+      <TemplateMetaDialog
+        open={metaDialog != null}
+        onOpenChange={(open) => {
+          if (!open) setMetaDialog(null);
+        }}
+        title={metaDialog?.mode === "edit" ? "템플릿 정보 수정" : "새 템플릿"}
+        categories={templateCategories}
+        initial={
+          metaDialog?.mode === "edit"
+            ? {
+                name: metaDialog.template.name,
+                description: metaDialog.template.description,
+                category: metaDialog.template.category,
+                mediaType: metaDialog.template.mediaType,
+                size: metaDialog.template.size,
+              }
+            : {
+                name: "",
+                description: "",
+                category: templateCategories[0]?.id ?? "marketing-banner",
+                mediaType,
+                size: { width: 1080, height: 1080, unit: "px", name: "1:1" },
+              }
+        }
+        onSubmit={(meta) => {
+          if (metaDialog?.mode === "edit") {
+            void persistCatalog(
+              upsertCatalogTemplate(catalog, {
+                ...metaDialog.template,
+                ...meta,
+              }),
+            );
+            return;
+          }
+          const id = newCustomTemplateId();
+          const created: Template = {
+            id,
+            ...meta,
+            thumbnail: "",
+            isCustom: true,
+            customizable: true,
+            layout: createDefaultTemplateLayout(),
+          };
+          void (async () => {
+            await persistCatalog(upsertCatalogTemplate(catalog, created));
+            navigate(`/admin/templates/${id}/builder`);
+          })();
+        }}
+      />
     </div>
   );
 }

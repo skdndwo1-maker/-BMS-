@@ -71,6 +71,7 @@ import { normalizeRunForRag } from "./ragNormalize.js";
 import { requireAdmin } from "./adminAuth.js";
 import { handleLibraryUpload } from "./libraryUpload.js";
 import { handleLibraryList } from "./libraryAssets.js";
+import { handleTemplateCatalogGet, handleTemplateCatalogPut } from "./templateCatalog.js";
 import { getSupabaseAnonClient, getSupabaseServiceClient, isSupabaseInvalidApiKeyError } from "./supabase.js";
 
 const app = express();
@@ -505,6 +506,15 @@ app.get("/api/library/assets", (req, res) => {
 /** Brand Library: 관리자 에셋 업로드 (JWT + admin_users → service role Storage/DB) */
 app.post("/api/library/upload", uploadLibrary.single("file"), (req, res) => {
   void handleLibraryUpload(req, res);
+});
+
+/** 브랜드 디자인 템플릿 카탈로그 (관리자 편집분: 제작물 유형·템플릿·레이아웃) */
+app.get("/api/templates/catalog", (req, res) => {
+  void handleTemplateCatalogGet(req, res);
+});
+
+app.put("/api/templates/catalog", (req, res) => {
+  void handleTemplateCatalogPut(req, res);
 });
 
 /** 국가법령정보센터 Open API 연동 상태. `?probe=1`이면 상표법 검색 1회로 실제 호출 성공 여부 확인(OC·IP 등록 필요) */
