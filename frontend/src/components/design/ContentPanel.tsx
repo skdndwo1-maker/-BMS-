@@ -34,7 +34,8 @@ import {
   type AiAssetAlternative,
 } from "@/components/design/AiAssetAlternativesDialog";
 import { AiImageAlternativesDialog } from "@/components/design/AiImageAlternativesDialog";
-import { generateDesignAsset, isSvgAlternative, removeDesignImageBackground } from "@/lib/designEditorApi";
+import { generateDesignAsset, isSvgAlternative } from "@/lib/designEditorApi";
+import { removeImageBackground } from "@/lib/backgroundRemoval";
 import {
   base64ToDataUri,
   deleteUserGeneratedAsset,
@@ -60,7 +61,7 @@ import {
   detectClosestAiImageAspectRatio,
   type AiImageAspectRatioId,
 } from "@/design/aiImageAspectRatio";
-import { templates as allDesignTemplates } from "@/design/templates";
+import { useTemplateCatalog } from "@/design/templateCatalog";
 import { resolvePosterBodyBlocksForRender, applyBodyBlockTextEdit } from "@/design/posterBodyDisplay";
 import { VI_COLORS } from "@/design/viCanvasConstants";
 import { isSafetyCautionTemplate } from "@/design/safetyCautionPreset";
@@ -282,11 +283,13 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     });
   }, [content, onContentChange]);
 
+  const { templates: allDesignTemplates } = useTemplateCatalog();
   const isPlacard = PLACARD_IDS.includes(templateId ?? "");
   /** 템플릿 갤러리에 등록된 모든 온·오프라인 템플릿: A1 포스터와 동일 편집 패널 */
   const useBrandGraphicPanel = allDesignTemplates.some((t) => t.id === templateId);
   const isContentEmpty = !content.title && !content.subtitle && !content.bodyText;
   const templateMeta = allDesignTemplates.find((t) => t.id === templateId);
+  const logoPositionLocked = Boolean(content.templateLogoLocked);
   const isXBanner = (templateId ?? "") === "xbanner" || templateMeta?.category === "xbanner";
   const isSafetyCaution = isSafetyCautionTemplate(templateId);
   const isRcs = templateMeta?.category === "rcs";
@@ -358,17 +361,12 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     if (bgRemoveBusy) return;
     const src = imagePreview?.trim();
     if (!src) return;
-    const mimeMatch = /^data:(image\/[\w+.-]+);base64,/.exec(src);
-    const mimeType = mimeMatch?.[1] ?? "image/png";
-    const base64 = src.replace(/^data:image\/[\w+.-]+;base64,/, "");
-    if (!base64) return;
     setBgRemoveBusy(true);
     setBgRemoveError(null);
     try {
-      const out = await removeDesignImageBackground({ imageBase64: base64, imageMime: mimeType });
-      const nextDataUrl = base64ToDataUri(out.mimeType, out.base64);
-      onContentChange((prev) => applyPosterImageToContent(prev, nextDataUrl));
-      setImagePreview(nextDataUrl);
+      const out = await removeImageBackground(src);
+      onContentChange((prev) => applyPosterImageToContent(prev, out.dataUrl));
+      setImagePreview(out.dataUrl);
     } catch (e) {
       setBgRemoveError(e instanceof Error ? e.message : "배경 제거에 실패했습니다.");
     } finally {
@@ -1853,7 +1851,10 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           <div ref={refLogo} className="border-t border-gray-100 pt-4 space-y-4">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">브랜드 로고</p>
             <LogoSelector/>
-            {!isPlacard && !isSafetyCaution ? <LogoPositionSelector/> : null}
+            {!isPlacard && !isSafetyCaution && !logoPositionLocked ? <LogoPositionSelector/> : null}
+            {logoPositionLocked ? (
+              <p className="text-xs text-gray-500">이 템플릿은 로고 위치가 고정되어 있습니다.</p>
+            ) : null}
           </div>
         ) : null}
 
@@ -2191,7 +2192,11 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
       </div>
       <div className="border-t border-gray-200 pt-6 space-y-6">
         <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Sparkles className="w-4 h-4 text-[#FF7F66]"/>Brand Assets</h3>
-        <LogoSelector/>{!isSafetyCaution ? <LogoPositionSelector/> : null}
+        <LogoSelector/>
+        {!isSafetyCaution && !logoPositionLocked ? <LogoPositionSelector/> : null}
+        {logoPositionLocked ? (
+          <p className="text-xs text-gray-500">이 템플릿은 로고 위치가 고정되어 있습니다.</p>
+        ) : null}
       </div>
       <div className="space-y-2">
         <Label>Main Image</Label>

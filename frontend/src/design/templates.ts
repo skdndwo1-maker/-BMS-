@@ -1,4 +1,4 @@
-import type { Template } from "./types";
+import type { Template, TemplateCategoryDef } from "./types";
  
 export const templates: Template[] = [
   // Marketing Banners (Online)
@@ -173,7 +173,7 @@ export const templates: Template[] = [
   },
 ];
  
-export const templateCategories = [
+export const templateCategories: TemplateCategoryDef[] = [
   { id: 'marketing-banner', label: '마케팅 배너',   icon: 'LayoutTemplate' },
   { id: 'poster',           label: '포스터',        icon: 'FileImage' },
   { id: 'social-media',     label: '소셜 미디어',   icon: 'Share2' },

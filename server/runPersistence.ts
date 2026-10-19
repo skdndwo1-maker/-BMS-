@@ -13,7 +13,6 @@ export type RunType =
   | "design_editor_draft_proposal"
   | "design_editor_asset_generation"
   | "design_editor_image_develop"
-  | "design_editor_image_remove_background"
   | "simply_heart";
 
 export async function persistRun(args: {

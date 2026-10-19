@@ -32,7 +32,6 @@ export {
   runDesignEditorAssetGeneration,
   runDesignEditorImageGeneration,
   runDesignEditorImageDevelop,
-  runDesignEditorImageBackgroundRemoval,
   normalizeImageAspectRatioId,
   runDesignEditorDraftProposal,
   type DesignEditorViolationRow,

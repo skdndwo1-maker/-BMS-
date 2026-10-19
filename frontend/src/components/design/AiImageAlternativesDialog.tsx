@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Scissors, Sparkles } from "lucide-react";
-import { developDesignImage, removeDesignImageBackground } from "@/lib/designEditorApi";
+import { developDesignImage } from "@/lib/designEditorApi";
+import { removeImageBackground } from "@/lib/backgroundRemoval";
 import { base64ToDataUri } from "@/lib/userGeneratedAssetsApi";
 
 export type AiImageAlternative = {
@@ -113,15 +114,14 @@ export function AiImageAlternativesDialog({
     setBgRemoveBusy(true);
     setDevelopError(null);
     try {
-      const out = await removeDesignImageBackground({
-        imageBase64: activeStep.imageBase64,
-        imageMime: activeStep.mimeType,
-      });
-      const src = base64ToDataUri(out.mimeType, out.base64);
+      const inputDataUrl = activeStep.src.startsWith("data:")
+        ? activeStep.src
+        : base64ToDataUri(activeStep.mimeType, activeStep.imageBase64);
+      const out = await removeImageBackground(inputDataUrl);
       const nextStep: AiImageDevelopStep = {
         id: String(developSteps.length),
         label: "배경제거",
-        src,
+        src: out.dataUrl,
         mimeType: out.mimeType,
         imageBase64: out.base64,
         developPrompt: "AI 배경제거",

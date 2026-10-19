@@ -23,7 +23,6 @@ import {
   runDesignEditorAssetGeneration,
   runDesignEditorImageGeneration,
   runDesignEditorImageDevelop,
-  runDesignEditorImageBackgroundRemoval,
   normalizeImageAspectRatioId,
   runDesignEditorDraftProposal,
   runInspectionWithGemini,
@@ -72,6 +71,7 @@ import { normalizeRunForRag } from "./ragNormalize.js";
 import { requireAdmin } from "./adminAuth.js";
 import { handleLibraryUpload } from "./libraryUpload.js";
 import { handleLibraryList } from "./libraryAssets.js";
+import { handleTemplateCatalogGet, handleTemplateCatalogPut } from "./templateCatalog.js";
 import { getSupabaseAnonClient, getSupabaseServiceClient, isSupabaseInvalidApiKeyError } from "./supabase.js";
 
 const app = express();
@@ -506,6 +506,15 @@ app.get("/api/library/assets", (req, res) => {
 /** Brand Library: 관리자 에셋 업로드 (JWT + admin_users → service role Storage/DB) */
 app.post("/api/library/upload", uploadLibrary.single("file"), (req, res) => {
   void handleLibraryUpload(req, res);
+});
+
+/** 브랜드 디자인 템플릿 카탈로그 (관리자 편집분: 제작물 유형·템플릿·레이아웃) */
+app.get("/api/templates/catalog", (req, res) => {
+  void handleTemplateCatalogGet(req, res);
+});
+
+app.put("/api/templates/catalog", (req, res) => {
+  void handleTemplateCatalogPut(req, res);
 });
 
 /** 국가법령정보센터 Open API 연동 상태. `?probe=1`이면 상표법 검색 1회로 실제 호출 성공 여부 확인(OC·IP 등록 필요) */
@@ -1730,49 +1739,6 @@ app.post("/api/design-editor/develop-image", async (req, res) => {
       },
       outputJson: { ok: true, mimeType: out.mimeType, caption: out.caption },
       inputText: developPrompt,
-      outputText: out.caption ?? null,
-      model: process.env.GEMINI_IMAGE_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || null,
-    });
-
-    res.json({ ok: true, mimeType: out.mimeType, base64: out.base64, caption: out.caption });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-app.post("/api/design-editor/remove-background", async (req, res) => {
-  try {
-    const imageMime = typeof req.body?.imageMime === "string" ? req.body.imageMime.trim() : "image/png";
-    const rawB64 = String(req.body?.imageBase64 ?? "").replace(/^data:image\/\w+;base64,/, "");
-
-    if (!rawB64 || !imageMime.startsWith("image/")) {
-      res.status(400).json({ error: "image_required" });
-      return;
-    }
-    if (!process.env.GEMINI_API_KEY?.trim()) {
-      res.status(503).json({ error: "GEMINI_API_KEY가 설정되어 있지 않습니다." });
-      return;
-    }
-
-    const out = await runDesignEditorImageBackgroundRemoval({
-      imageBase64: rawB64,
-      imageMime,
-    });
-
-    if (!out) {
-      res.status(503).json({
-        error: "배경 제거에 실패했습니다. GEMINI_IMAGE_MODEL 설정과 입력 이미지를 확인해 주세요.",
-      });
-      return;
-    }
-
-    await persistRun({
-      req,
-      type: "design_editor_image_remove_background",
-      status: "pending_review",
-      inputJson: { imageMime },
-      outputJson: { ok: true, mimeType: out.mimeType, caption: out.caption },
-      inputText: null,
       outputText: out.caption ?? null,
       model: process.env.GEMINI_IMAGE_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || null,
     });

@@ -7,6 +7,7 @@ import { BrandLibrary } from "@/components/BrandLibrary";
 import { TemplateGallery } from "@/components/TemplateGallery";
 import { DesignEditor } from "@/components/design/DesignEditor";
 import { AdminReview } from "@/components/AdminReview";
+import { TemplateBuilder } from "@/components/admin/TemplateBuilder";
 import { MyDesignsDashboard } from "@/components/MyDesignsDashboard";
 import { SimplyHeart } from "@/components/SimplyHeart";
 
@@ -22,5 +23,6 @@ export const appRouter = createBrowserRouter([
   { path: "/simply-heart", element: <SimplyHeart /> },
   { path: "/library", element: <BrandLibrary /> },
   { path: "/admin/review", element: <AdminReview /> },
+  { path: "/admin/templates/:templateId/builder", element: <TemplateBuilder /> },
   { path: "*", element: <Navigate to="/" replace /> },
 ]);

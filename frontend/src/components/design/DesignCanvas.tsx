@@ -10,7 +10,8 @@ import {
   type MouseEvent,
   type FocusEvent,
 } from "react";
-import type { DesignContent, CanvasSize, AssetLayer, TemplateCategory } from "@/design/types";
+import type { DesignContent, CanvasSize, AssetLayer, TemplateCategory, CanvasShape } from "@/design/types";
+import { isTemplateLockedKey } from "@/design/templateLayout";
 import { DraggableAsset } from "./DraggableAsset";
 import { DraggableCanvasOverlay } from "./DraggableCanvasOverlay";
 
@@ -887,7 +888,9 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement) return;
       if ((ae as HTMLElement | null)?.isContentEditable) return;
       const c0 = contentRef.current;
-      const keys = expandKeysForRectOps(c0, selectedKeysRef.current);
+      const keys = expandKeysForRectOps(c0, selectedKeysRef.current).filter(
+        (k) => !isTemplateLockedKey(c0, k)
+      );
       const removeTitle = keys.includes("title");
       const removeFooter = keys.includes("footer");
       const removeImage = keys.includes("image");
@@ -902,7 +905,14 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         if (!k.startsWith("asset:")) continue;
         const id = k.slice(6);
         const a = (c0.assetLayers ?? []).find((x) => x.id === id);
-        if (a && !a.locked) assetIds.add(id);
+        if (a && !a.locked && !isTemplateLockedKey(c0, `asset:${id}`)) assetIds.add(id);
+      }
+      const shapeIds = new Set<string>();
+      for (const k of keys) {
+        if (!k.startsWith("shape:")) continue;
+        const id = k.slice(6);
+        const s = (c0.canvasShapes ?? []).find((x) => x.id === id);
+        if (s && !s.locked) shapeIds.add(id);
       }
       if (
         !removeTitle &&
@@ -910,7 +920,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
         !removeImage &&
         !removeUploadedLogoKey &&
         bodyIds.size === 0 &&
-        assetIds.size === 0
+        assetIds.size === 0 &&
+        shapeIds.size === 0
       )
         return;
       e.preventDefault();
@@ -941,6 +952,9 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       if (assetIds.size > 0) {
         next.assetLayers = (next.assetLayers ?? []).filter((a) => !assetIds.has(a.id));
       }
+      if (shapeIds.size > 0) {
+        next.canvasShapes = (next.canvasShapes ?? []).filter((s) => !shapeIds.has(s.id));
+      }
       const removedKeys: string[] = [];
       if (removeTitle) removedKeys.push("title");
       if (removeFooter) removedKeys.push("footer");
@@ -948,6 +962,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       if (removeUploadedLogoKey) removedKeys.push("uploadedLogo");
       for (const id of bodyIds) removedKeys.push(id === "body-1" ? "body" : `body:${id}`);
       for (const id of assetIds) removedKeys.push(`asset:${id}`);
+      for (const id of shapeIds) removedKeys.push(`shape:${id}`);
       next = removeGroupsTouchingKeys(next, [...removedKeys, ...selectedKeysRef.current.filter(isGroupSelectionKey)]);
       onContentChange(next);
       setSelectedKeys((prev) =>
@@ -961,6 +976,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             return !bodyIds.has(id);
           }
           if (k.startsWith("asset:")) return !assetIds.has(k.slice(6));
+          if (k.startsWith("shape:")) return !shapeIds.has(k.slice(6));
           return true;
         })
       );
@@ -1223,6 +1239,21 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     content.axisLayoutImageCornerRadiusPx != null && !isFullBackgroundImage
       ? content.axisLayoutImageCornerRadiusPx * layoutScale
       : undefined;
+  const lockedByTemplate = (key: string) => isTemplateLockedKey(content, key);
+  const canvasShapes = content.canvasShapes ?? [];
+  const updateCanvasShape = (id: string, patch: Partial<CanvasShape>) => {
+    if (!onContentChange) return;
+    const c = contentRef.current;
+    onContentChange({
+      ...c,
+      canvasShapes: (c.canvasShapes ?? []).map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    });
+  };
+  const removeCanvasShape = (id: string) => {
+    if (!onContentChange) return;
+    const c = contentRef.current;
+    onContentChange({ ...c, canvasShapes: (c.canvasShapes ?? []).filter((s) => s.id !== id) });
+  };
   const badgeRect = content.posterBadgeRect ?? DEFAULT_POSTER_BADGE_RECT;
   const titleRect = content.posterTitleRect ?? DEFAULT_POSTER_TITLE_RECT;
   const footerRect = content.posterFooterRect ?? DEFAULT_POSTER_FOOTER_RECT;
@@ -2097,6 +2128,59 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             />
           </DraggableCanvasOverlay>
         ) : null}
+        {/* 템플릿 컬러 박스: 텍스트·이미지 뒤 */}
+        {canvasShapes.map((s) => (
+          <DraggableCanvasOverlay
+            key={s.id}
+            rect={s}
+            canvasW={displayW}
+            canvasH={displayH}
+            onRectChange={(next) => updateCanvasShape(s.id, next)}
+            isSelected={expandedSelKeys.includes(`shape:${s.id}`)}
+            onSelect={(opts) => pickKey(`shape:${s.id}`, !!opts?.additive)}
+            zIndex={3}
+            label="컬러 박스"
+            locked={Boolean(s.locked)}
+            borderRadiusMode="square"
+            snapStepPx={snapPx}
+            onRequestDelete={onContentChange ? () => removeCanvasShape(s.id) : undefined}
+          >
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                background: s.color,
+                opacity: s.opacity ?? 1,
+                borderRadius: `${(Math.min(s.width * displayW, s.height * displayH) * (s.radiusPct ?? 0)) / 100}px`,
+              }}
+            />
+          </DraggableCanvasOverlay>
+        ))}
+        {!imageUrl && content.templateImagePlaceholder && !isFullBackgroundImage ? (
+          <div
+            data-canvas-export-exclude="true"
+            style={{
+              position: "absolute",
+              left: `${imageRect.x * displayW}px`,
+              top: `${imageRect.y * displayH}px`,
+              width: `${imageRect.width * displayW}px`,
+              height: `${imageRect.height * displayH}px`,
+              zIndex: imageZIndex,
+              border: "2px dashed rgba(244, 49, 130, 0.45)",
+              borderRadius: "12px",
+              background: "rgba(244, 49, 130, 0.04)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "rgba(244, 49, 130, 0.75)",
+              fontSize: "12px",
+              fontWeight: 600,
+              pointerEvents: "none",
+            }}
+          >
+            이미지 영역 · 우측 패널에서 업로드
+          </div>
+        ) : null}
         {/* 이미지: 드래그·리사이즈, 모서리 라운드 */}
         {imageUrl && (
           <DraggableCanvasOverlay
@@ -2111,9 +2195,9 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             }}
             zIndex={imageZIndex}
             label={imageInnerPosAdjust ? "이미지 · 안쪽 위치 조절" : isFullBackgroundImage ? "배경 이미지" : "이미지"}
-            locked={Boolean(content.posterImageLocked)}
+            locked={Boolean(content.posterImageLocked) || lockedByTemplate("image")}
             onToggleLock={
-              onContentChange
+              onContentChange && !lockedByTemplate("image")
                 ? () =>
                     onContentChange({
                       ...contentRef.current,
@@ -2197,7 +2281,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             borderRadiusMode="square"
             snapStepPx={snapPx}
             canvasInsetPx={textCanvasInsetPx}
-            locked={isPlacard}
+            locked={isPlacard || lockedByTemplate("title")}
             clipContent={!isSafetyCaution}
             onOverlayDoubleClick={() => {
               onBeginCanvasTextEdit?.();
@@ -2341,6 +2425,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               borderRadiusMode="square"
               snapStepPx={snapPx}
               canvasInsetPx={textCanvasInsetPx}
+              locked={lockedByTemplate(`subtitle:${s.id}`)}
               onOverlayDoubleClick={() => {
                 onBeginCanvasTextEdit?.();
                 setInlineEditTarget({ kind: "subtitle", id: s.id });
@@ -2455,7 +2540,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
               borderRadiusMode="square"
               snapStepPx={snapPx}
               canvasInsetPx={textCanvasInsetPx}
-              locked={isPlacard}
+              locked={isPlacard || lockedByTemplate(`body:${b.id}`)}
               clipContent={!isSafetyCaution}
               onOverlayDoubleClick={() => {
                 onBeginCanvasTextEdit?.();
@@ -2531,7 +2616,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             borderRadiusMode="square"
             snapStepPx={snapPx}
             canvasInsetPx={textCanvasInsetPx}
-            locked={isPlacard}
+            locked={isPlacard || lockedByTemplate("footer")}
             onOverlayDoubleClick={() => {
               onBeginCanvasTextEdit?.();
               setInlineEditTarget({ kind: "footer" });
@@ -2753,6 +2838,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             }}
             onUpdate={handleAssetUpdate}
             onDelete={handleAssetDelete}
+            templateLocked={lockedByTemplate(`asset:${asset.id}`)}
           />
         ))}
 

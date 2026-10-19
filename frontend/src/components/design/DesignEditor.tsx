@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { templates } from "@/design/templates";
+import { useTemplateCatalog } from "@/design/templateCatalog";
+import { applyTemplateLayoutToContent } from "@/design/templateLayout";
 import type { DesignContent } from "@/design/types";
 import { DesignCanvas, type DesignCanvasHandle, type DesignFocusTarget } from './DesignCanvas';
 import type { CanvasTextEditTarget } from '@/design/canvasTextTypography';
@@ -102,6 +103,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const actualTemplateId = templateId || params.templateId;
 
+  const { templates, loaded: catalogLoaded } = useTemplateCatalog();
   const template = templates.find(t => t.id === actualTemplateId);
   const sb = useMemo(() => {
     try {
@@ -555,11 +557,30 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     }
   }, [template, bootBusy, actualTemplateId, searchParams, setSearchParams, setContentWithHistory]);
 
+  /** 관리자 템플릿 빌더 레이아웃 — 새 디자인 진입 시 1회 적용 (AXIS 가이드보다 먼저) */
+  const templateLayout = template?.layout;
+  const templateGridVisible = templateLayout?.grid.visible;
+  useEffect(() => {
+    if (!templateLayout || !actualTemplateId) return;
+    if (bootBusy) return;
+    if (searchParams.get("designId")?.trim()) return;
+    setContentWithHistory((prev) =>
+      prev.templateLayoutApplied === actualTemplateId
+        ? prev
+        : applyTemplateLayoutToContent(prev, templateLayout, actualTemplateId)
+    );
+  }, [templateLayout, bootBusy, actualTemplateId, searchParams, setContentWithHistory]);
+  useEffect(() => {
+    if (templateGridVisible != null) setShowViGrid(templateGridVisible);
+  }, [templateGridVisible]);
+
   /** 최초 진입 시 AXIS 레이아웃 가이드(캔버스 비율별 Wide/Basic/Square) 기본 배치 적용 */
   useEffect(() => {
     if (!template?.size?.width || !template.size.height) return;
     if (bootBusy) return;
     if (actualTemplateId === "rcs-568x368") return;
+    /** 관리자 빌더 레이아웃이 있으면 AXIS 가이드로 덮지 않음 */
+    if (template.layout) return;
 
     setContentWithHistory((prev) => {
       if (!shouldApplyAxisLayoutGuide(actualTemplateId, prev, template.category)) return prev;
@@ -622,6 +643,14 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     lastBurstKeyRef.current = null;
     lastSnapshotAtRef.current = 0;
   };
+
+  if (!template && !catalogLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm text-gray-500">
+        템플릿을 불러오는 중…
+      </div>
+    );
+  }
 
   if (!template) {
     return (
