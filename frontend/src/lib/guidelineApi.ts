@@ -598,10 +598,36 @@ export async function runBrandNaming(opts: {
   return (await r.json()) as BrandNamingRunResult;
 }
 
-export async function fetchHealth(): Promise<{ ok: boolean; gemini: boolean; law?: boolean }> {
-  const r = await fetch(apiUrl("/api/health"));
-  if (!r.ok) throw new Error("health");
-  return (await r.json()) as { ok: boolean; gemini: boolean; law?: boolean };
+export type HealthStatus = {
+  ok: boolean;
+  gemini: boolean;
+  law?: boolean;
+  publicBase?: string;
+};
+
+/** 브라우저에서 호출 중인 API 베이스(디버그·연동 상태 표시용) */
+export function getApiBaseForDisplay(): string {
+  const b = (import.meta.env.VITE_API_URL as string | undefined)?.trim().replace(/\/$/, "") ?? "";
+  if (b) return b;
+  if (typeof window !== "undefined") return window.location.origin;
+  return "(same-origin /api → Vite proxy)";
+}
+
+export async function fetchHealth(): Promise<HealthStatus> {
+  const url = apiUrl("/api/health");
+  let r: Response;
+  try {
+    r = await fetch(url);
+  } catch {
+    throw new Error(
+      `API 서버에 연결할 수 없습니다. 로컬 개발 시 터미널에서 npm run dev:full 로 API(3001)와 프론트를 함께 실행했는지 확인하세요. (요청: ${url})`
+    );
+  }
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    throw new Error(`헬스 체크 실패 HTTP ${r.status} — ${body.slice(0, 160) || url}`);
+  }
+  return (await r.json()) as HealthStatus;
 }
 
 /** 서버에 저장된 가이드 파일로 AI 요약 재생성 (GEMINI_API_KEY 필요) */

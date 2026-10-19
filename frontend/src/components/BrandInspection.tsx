@@ -4,6 +4,7 @@ import {
   analyzeGuideline,
   fetchGuideline,
   fetchHealth,
+  getApiBaseForDisplay,
   runInspection,
   syncGuidelineFromFixed,
   type GuidelineInfo,
@@ -111,6 +112,7 @@ export function BrandInspection() {
   const [guidelineAnalyzing, setGuidelineAnalyzing] = useState(false);
   const [inspectionError, setInspectionError] = useState<string | null>(null);
   const [geminiConfigured, setGeminiConfigured] = useState<boolean | null>(null);
+  const [apiHealthError, setApiHealthError] = useState<string | null>(null);
   const [violations, setViolations] = useState<Violation[]>([]);
   const [inspectionOverallSummary, setInspectionOverallSummary] = useState<string | null>(null);
   /** 검수 응답의 AI 교정 이미지 1회분만 유지 (추가 생성 없음) */
@@ -201,28 +203,31 @@ export function BrandInspection() {
     (async () => {
       setGuidelineLoading(true);
       setGuidelineUploadError(null);
+      setApiHealthError(null);
+
       try {
         const h = await fetchHealth();
-        if (cancelled) return;
-        setGeminiConfigured(h.gemini);
+        if (!cancelled) setGeminiConfigured(h.gemini);
+      } catch (e) {
+        if (!cancelled) {
+          setGeminiConfigured(null);
+          setApiHealthError(e instanceof Error ? e.message : String(e));
+        }
+      }
 
-        // 먼저 기존 가이드라인 파일이 있는지 확인 (사용자 업로드 포함)
+      try {
         let guidelineInfo = await fetchGuideline(selectedGuidelineLibrary);
-        // 파일이 없는 경우에만 고정 PDF 동기화 시도
         if (!guidelineInfo?.hasFile) {
           try {
             const synced = await syncGuidelineFromFixed(selectedGuidelineLibrary);
             guidelineInfo = synced.guideline;
           } catch {
-            // 고정 PDF 동기화 실패 시 현재 상태 유지 (미연동 표시)
+            /* 고정 PDF 동기화 실패 시 현재 상태 유지 */
           }
         }
-
-        if (cancelled) return;
-        setServerGuideline(guidelineInfo);
+        if (!cancelled) setServerGuideline(guidelineInfo);
       } catch (e) {
         if (!cancelled) {
-          setGeminiConfigured(null);
           setServerGuideline(null);
           setGuidelineUploadError(e instanceof Error ? e.message : String(e));
         }
@@ -700,15 +705,37 @@ export function BrandInspection() {
                         확인 중
                       </span>
                     ) : (
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                          serverGuideline?.hasFile
-                            ? "bg-[#c8d9c4] font-bold text-[#2f4a38]"
-                            : "bg-[#E5E3DD] text-[#6B6B6B]"
-                        }`}
-                      >
-                        {serverGuideline?.hasFile ? "연동됨" : "미연동"}
-                      </span>
+                      <>
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                            apiHealthError
+                              ? "bg-red-100 text-red-800"
+                              : geminiConfigured
+                                ? "bg-[#c8d9c4] font-bold text-[#2f4a38]"
+                                : geminiConfigured === false
+                                  ? "bg-amber-100 text-amber-900"
+                                  : "bg-[#E5E3DD] text-[#6B6B6B]"
+                          }`}
+                          title="백엔드 GEMINI_API_KEY (브라우저에 키를 넣지 않음)"
+                        >
+                          {apiHealthError
+                            ? "API 연결 실패"
+                            : geminiConfigured
+                              ? "Gemini 연동됨"
+                              : geminiConfigured === false
+                                ? "Gemini 미설정"
+                                : "Gemini 확인 불가"}
+                        </span>
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                            serverGuideline?.hasFile
+                              ? "bg-[#c8d9c4] font-bold text-[#2f4a38]"
+                              : "bg-[#E5E3DD] text-[#6B6B6B]"
+                          }`}
+                        >
+                          {serverGuideline?.hasFile ? "가이드 연동됨" : "가이드 미연동"}
+                        </span>
+                      </>
                     )}
                     <Button
                       type="button"
@@ -722,6 +749,15 @@ export function BrandInspection() {
                     </Button>
                   </div>
                 </div>
+                {!guidelineLoading && apiHealthError && (
+                  <p className="mt-2 text-[11px] leading-relaxed text-red-700">{apiHealthError}</p>
+                )}
+                {!guidelineLoading && !apiHealthError && geminiConfigured === false && (
+                  <p className="mt-2 text-[11px] leading-relaxed text-amber-800">
+                    서버 <code className="rounded bg-amber-50 px-1">.env</code>의 GEMINI_API_KEY를 설정한 뒤 API를
+                    재시작하세요. API: {getApiBaseForDisplay()}
+                  </p>
+                )}
               </div>
             </div>
           </div>
