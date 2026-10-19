@@ -234,26 +234,6 @@ export async function developDesignImage(body: {
   };
 }
 
-export async function removeDesignImageBackground(body: {
-  imageBase64: string;
-  imageMime: string;
-}): Promise<{ mimeType: string; base64: string; caption: string }> {
-  const r = await fetch(apiUrl("/api/design-editor/remove-background"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await readJsonBody(r);
-  if (!r.ok || typeof data.base64 !== "string" || typeof data.mimeType !== "string") {
-    throw new Error(typeof data.error === "string" ? data.error : "remove_background_failed");
-  }
-  return {
-    mimeType: data.mimeType,
-    base64: data.base64,
-    caption: typeof data.caption === "string" ? data.caption : "",
-  };
-}
-
 export { isSvgAlternative };
 
 export type DesignEditorDraftProposal = {

@@ -34,7 +34,8 @@ import {
   type AiAssetAlternative,
 } from "@/components/design/AiAssetAlternativesDialog";
 import { AiImageAlternativesDialog } from "@/components/design/AiImageAlternativesDialog";
-import { generateDesignAsset, isSvgAlternative, removeDesignImageBackground } from "@/lib/designEditorApi";
+import { generateDesignAsset, isSvgAlternative } from "@/lib/designEditorApi";
+import { removeImageBackground } from "@/lib/backgroundRemoval";
 import {
   base64ToDataUri,
   deleteUserGeneratedAsset,
@@ -358,17 +359,12 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     if (bgRemoveBusy) return;
     const src = imagePreview?.trim();
     if (!src) return;
-    const mimeMatch = /^data:(image\/[\w+.-]+);base64,/.exec(src);
-    const mimeType = mimeMatch?.[1] ?? "image/png";
-    const base64 = src.replace(/^data:image\/[\w+.-]+;base64,/, "");
-    if (!base64) return;
     setBgRemoveBusy(true);
     setBgRemoveError(null);
     try {
-      const out = await removeDesignImageBackground({ imageBase64: base64, imageMime: mimeType });
-      const nextDataUrl = base64ToDataUri(out.mimeType, out.base64);
-      onContentChange((prev) => applyPosterImageToContent(prev, nextDataUrl));
-      setImagePreview(nextDataUrl);
+      const out = await removeImageBackground(src);
+      onContentChange((prev) => applyPosterImageToContent(prev, out.dataUrl));
+      setImagePreview(out.dataUrl);
     } catch (e) {
       setBgRemoveError(e instanceof Error ? e.message : "배경 제거에 실패했습니다.");
     } finally {
