@@ -37,6 +37,13 @@ export function sha256Hex(s: string): string {
   return createHash("sha256").update(s).digest("hex");
 }
 
+/**
+ * PDF-derived RAG source (origin=pdf_auto). Checksum change → re-chunk via deleteChunksForSource.
+ * human_supplement sources are never updated here; see supabase/migrations/20260912_02_rag_sources_origin.sql.
+ *
+ * TODO(admin-notify): When guideline PDF checksum changes, list active human_supplement rag_sources
+ * for the same guideline_id and notify admins to reconcile manually (no auto re-index).
+ */
 export async function upsertGuidelineSource(args: {
   guidelineId: string;
   title: string;
@@ -47,11 +54,12 @@ export async function upsertGuidelineSource(args: {
   if (!isSupabaseRagEnabled()) return null;
   const sb = getSupabaseServiceClient();
 
-  // Upsert by (type,guideline_id,title) via a select-first approach (no unique constraint assumed)
+  // Upsert pdf_auto only (human_supplement is admin-managed and PDF-update-safe)
   const { data: existing, error: exErr } = await sb
     .from("rag_sources")
     .select("id")
     .eq("type", "guideline")
+    .eq("origin", "pdf_auto")
     .eq("guideline_id", args.guidelineId)
     .eq("title", args.title)
     .limit(1);
@@ -80,6 +88,7 @@ export async function upsertGuidelineSource(args: {
     .from("rag_sources")
     .insert({
       type: "guideline",
+      origin: "pdf_auto",
       title: args.title,
       guideline_id: args.guidelineId,
       stored_relative_path: args.storedRelativePath,
@@ -152,8 +161,34 @@ export async function upsertRunQaSource(args: {
 export async function deleteChunksForSource(sourceId: string): Promise<void> {
   if (!isSupabaseRagEnabled()) return;
   const sb = getSupabaseServiceClient();
+
+  const { data: source, error: srcErr } = await sb
+    .from("rag_sources")
+    .select("origin")
+    .eq("id", sourceId)
+    .maybeSingle();
+
+  if (srcErr) {
+    throw new Error(`deleteChunksForSource: failed to load rag_source ${sourceId}: ${srcErr.message}`);
+  }
+  if (!source) {
+    throw new Error(`deleteChunksForSource: rag_source not found: ${sourceId}`);
+  }
+  if (source.origin === "human_supplement") {
+    throw new Error(
+      `deleteChunksForSource: refused — origin=human_supplement must not be re-indexed or cleared (sourceId=${sourceId})`
+    );
+  }
+  if (source.origin !== "pdf_auto") {
+    throw new Error(
+      `deleteChunksForSource: refused — only origin=pdf_auto is allowed (sourceId=${sourceId}, origin=${String(source.origin)})`
+    );
+  }
+
   const { error } = await sb.from("rag_chunks").delete().eq("source_id", sourceId);
-  if (error) console.error("[supabase] deleteChunksForSource failed:", error.message);
+  if (error) {
+    throw new Error(`deleteChunksForSource: delete failed for ${sourceId}: ${error.message}`);
+  }
 }
 
 export async function insertChunksWithEmbeddings(args: {

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Sparkles } from "lucide-react";
-import { developDesignImage } from "@/lib/designEditorApi";
+import { Loader2, Scissors, Sparkles } from "lucide-react";
+import { developDesignImage, removeDesignImageBackground } from "@/lib/designEditorApi";
 import { base64ToDataUri } from "@/lib/userGeneratedAssetsApi";
 
 export type AiImageAlternative = {
@@ -61,6 +61,7 @@ export function AiImageAlternativesDialog({
   const [developPrompt, setDevelopPrompt] = useState("");
   const [developBusy, setDevelopBusy] = useState(false);
   const [developError, setDevelopError] = useState<string | null>(null);
+  const [bgRemoveBusy, setBgRemoveBusy] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -70,17 +71,18 @@ export function AiImageAlternativesDialog({
       setDevelopPrompt("");
       setDevelopBusy(false);
       setDevelopError(null);
+      setBgRemoveBusy(false);
     }
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !developBusy) onOpenChange(false);
+      if (e.key === "Escape" && !developBusy && !bgRemoveBusy) onOpenChange(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, developBusy, onOpenChange]);
+  }, [open, developBusy, bgRemoveBusy, onOpenChange]);
 
   if (!open || alternatives.length === 0) return null;
 
@@ -104,6 +106,36 @@ export function AiImageAlternativesDialog({
     setActiveStepIdx(0);
     setDevelopPrompt("");
     setDevelopError(null);
+  };
+
+  const runRemoveBackground = async () => {
+    if (bgRemoveBusy || developBusy || !activeStep) return;
+    setBgRemoveBusy(true);
+    setDevelopError(null);
+    try {
+      const out = await removeDesignImageBackground({
+        imageBase64: activeStep.imageBase64,
+        imageMime: activeStep.mimeType,
+      });
+      const src = base64ToDataUri(out.mimeType, out.base64);
+      const nextStep: AiImageDevelopStep = {
+        id: String(developSteps.length),
+        label: "배경제거",
+        src,
+        mimeType: out.mimeType,
+        imageBase64: out.base64,
+        developPrompt: "AI 배경제거",
+      };
+      setDevelopSteps((prev) => {
+        const next = [...prev, nextStep];
+        setActiveStepIdx(next.length - 1);
+        return next;
+      });
+    } catch (e) {
+      setDevelopError(e instanceof Error ? e.message : "배경 제거에 실패했습니다.");
+    } finally {
+      setBgRemoveBusy(false);
+    }
   };
 
   const runDevelop = async () => {
@@ -161,7 +193,7 @@ export function AiImageAlternativesDialog({
         role="presentation"
         className="absolute inset-0 bg-black/40"
         onClick={() => {
-          if (!developBusy) onOpenChange(false);
+          if (!developBusy && !bgRemoveBusy) onOpenChange(false);
         }}
       />
       <div
@@ -180,7 +212,7 @@ export function AiImageAlternativesDialog({
             variant="ghost"
             size="sm"
             className="h-8"
-            disabled={developBusy}
+            disabled={developBusy || bgRemoveBusy}
             onClick={() => onOpenChange(false)}
           >
             닫기
@@ -237,23 +269,44 @@ export function AiImageAlternativesDialog({
                     disabled={developBusy}
                     autoComplete="off"
                   />
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="h-8 gap-1.5 text-[12px]"
-                    disabled={developBusy || !developPrompt.trim()}
-                    onClick={() => void runDevelop()}
-                  >
-                    {developBusy ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-3.5 w-3.5" />
-                    )}
-                    디벨롭하기
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-8 gap-1.5 text-[12px]"
+                      disabled={developBusy || bgRemoveBusy || !developPrompt.trim()}
+                      onClick={() => void runDevelop()}
+                    >
+                      {developBusy ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3.5 w-3.5" />
+                      )}
+                      디벨롭하기
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1.5 text-[12px]"
+                      disabled={developBusy || bgRemoveBusy}
+                      onClick={() => void runRemoveBackground()}
+                      title="주요 개체만 남기고 배경을 투명하게 지웁니다"
+                    >
+                      {bgRemoveBusy ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Scissors className="h-3.5 w-3.5" />
+                      )}
+                      AI배경제거
+                    </Button>
+                  </div>
                   {developError ? <p className="text-[10px] text-red-500">{developError}</p> : null}
                   {developBusy ? (
                     <p className="text-[10px] text-gray-500">디벨롭 중… 1~3분 걸릴 수 있습니다.</p>
+                  ) : null}
+                  {bgRemoveBusy ? (
+                    <p className="text-[10px] text-gray-500">배경 제거 중… 1~2분 걸릴 수 있습니다.</p>
                   ) : null}
                 </div>
               </div>
@@ -297,7 +350,7 @@ export function AiImageAlternativesDialog({
           <Button
             type="button"
             className="h-9 w-full text-[13px]"
-            disabled={!activeStep || developBusy}
+            disabled={!activeStep || developBusy || bgRemoveBusy}
             onClick={handleApply}
           >
             {activeStep ? "선택한 이미지 적용" : "대안을 먼저 선택하세요"}

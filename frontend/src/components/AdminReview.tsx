@@ -162,7 +162,8 @@ export function AdminReview() {
                         {r.type} · {r.status} · {r.id.slice(0, 8)}
                       </p>
                       <p className="text-[12px] text-gray-500">
-                        {new Date(r.created_at).toLocaleString()} · guideline: {r.guideline_id ?? "-"} · template:{" "}
+                        {new Date(r.created_at).toLocaleString()} · guideline:{" "}
+                        {r.guidelines?.title ?? r.guideline_id ?? "-"} · template:{" "}
                         {r.template_id ?? "-"} · score: {r.score ?? "-"} · model: {r.model ?? "-"}
                       </p>
                     </div>

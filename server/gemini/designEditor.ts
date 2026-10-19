@@ -6,7 +6,7 @@ import {
   shouldTryNextTextModel,
   textModelCandidates,
 } from "./shared.js";
-import { generateImageFromTextPrompt, generateRevisedBrandingImage, generateImageDevelopFromReference } from "./inspection.js";
+import { generateImageFromTextPrompt, generateRevisedBrandingImage, generateImageDevelopFromReference, removeImageBackgroundFromReference } from "./inspection.js";
 
 /** 브랜드 제작(디자인 에디터) 캔버스 — 위반 항목별 수정 힌트 포함 */
 const designEditorInspectionSchema = {
@@ -104,6 +104,27 @@ function normalizeDesignEditorViolation(raw: Record<string, unknown>): DesignEdi
     layoutReset
   };
 }
+
+/** 영역 1: VI 가이드 기반 이미지·에셋 생성 — 역할·CoT (프롬프트 텍스트 전용) */
+const VI_VISUAL_ROLE_INTRO = `당신은 LG U+의 UX/UI 디자이저이자 시각디자인 교수입니다.
+브랜드 VI 원칙을 정확히 이해하고 있습니다.`;
+
+const VI_VISUAL_COT_BLOCK = `[생성 절차 — Chain-of-Thought]
+1) 아래 [참조 샘플·스타일 가이드]와 [참조 VI 가이드라인]을 보고, 샘플들이 공통으로 따르는 조형 원칙(라인 두께, 여백, 기하학적 단순화 정도, 2D/3D 표현 방식 등)을 **먼저 언어로 요약**하라.
+2) 그 원칙이 VI 가이드라인(2D/3D, 아이콘, 픽토그램 각각의 규정)과 **일치하는지 확인**하라.
+3) 위 분석을 바탕으로 요청받은 새 에셋을 생성하라.`;
+
+/** 영역 2: Simply Guide 기반 카피 — 역할·CoT (프롬프트 텍스트 전용) */
+const SIMPLY_COPY_ROLE_INTRO = `당신은 LG U+의 카피라이터이자 브랜드 커뮤니케이션 전문가입니다.
+Simply Guide의 어법과 톤앤매너를 정확히 이해하고 있습니다.`;
+
+const SIMPLY_COPY_COT_BLOCK = `[작성 절차 — Chain-of-Thought]
+1) 작성 대상 슬롯이 **타이틀(메인·부제) / 본문 / 유의사항(하단 고지)** 중 어디에 해당하는지 확인하라.
+2) 해당 카테고리의 **Simply Guide 어법·톤 규칙**을 [참조 가이드라인]과 [Simply Guide 문구 예시]에서 확인하라.
+3) 그 규칙에 맞춰 문구를 제안하라.`;
+
+const SIMPLY_FEW_SHOT_INSTRUCTION = `[Few-shot — Simply Guide 문구 예시]
+[참조 가이드라인] 안의 Simply U+ 발췌·RAG 구절에서 타이틀·본문·유의사항에 해당하는 **실제 예시 문구**를 카테고리별로 골라 참고하라. 예시가 부족하면 Simply Guide의 간결·고객 중심·명료한 어법만 적용하라.`;
 
 function parseDesignEditorInspectionPayload(raw: string): {
   score: number;
@@ -298,6 +319,12 @@ export async function generateDesignEditorReplacementImage(opts: {
   const topicBlock = opts.creativeTopic?.trim()
     ? `\n[제작 주제]\n${opts.creativeTopic.trim()}\n`
     : "";
+  const viNotes = `${VI_VISUAL_ROLE_INTRO}
+
+${VI_VISUAL_COT_BLOCK}
+
+${topicBlock}[이미지 교체 우선]
+${opts.imageBrief}`;
   const r = await generateRevisedBrandingImage({
     designBase64: opts.designBase64,
     designMime: opts.designMime,
@@ -310,7 +337,7 @@ export async function generateDesignEditorReplacementImage(opts: {
         severity: "medium"
       }
     ],
-    userNotes: `${topicBlock}[이미지 교체 우선]\n${opts.imageBrief}`
+    userNotes: viNotes
   });
   if (!r) return null;
   return { mimeType: r.mimeType, base64: r.base64, caption: r.caption };
@@ -401,18 +428,22 @@ export async function runDesignEditorTextSuggestion(opts: {
 요청된 슬롯: ${targetStr}
 [제작 주제]에 「부제2만」「본문2만」「부제1·본문1만」「전체」처럼 원하는 슬롯만 지정할 수 있습니다. 지정이 없으면 요청된 슬롯 전부에 맞춥니다.`;
 
-  const prompt = `역할: LG U+ 브랜드 카피라이터. **B2C Brand Guidelines(Jason)** 의 브랜드 규정과 **Simply U+ 가이드라인**의 표현·톤·금지 사항을 함께 따릅니다.
+  const prompt = `${SIMPLY_COPY_ROLE_INTRO}
+
+${SIMPLY_COPY_COT_BLOCK}
+
+${SIMPLY_FEW_SHOT_INSTRUCTION}
 
 작업:
 1) 아래 [캔버스 JSON]의 목적·톤·메시지 방향을 파악하세요.
-2) [참조 가이드라인]의 Simple 톤(간결·명료·고객 중심), B2C 브랜드 규정, 실천 과제를 반영하세요.
+2) **카피·어법·톤**은 Simply Guide를 최우선으로, B2C Brand Guidelines(Jason)는 브랜드 금지·표기 등 보조 규정으로만 참고하세요.
 3) 요청된 슬롯만 채우고, 요청되지 않은 필드는 반드시 빈 문자열 "" 입니다.
 ${slotHelp}
 4) JSON만 출력합니다.
 
 템플릿: ${opts.templateLabel}
 ${opts.creativeTopic?.trim() ? `\n[제작 주제·의도]\n${opts.creativeTopic.trim()}\n` : ""}
-[참조 가이드라인 — Jason B2C + Simply U+]
+[참조 가이드라인 — Simply U+ (주) + Jason B2C (보조)]
 ${guide}
 
 [캔버스 JSON]
@@ -505,7 +536,15 @@ export async function runDesignEditorCanvasVisualCorrection(opts: {
       ? `[디자인 교정 모드 — 전체]\n캔버스 전체를 Jason B2C Brand Guidelines에 맞게 시각적으로 다듬은 단일 이미지를 생성하세요.`
       : `[디자인 교정 모드 — 검수 반영]\n아래 검수 지적을 우선 반영하여 수정 이미지를 생성하세요.`;
 
-  const notes = `${viPdfFirst}\n\n${typographyRules}\n\n${topicBlock}${modeNotes}`;
+  const notes = `${VI_VISUAL_ROLE_INTRO}
+
+${VI_VISUAL_COT_BLOCK}
+
+${viPdfFirst}
+
+${typographyRules}
+
+${topicBlock}${modeNotes}`;
 
   return generateRevisedBrandingImage({
     designBase64: opts.designBase64,
@@ -601,11 +640,16 @@ export async function runDesignEditorAssetGeneration(opts: {
 - 텍스트·글자 금지`;
 
   const genAI = new GoogleGenerativeAI(key);
-  const prompt = `역할: LG U+ 브랜드 디자인 에디터용 SVG 아티스트.
+  const prompt = `${VI_VISUAL_ROLE_INTRO}
+
+${VI_VISUAL_COT_BLOCK}
+
+[참조 샘플·스타일 가이드 — Few-shot]
+아래 스타일 블록은 RCS·VI 기준 **참조 샘플**입니다. 생성 전에 이 샘플들의 공통 조형 원칙을 요약·검증한 뒤 적용하세요.
+${styleBlock}
 
 작업: 아래 [생성방향]에 맞는 ${opts.assetKind === "pictogram" ? "픽토그램" : "일러스트"} SVG **대안 3개**를 설계하세요.
 각 대안은 같은 주제지만 구도·오브젝트 조합·포인트 색 배치가 서로 달라야 합니다.
-${styleBlock}
 
 규칙:
 1) alternatives 배열에 정확히 3개 항목. 각 svg는 xmlns="http://www.w3.org/2000/svg" 포함 완전한 <svg>...</svg> 한 개.
@@ -702,7 +746,9 @@ export async function runDesignEditorImageGeneration(opts: {
 
   for (let i = 0; i < IMAGE_VARIANT_HINTS.length; i++) {
     const variantHint = IMAGE_VARIANT_HINTS[i];
-    const prompt = `역할: LG U+ 브랜드 마케팅·디자인 템플릿용 고품질 히어로/배경 이미지 생성 전문가.
+    const prompt = `${VI_VISUAL_ROLE_INTRO}
+
+${VI_VISUAL_COT_BLOCK}
 
 작업: 아래 [생성방향]에 맞는 **마케팅 이미지 1장**을 생성하세요. (대안 ${i + 1}/3 — ${variantHint})
 
@@ -744,6 +790,14 @@ ${variantHint}`;
   return null;
 }
 
+/** 디자인 에디터: 이미지 배경 제거 (주요 개체만 남기고 투명 배경 PNG) */
+export async function runDesignEditorImageBackgroundRemoval(opts: {
+  imageBase64: string;
+  imageMime: string;
+}): Promise<{ mimeType: string; base64: string; caption: string } | null> {
+  return removeImageBackgroundFromReference(opts);
+}
+
 /** 디자인 에디터: 선택 이미지 + 추가 프롬프트로 디벨롭 */
 export async function runDesignEditorImageDevelop(opts: {
   imageBase64: string;
@@ -752,7 +806,13 @@ export async function runDesignEditorImageDevelop(opts: {
   templateLabel?: string;
   creativeTopic?: string;
 }): Promise<{ mimeType: string; base64: string; caption: string } | null> {
-  return generateImageDevelopFromReference(opts);
+  const developPrompt = `${VI_VISUAL_ROLE_INTRO}
+
+${VI_VISUAL_COT_BLOCK}
+
+[추가 디벨롭 요청]
+${opts.developPrompt.trim()}`;
+  return generateImageDevelopFromReference({ ...opts, developPrompt });
 }
 
 const normRectSchema = {
@@ -1065,10 +1125,14 @@ export async function runDesignEditorDraftProposal(opts: {
   const guide = opts.guidelineSummary.slice(0, 72_000);
   const ctx = opts.contentJson.slice(0, 28_000);
 
-  const prompt = `역할: LG U+ 브랜드 디자인 에디터 AI. 텍스트·레이아웃은 **Jason B2C + Simply U+** 가이드를, 이미지 시안은 **Jason B2C**만 참조합니다.
+  const prompt = `${SIMPLY_COPY_ROLE_INTRO}
+
+${SIMPLY_COPY_COT_BLOCK}
+
+${SIMPLY_FEW_SHOT_INSTRUCTION}
 
 작업: [제작 주제]와 [캔버스 정보]에 맞는 **완성형 디자인 초안**을 JSON으로 설계하세요.
-로고 위치·메인 타이틀·부제(0~3)·본문(1~3)·유의사항·배경/히어로 이미지·픽토그램/일러스트를 **Jason B2C + Simply 규정 범위 안에서** 배치하되, 캔버스 비율 안에서 겹치지 않게 합니다.
+**타이틀·부제·본문·유의사항(footer) 카피**는 Simply Guide 어법을 최우선으로 작성하고, 레이아웃·로고·색·이미지/에셋 배치는 Jason B2C VI를 따르세요. 캔버스 비율 안에서 겹치지 않게 합니다.
 
 [캔버스 정보]
 - 템플릿 ID: ${opts.templateLabel}

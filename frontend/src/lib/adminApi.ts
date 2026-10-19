@@ -7,6 +7,8 @@ export type AdminRunRow = {
   type: string;
   status: string;
   guideline_id: string | null;
+  /** PostgREST embed (single-id runs only; comma-separated guideline_id → null) */
+  guidelines: { title: string; type: string } | null;
   template_id: string | null;
   score: number | null;
   model: string | null;

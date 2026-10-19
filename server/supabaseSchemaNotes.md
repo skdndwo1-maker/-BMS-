@@ -3,9 +3,9 @@
 This repo includes SQL migrations under `supabase/migrations/`.
 
 ### Apply in Supabase
-1. Open Supabase Dashboard → SQL Editor
-2. Paste contents of `supabase/migrations/20260421_init_runs_rag.sql`
-3. Run
+1. Open Supabase Dashboard → SQL Editor (or Supabase CLI migrations)
+2. Run migrations under `supabase/migrations/` in filename order (oldest first)
+3. After `20260912_*` migrations: `npm run migrate:guidelines` (optional `--dry-run`)
 
 ### Required env (server)
 - `SUPABASE_URL` (project URL; `/rest/v1` suffix is OK)

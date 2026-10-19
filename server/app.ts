@@ -23,6 +23,7 @@ import {
   runDesignEditorAssetGeneration,
   runDesignEditorImageGeneration,
   runDesignEditorImageDevelop,
+  runDesignEditorImageBackgroundRemoval,
   normalizeImageAspectRatioId,
   runDesignEditorDraftProposal,
   runInspectionWithGemini,
@@ -1739,6 +1740,49 @@ app.post("/api/design-editor/develop-image", async (req, res) => {
   }
 });
 
+app.post("/api/design-editor/remove-background", async (req, res) => {
+  try {
+    const imageMime = typeof req.body?.imageMime === "string" ? req.body.imageMime.trim() : "image/png";
+    const rawB64 = String(req.body?.imageBase64 ?? "").replace(/^data:image\/\w+;base64,/, "");
+
+    if (!rawB64 || !imageMime.startsWith("image/")) {
+      res.status(400).json({ error: "image_required" });
+      return;
+    }
+    if (!process.env.GEMINI_API_KEY?.trim()) {
+      res.status(503).json({ error: "GEMINI_API_KEY가 설정되어 있지 않습니다." });
+      return;
+    }
+
+    const out = await runDesignEditorImageBackgroundRemoval({
+      imageBase64: rawB64,
+      imageMime,
+    });
+
+    if (!out) {
+      res.status(503).json({
+        error: "배경 제거에 실패했습니다. GEMINI_IMAGE_MODEL 설정과 입력 이미지를 확인해 주세요.",
+      });
+      return;
+    }
+
+    await persistRun({
+      req,
+      type: "design_editor_image_remove_background",
+      status: "pending_review",
+      inputJson: { imageMime },
+      outputJson: { ok: true, mimeType: out.mimeType, caption: out.caption },
+      inputText: null,
+      outputText: out.caption ?? null,
+      model: process.env.GEMINI_IMAGE_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || null,
+    });
+
+    res.json({ ok: true, mimeType: out.mimeType, base64: out.base64, caption: out.caption });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 app.post("/api/design-editor/correct-canvas", async (req, res) => {
   try {
     const guidelineId = DESIGN_EDITOR_INSPECTION_GUIDELINE_ID;
@@ -1932,7 +1976,9 @@ app.get("/api/admin/runs", async (req, res) => {
     const selectQuery = (sb: ReturnType<typeof getSupabaseServiceClient>) =>
       sb
         .from("runs")
-        .select("id,created_at,type,status,guideline_id,template_id,score,model,input_text,output_text,input_json,output_json")
+        .select(
+          "id,created_at,type,status,guideline_id,template_id,score,model,input_text,output_text,input_json,output_json,guidelines(title,type)"
+        )
         .eq("status", status)
         .order("created_at", { ascending: false })
         .limit(limit);
