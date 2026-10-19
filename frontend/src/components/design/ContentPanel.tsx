@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  Upload, Image as ImageIcon, Sparkles, Type,
+  Upload, Image as ImageIcon, Sparkles, Scissors, Type,
   AlignLeft,
   CornerDownLeft, CornerDownRight, CornerUpLeft, CornerUpRight,
   ChevronDown, ChevronUp, Settings, Shapes, Trash2, Eye, EyeOff, Plus, Loader2,
@@ -34,7 +34,7 @@ import {
   type AiAssetAlternative,
 } from "@/components/design/AiAssetAlternativesDialog";
 import { AiImageAlternativesDialog } from "@/components/design/AiImageAlternativesDialog";
-import { generateDesignAsset, isSvgAlternative } from "@/lib/designEditorApi";
+import { generateDesignAsset, isSvgAlternative, removeDesignImageBackground } from "@/lib/designEditorApi";
 import {
   base64ToDataUri,
   deleteUserGeneratedAsset,
@@ -210,6 +210,8 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   const [imageAiBusy, setImageAiBusy] = useState(false);
   const [imageAiError, setImageAiError] = useState<string | null>(null);
   const [myImagePickerOpen, setMyImagePickerOpen] = useState(false);
+  const [bgRemoveBusy, setBgRemoveBusy] = useState(false);
+  const [bgRemoveError, setBgRemoveError] = useState<string | null>(null);
   const [aiAltDialog, setAiAltDialog] = useState<AiAltDialogState | null>(null);
   const [myIllustAssets, setMyIllustAssets] = useState<UserGeneratedAsset[]>([]);
   const [myPictoAssets, setMyPictoAssets] = useState<UserGeneratedAsset[]>([]);
@@ -351,6 +353,28 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
       setImagePreview(dataUrl);
     })();
   }}, accept:{"image/*":[".png",".jpg",".jpeg",".webp"]}, multiple:false });
+
+  const removeUploadedImageBackground = useCallback(async () => {
+    if (bgRemoveBusy) return;
+    const src = imagePreview?.trim();
+    if (!src) return;
+    const mimeMatch = /^data:(image\/[\w+.-]+);base64,/.exec(src);
+    const mimeType = mimeMatch?.[1] ?? "image/png";
+    const base64 = src.replace(/^data:image\/[\w+.-]+;base64,/, "");
+    if (!base64) return;
+    setBgRemoveBusy(true);
+    setBgRemoveError(null);
+    try {
+      const out = await removeDesignImageBackground({ imageBase64: base64, imageMime: mimeType });
+      const nextDataUrl = base64ToDataUri(out.mimeType, out.base64);
+      onContentChange((prev) => applyPosterImageToContent(prev, nextDataUrl));
+      setImagePreview(nextDataUrl);
+    } catch (e) {
+      setBgRemoveError(e instanceof Error ? e.message : "배경 제거에 실패했습니다.");
+    } finally {
+      setBgRemoveBusy(false);
+    }
+  }, [bgRemoveBusy, imagePreview, onContentChange]);
   /**
    * 로고 업로드: react-dropzone 대신 ref 기반 hidden input을 쓴다.
    * `LogoSelector`가 ContentPanel 안에서 매 렌더마다 재생성되며 remount되기 때문에
@@ -1843,30 +1867,56 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
             {imagePreview?(<div className="space-y-2"><img src={imagePreview} alt="Preview" className="max-h-24 mx-auto rounded"/><p className="text-xs text-gray-500">클릭하여 교체 · 캔버스에서 위치·크기 조절</p></div>):(<div className="space-y-1"><ImageIcon className="w-8 h-8 mx-auto text-gray-400"/><p className="text-xs text-gray-600">이미지 드래그 또는 클릭하여 업로드</p><p className="text-xs text-gray-400">{imagePlacementMode === "full-background" ? "배경 전체형 · 텍스트는 위에 오버레이" : "라운드 박스형 · 모서리 라운드 자동"}</p></div>)}
           </div>
           {imagePreview ? (
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 text-[12px]"
-                onClick={() => {
-                  onContentChange({
-                    ...content,
-                    image: undefined,
-                    posterBackgroundImageRect: undefined,
-                    posterImageOpacity: 0,
-                    posterImagePosX: undefined,
-                    posterImagePosY: undefined,
-                    posterImageBrightness: undefined,
-                    posterImageContrast: undefined,
-                    posterImageSaturation: undefined,
-                    posterImageLocked: undefined,
-                  });
-                  setImagePreview(null);
-                }}
-              >
-                제거
-              </Button>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 text-[12px]"
+                  disabled={bgRemoveBusy}
+                  onClick={() => void removeUploadedImageBackground()}
+                  title="주요 개체만 남기고 배경을 투명하게 지웁니다"
+                >
+                  {bgRemoveBusy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Scissors className="h-3.5 w-3.5" />
+                  )}
+                  AI배경제거
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-[12px]"
+                  disabled={bgRemoveBusy}
+                  onClick={() => {
+                    onContentChange({
+                      ...content,
+                      image: undefined,
+                      posterBackgroundImageRect: undefined,
+                      posterImageOpacity: 0,
+                      posterImagePosX: undefined,
+                      posterImagePosY: undefined,
+                      posterImageBrightness: undefined,
+                      posterImageContrast: undefined,
+                      posterImageSaturation: undefined,
+                      posterImageLocked: undefined,
+                    });
+                    setImagePreview(null);
+                    setBgRemoveError(null);
+                  }}
+                >
+                  제거
+                </Button>
+              </div>
+              {bgRemoveBusy ? (
+                <p className="text-right text-[10px] text-gray-500">배경 제거 중… 1~2분 걸릴 수 있습니다.</p>
+              ) : null}
+              {bgRemoveError ? (
+                <p className="text-right text-[10px] text-red-500">{bgRemoveError}</p>
+              ) : null}
             </div>
           ) : null}
           {imageAiBlock}

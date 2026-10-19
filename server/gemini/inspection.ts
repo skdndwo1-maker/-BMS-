@@ -547,6 +547,42 @@ export async function generateImageFromTextPrompt(
   };
 }
 
+/** 기준 이미지에서 주요 개체만 남기고 배경을 투명하게 제거 */
+export async function removeImageBackgroundFromReference(opts: {
+  imageBase64: string;
+  imageMime: string;
+}): Promise<{ mimeType: string; base64: string; caption: string } | null> {
+  if (!opts.imageMime.startsWith("image/")) return null;
+  const b64 = opts.imageBase64.replace(/^data:image\/\w+;base64,/, "").trim();
+  if (!b64) return null;
+
+  const prompt = `역할: 이미지 배경 제거 전문가.
+
+작업: 첨부한 이미지에서 **주요 개체(피사체)만 남기고 배경 요소를 모두 제거**한 PNG 이미지를 생성하세요.
+
+규칙:
+- 주요 개체(인물·제품·오브젝트 등 중심 피사체)의 형태·색·디테일·가장자리는 원본 그대로 유지
+- 배경(하늘·벽·바닥·주변 사물·그림자 등)은 완전히 제거하여 **투명 배경(알파 채널)**으로 처리
+- 결과는 반드시 **PNG(투명 배경 지원)** 포맷으로 출력
+- 피사체의 외곽선은 부드럽고 자연스럽게 (안티에일리어싱 유지, 거친 톱니 금지)
+- 피사체 내부의 유리·머리카락·반투명 영역은 가능하면 원본 질감 유지
+- 추가 요소·텍스트·워터마크·배경 색 삽입 금지
+- 한국어 1문장으로 처리 결과를 설명한 뒤 이미지 출력`;
+
+  const json = await runGeminiImageGenerateWithMultiParts([
+    { text: prompt },
+    { inlineData: { mimeType: opts.imageMime, data: b64 } },
+  ]);
+  if (!json) return null;
+  const extracted = extractTextAndImageFromGeminiResponse(json);
+  if (!extracted) return null;
+  return {
+    mimeType: extracted.mimeType,
+    base64: extracted.base64,
+    caption: extracted.text || "배경이 제거되었습니다.",
+  };
+}
+
 /** 기준 이미지 + 추가 프롬프트로 디벨롭(반복 개선) */
 export async function generateImageDevelopFromReference(opts: {
   imageBase64: string;

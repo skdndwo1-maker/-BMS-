@@ -6,7 +6,7 @@ import {
   shouldTryNextTextModel,
   textModelCandidates,
 } from "./shared.js";
-import { generateImageFromTextPrompt, generateRevisedBrandingImage, generateImageDevelopFromReference } from "./inspection.js";
+import { generateImageFromTextPrompt, generateRevisedBrandingImage, generateImageDevelopFromReference, removeImageBackgroundFromReference } from "./inspection.js";
 
 /** 브랜드 제작(디자인 에디터) 캔버스 — 위반 항목별 수정 힌트 포함 */
 const designEditorInspectionSchema = {
@@ -788,6 +788,14 @@ ${variantHint}`;
     return { alternatives: alternatives.slice(0, 3) };
   }
   return null;
+}
+
+/** 디자인 에디터: 이미지 배경 제거 (주요 개체만 남기고 투명 배경 PNG) */
+export async function runDesignEditorImageBackgroundRemoval(opts: {
+  imageBase64: string;
+  imageMime: string;
+}): Promise<{ mimeType: string; base64: string; caption: string } | null> {
+  return removeImageBackgroundFromReference(opts);
 }
 
 /** 디자인 에디터: 선택 이미지 + 추가 프롬프트로 디벨롭 */
