@@ -1,0 +1,9 @@
+# Railway(Nixpacks) Node 설치: npm 10의 `production` config 경고 완화
+# https://nixpacks.com/docs/providers/node
+
+[variables]
+NPM_CONFIG_PRODUCTION = ""
+NPM_CONFIG_OMIT = "dev"
+
+[phases.install]
+cmds = ["npm ci --omit=dev"]
