@@ -1,9 +1,9 @@
-import { apiUrl } from "./apiUrl";
+import { apiFetch } from "./apiFetch";
 
 export type OptionsChatMessage = { role: "user" | "assistant"; content: string };
 
 export async function postOptionsChat(messages: OptionsChatMessage[]): Promise<string> {
-  const r = await fetch(apiUrl("/api/options/chat"), {
+  const r = await apiFetch("/api/options/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages })

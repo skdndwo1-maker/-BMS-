@@ -1,4 +1,4 @@
-import { apiUrl } from "@/lib/apiUrl";
+import { apiFetch } from "@/lib/apiFetch";
 
 export type SimplyHeartImagePart = { mimeType: string; data: string };
 
@@ -9,7 +9,7 @@ export async function postSimplyHeartStep(args: {
   images?: SimplyHeartImagePart[];
   mode?: "audit" | "generate";
 }): Promise<{ text: string; model?: string }> {
-  const r = await fetch(apiUrl("/api/simply-heart/step"), {
+  const r = await apiFetch("/api/simply-heart/step", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

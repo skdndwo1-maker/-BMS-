@@ -9,6 +9,10 @@
 # 넣어도 플랫폼이 다른 값을 주면 그 값에 맞춰 바인딩해야 하며, 서버는 `process.env.PORT`를 사용합니다.
 # 공개 URL은 호스트만 쓰면 되고(HTTPS), 컨테이너 내부 포트는 Railway 설정을 따릅니다.
 
+# API 프로세스 안에서 outbox 릴레이(5초 폴링)가 기본 기동됩니다.
+# 전용 워커 서비스로 분리할 때: startCommand = "npm run worker:outbox"
+# 그리고 API 쪽 Variables에 OUTBOX_RELAY_DISABLED=1 을 설정하세요.
+
 [deploy]
 startCommand = "npm start"
 restartPolicyType = "ON_FAILURE"

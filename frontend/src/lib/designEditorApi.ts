@@ -1,4 +1,4 @@
-import { apiUrl } from "./apiUrl.ts";
+import { apiFetch } from "./apiFetch.ts";
 
 export type DesignEditorViolation = {
   category: string;
@@ -51,7 +51,7 @@ export async function inspectDesignCanvas(body: {
   guidelineId?: string;
   creativeTopic?: string;
 }): Promise<DesignEditorInspectResponse> {
-  const r = await fetch(apiUrl("/api/design-editor/inspect"), {
+  const r = await apiFetch("/api/design-editor/inspect", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -91,7 +91,7 @@ export async function suggestDesignText(body: {
   guidelineId?: string;
   creativeTopic?: string;
 }): Promise<DesignEditorTextSuggestionResult> {
-  const r = await fetch(apiUrl("/api/design-editor/suggest-text"), {
+  const r = await apiFetch("/api/design-editor/suggest-text", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -122,7 +122,7 @@ export async function correctDesignCanvas(body: {
   violations?: Array<{ category: string; issue: string; severity: string }>;
   creativeTopic?: string;
 }): Promise<{ mimeType: string; data: string; caption: string }> {
-  const r = await fetch(apiUrl("/api/design-editor/correct-canvas"), {
+  const r = await apiFetch("/api/design-editor/correct-canvas", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -145,7 +145,7 @@ export async function replaceDesignImage(body: {
   guidelineId?: string;
   creativeTopic?: string;
 }): Promise<{ mimeType: string; data: string }> {
-  const r = await fetch(apiUrl("/api/design-editor/replace-image"), {
+  const r = await apiFetch("/api/design-editor/replace-image", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -173,7 +173,7 @@ export async function generateDesignAsset(body: {
   creativeTopic?: string;
   imageAspectRatio?: string;
 }): Promise<{ alternatives: GeneratedDesignAssetAlternative[] }> {
-  const r = await fetch(apiUrl("/api/design-editor/generate-asset"), {
+  const r = await apiFetch("/api/design-editor/generate-asset", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -218,7 +218,7 @@ export async function developDesignImage(body: {
   templateLabel?: string;
   creativeTopic?: string;
 }): Promise<{ mimeType: string; base64: string; caption: string }> {
-  const r = await fetch(apiUrl("/api/design-editor/develop-image"), {
+  const r = await apiFetch("/api/design-editor/develop-image", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -297,7 +297,7 @@ export async function proposeDesignDraft(body: {
   guidelineId?: string;
   creativeTopic: string;
 }): Promise<DesignEditorDraftProposalResponse> {
-  const r = await fetch(apiUrl("/api/design-editor/propose-draft"), {
+  const r = await apiFetch("/api/design-editor/propose-draft", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

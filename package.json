@@ -8,9 +8,11 @@
     "dev:full": "concurrently -k -n api,web -c blue,magenta \"npm run server:watch\" \"npm run dev --prefix frontend\"",
     "build:frontend": "npm run build --prefix frontend",
     "start": "tsx server/index.ts",
+    "worker:outbox": "tsx server/outboxWorker.ts",
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit",
     "analyze:guideline": "tsx scripts/analyze-lgu-guideline.ts",
-    "migrate:guidelines": "tsx scripts/migrate-guidelines-json-to-supabase.ts"
+    "migrate:guidelines": "tsx scripts/migrate-guidelines-json-to-supabase.ts",
+    "backfill:approved-outbox": "tsx scripts/backfill-approved-runs-outbox.ts"
   },
   "keywords": [],
   "author": "",
