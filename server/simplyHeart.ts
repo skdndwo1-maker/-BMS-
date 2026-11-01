@@ -14,8 +14,8 @@ import {
   isPrepaymentCreditsDepletedError,
   rethrowIfInvalidApiKey,
   shouldTryNextTextModel,
-  textModelCandidates,
 } from "./gemini/shared.js";
+import { logLlmCall, modelCandidates } from "./llm/router.js";
 
 const CORE_GUIDES: readonly { id: string; title: string; cap?: number }[] = [
   {
@@ -311,7 +311,8 @@ ${guidelineContext}`;
 
   for (const apiKey of apiKeys) {
     const genAI = new GoogleGenerativeAI(apiKey);
-    for (const mid of textModelCandidates()) {
+    for (const mid of modelCandidates("simply_heart")) {
+      const tLlm = Date.now();
       try {
         const model = genAI.getGenerativeModel({
           model: mid,
@@ -328,10 +329,17 @@ ${guidelineContext}`;
         }
 
         const result = await model.generateContent(parts);
+        logLlmCall({
+          task: "simply_heart",
+          model: mid,
+          startedAt: tLlm,
+          usage: result.response.usageMetadata,
+        });
         const text = result.response.text();
         if (text?.trim()) return { text: text.trim(), model: mid };
         return { text: "(빈 응답)", model: mid };
       } catch (e) {
+        logLlmCall({ task: "simply_heart", model: mid, startedAt: tLlm });
         rethrowIfInvalidApiKey(e);
         lastErr = e;
         if (isPrepaymentCreditsDepletedError(e)) {

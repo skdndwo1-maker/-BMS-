@@ -1,13 +1,18 @@
 import { GoogleGenerativeAI, SchemaType, type Schema } from "@google/generative-ai";
 
 import {
-  GEMINI_IMAGE_MODEL_FALLBACKS,
   getKey,
   parsePdfBufferToText,
   rethrowIfInvalidApiKey,
   shouldTryNextTextModel,
-  textModelCandidates,
 } from "./shared.js";
+import { detectDesignElements } from "./detectDesignElements.js";
+import {
+  isInspectionClassifyEnabled,
+  logLlmCall,
+  modelCandidates,
+  type LlmTask,
+} from "../llm/router.js";
 
 const inspectionResponseSchema = {
   type: SchemaType.OBJECT,
@@ -117,6 +122,20 @@ export async function runInspectionWithGemini(opts: {
   const genAI = new GoogleGenerativeAI(key);
 
   const guideBlock = opts.guidelineSummary.slice(0, 80_000);
+
+  let classifyBlock = "";
+  if (isInspectionClassifyEnabled() && opts.designMime.startsWith("image/")) {
+    const tClassify = Date.now();
+    const detected = await detectDesignElements({
+      designBase64: opts.designBase64,
+      designMime: opts.designMime,
+    });
+    logInspectionTiming("요소 판별", tClassify, detected ? "ok" : "skip");
+    if (detected) {
+      classifyBlock = `\n\n[시안 요소 판별]\n${JSON.stringify(detected)}\n위 요소 목록을 참고해 해당 영역에 집중해 검수하세요.`;
+    }
+  }
+
   const basePrompt = `역할: 당신은 LG U+ 등 기업의 브랜드·VI 가이드라인을 숙지한 시니어 디자인 QA입니다.
 
 작업:
@@ -129,13 +148,13 @@ export async function runInspectionWithGemini(opts: {
 7) [참조 가이드라인] 안에 "사용자 직접 입력 검수 사항" 블록이 있으면 그 내용을 **반드시** 반영해 평가하고, 위반 항목에도 필요하면 언급하세요.
 
 [참조 가이드라인]
-${guideBlock}`;
+${guideBlock}${classifyBlock}`;
 
   const jsonOnlySuffix = `
 출력: JSON 한 개만 (다른 문장 없이). 키: score, overallSummary, violations.`;
 
   let lastErr: unknown;
-  for (const modelId of textModelCandidates()) {
+  for (const modelId of modelCandidates("inspection_judge")) {
     const modelStructured = genAI.getGenerativeModel({
       model: modelId,
       generationConfig: {
@@ -162,6 +181,12 @@ ${designExcerpt || "(텍스트 추출 없음 — 가능한 경우 시각적 규�
           tLlm = Date.now();
           const result = await model.generateContent(prompt);
           logInspectionTiming(label, tLlm, formatUsageExtra(modelId, result.response.usageMetadata));
+          logLlmCall({
+            task: "inspection_judge",
+            model: modelId,
+            startedAt: tLlm,
+            usage: result.response.usageMetadata,
+          });
           return result;
         }
         const prompt = `${basePrompt}
@@ -174,9 +199,16 @@ ${designExcerpt || "(텍스트 추출 없음 — 가능한 경우 시각적 규�
           { inlineData: { mimeType: opts.designMime, data: opts.designBase64 } }
         ]);
         logInspectionTiming(label, tLlm, formatUsageExtra(modelId, result.response.usageMetadata));
+        logLlmCall({
+          task: "inspection_judge",
+          model: modelId,
+          startedAt: tLlm,
+          usage: result.response.usageMetadata,
+        });
         return result;
       } catch (e) {
         logInspectionTiming(label, tLlm, `model=${modelId} error`);
+        logLlmCall({ task: "inspection_judge", model: modelId, startedAt: tLlm });
         throw e;
       }
     }
@@ -368,10 +400,7 @@ ${userBlock}`;
     }
   ];
 
-  const models = [
-    process.env.GEMINI_IMAGE_MODEL?.trim(),
-    ...GEMINI_IMAGE_MODEL_FALLBACKS,
-  ].filter((m): m is string => Boolean(m));
+  const models = modelCandidates("revise_image");
 
   for (const model of models) {
     for (const body of bodies) {
@@ -391,6 +420,7 @@ ${userBlock}`;
           if (opts.logInspectionTiming) {
             logInspectionTiming("수정 이미지 LLM", tImg, `model=${model} http=${res.status}`);
           }
+          logLlmCall({ task: "revise_image", model, startedAt: tImg });
           if (res.status === 400 && /API_KEY_INVALID|API key expired/i.test(errBody)) {
             return null;
           }
@@ -404,6 +434,7 @@ ${userBlock}`;
           if (opts.logInspectionTiming) {
             logInspectionTiming("수정 이미지 LLM", tImg, formatUsageExtra(model, json.usageMetadata));
           }
+          logLlmCall({ task: "revise_image", model, startedAt: tImg, usage: json.usageMetadata });
           return {
             mimeType: extracted.mimeType,
             base64: extracted.base64,
@@ -413,10 +444,12 @@ ${userBlock}`;
         if (opts.logInspectionTiming) {
           logInspectionTiming("수정 이미지 LLM", tImg, `model=${model} no_image`);
         }
+        logLlmCall({ task: "revise_image", model, startedAt: tImg, usage: json.usageMetadata });
       } catch (e) {
         if (opts.logInspectionTiming) {
           logInspectionTiming("수정 이미지 LLM", tImg, `model=${model} error`);
         }
+        logLlmCall({ task: "revise_image", model, startedAt: tImg });
         console.error(`[gemini image] ${model}`, e);
       }
     }
@@ -459,14 +492,12 @@ function runGeminiImageGenerateWithParts(
     }
   ];
 
-  const models = [
-    process.env.GEMINI_IMAGE_MODEL?.trim(),
-    ...GEMINI_IMAGE_MODEL_FALLBACKS,
-  ].filter((m): m is string => Boolean(m));
+  const models = modelCandidates("revise_image_followup");
 
   return (async () => {
     for (const model of models) {
       for (const body of bodies) {
+        const tImg = Date.now();
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
             model
@@ -479,13 +510,24 @@ function runGeminiImageGenerateWithParts(
           if (!res.ok) {
             const errBody = await res.text();
             console.error(`[gemini image followup] ${model} HTTP ${res.status}`, errBody.slice(0, 400));
+            logLlmCall({ task: "revise_image_followup", model, startedAt: tImg });
             if (res.status === 400 && /API_KEY_INVALID|API key expired/i.test(errBody)) {
               return null;
             }
             continue;
           }
-          return (await res.json()) as unknown;
+          const json = (await res.json()) as {
+            usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+          };
+          logLlmCall({
+            task: "revise_image_followup",
+            model,
+            startedAt: tImg,
+            usage: json.usageMetadata,
+          });
+          return json as unknown;
         } catch (e) {
+          logLlmCall({ task: "revise_image_followup", model, startedAt: tImg });
           console.error(`[gemini image followup] ${model}`, e);
         }
       }
@@ -517,11 +559,12 @@ function geminiImagePartsToSnake(
  */
 function runGeminiImageGenerateWithMultiParts(
   parts: GeminiImageUserPart[],
-  opts?: { aspectRatio?: string }
+  opts?: { aspectRatio?: string; task?: Extract<LlmTask, "generate_asset" | "develop_image" | "revise_image_followup"> }
 ): Promise<unknown | null> {
   const key = getKey();
   if (!key) return Promise.resolve(null);
   if (parts.length === 0) return Promise.resolve(null);
+  const task = opts?.task ?? "generate_asset";
 
   const generationConfig: Record<string, unknown> = {
     responseModalities: ["TEXT", "IMAGE"],
@@ -541,14 +584,12 @@ function runGeminiImageGenerateWithMultiParts(
     },
   ];
 
-  const models = [
-    process.env.GEMINI_IMAGE_MODEL?.trim(),
-    ...GEMINI_IMAGE_MODEL_FALLBACKS,
-  ].filter((m): m is string => Boolean(m));
+  const models = modelCandidates(task);
 
   return (async () => {
     for (const model of models) {
       for (const body of bodies) {
+        const tImg = Date.now();
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
             model
@@ -561,13 +602,19 @@ function runGeminiImageGenerateWithMultiParts(
           if (!res.ok) {
             const errBody = await res.text();
             console.error(`[gemini image multi] ${model} HTTP ${res.status}`, errBody.slice(0, 400));
+            logLlmCall({ task, model, startedAt: tImg });
             if (res.status === 400 && /API_KEY_INVALID|API key expired/i.test(errBody)) {
               return null;
             }
             continue;
           }
-          return (await res.json()) as unknown;
+          const json = (await res.json()) as {
+            usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+          };
+          logLlmCall({ task, model, startedAt: tImg, usage: json.usageMetadata });
+          return json as unknown;
         } catch (e) {
+          logLlmCall({ task, model, startedAt: tImg });
           console.error(`[gemini image multi] ${model}`, e);
         }
       }
@@ -583,6 +630,7 @@ export async function generateImageFromTextPrompt(
 ): Promise<{ mimeType: string; base64: string; caption: string } | null> {
   const json = await runGeminiImageGenerateWithMultiParts([{ text: prompt }], {
     aspectRatio: opts?.aspectRatio,
+    task: "generate_asset",
   });
   if (!json) return null;
   const extracted = extractTextAndImageFromGeminiResponse(json);
@@ -626,10 +674,13 @@ ${developPrompt}
 - 원본과 동일한 캠페인·무드·구도를 기본으로 하되 [추가 요청] 변경만 명확히 반영
 - 한국어 1~2문장으로 무엇을 바꿨는지 설명한 뒤 이미지 출력`;
 
-  const json = await runGeminiImageGenerateWithMultiParts([
-    { text: prompt },
-    { inlineData: { mimeType: opts.imageMime, data: b64 } },
-  ]);
+  const json = await runGeminiImageGenerateWithMultiParts(
+    [
+      { text: prompt },
+      { inlineData: { mimeType: opts.imageMime, data: b64 } },
+    ],
+    { task: "develop_image" }
+  );
   if (!json) return null;
   const extracted = extractTextAndImageFromGeminiResponse(json);
   if (!extracted) return null;
@@ -724,13 +775,21 @@ ${attachmentLines.join("\n")}`;
     ...imageParts
   ];
 
-  for (const mid of textModelCandidates()) {
+  for (const mid of modelCandidates("inspection_plan_revision")) {
+    const tLlm = Date.now();
     try {
       const model = genAI.getGenerativeModel({ model: mid });
       const result = await model.generateContent(contentParts);
+      logLlmCall({
+        task: "inspection_plan_revision",
+        model: mid,
+        startedAt: tLlm,
+        usage: result.response.usageMetadata,
+      });
       const t = result.response.text()?.trim();
       if (t) return sanitizeRevisionDirectiveText(t);
     } catch (e) {
+      logLlmCall({ task: "inspection_plan_revision", model: mid, startedAt: tLlm });
       rethrowIfInvalidApiKey(e);
       if (shouldTryNextTextModel(e)) {
         console.warn(
@@ -830,7 +889,9 @@ ${directive}`;
   }
 
   try {
-    const json = await runGeminiImageGenerateWithMultiParts(imageParts);
+    const json = await runGeminiImageGenerateWithMultiParts(imageParts, {
+      task: "revise_image_followup",
+    });
     if (!json) return null;
     const extracted = extractTextAndImageFromGeminiResponse(json);
     if (!extracted) return null;
@@ -960,7 +1021,8 @@ ${opts.userMessage.trim()}`;
 
   const genAI = new GoogleGenerativeAI(key);
   let lastErr: unknown;
-  for (const mid of textModelCandidates()) {
+  for (const mid of modelCandidates("inspection_chat")) {
+    const tLlm = Date.now();
     try {
       const model = genAI.getGenerativeModel({ model: mid });
       if (opts.designMime.startsWith("image/")) {
@@ -968,11 +1030,24 @@ ${opts.userMessage.trim()}`;
           systemBlock,
           { inlineData: { mimeType: opts.designMime, data: opts.designBase64 } }
         ]);
+        logLlmCall({
+          task: "inspection_chat",
+          model: mid,
+          startedAt: tLlm,
+          usage: result.response.usageMetadata,
+        });
         return result.response.text();
       }
       const result = await model.generateContent(systemBlock);
+      logLlmCall({
+        task: "inspection_chat",
+        model: mid,
+        startedAt: tLlm,
+        usage: result.response.usageMetadata,
+      });
       return result.response.text();
     } catch (e) {
+      logLlmCall({ task: "inspection_chat", model: mid, startedAt: tLlm });
       rethrowIfInvalidApiKey(e);
       lastErr = e;
       if (shouldTryNextTextModel(e)) {

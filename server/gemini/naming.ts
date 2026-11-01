@@ -13,8 +13,8 @@ import {
   getKey,
   rethrowIfInvalidApiKey,
   shouldTryNextTextModel,
-  textModelCandidates,
 } from "./shared.js";
+import { logLlmCall, modelCandidates } from "../llm/router.js";
 
 /** 적법성: 국가법령정보 API + Gemini 사회적 이슈·민감도 (Detail은 두 소제목 필수) */
 const NAMING_LEGALITY_SCORE_DESC =
@@ -607,7 +607,7 @@ ${req}
 반드시 JSON 형식으로만 응답하고 다른 텍스트는 포함하지 마세요.`;
 
   let lastErr: unknown;
-  for (const modelId of textModelCandidates()) {
+  for (const modelId of modelCandidates("naming")) {
     const model = genAI.getGenerativeModel({
       model: modelId,
       generationConfig: {
@@ -615,13 +615,16 @@ ${req}
         responseSchema: auditAlternateNamesSchema
       }
     });
+    const tLlm = Date.now();
     try {
       const result = await model.generateContent(prompt);
+      logLlmCall({ task: "naming", model: modelId, startedAt: tLlm, usage: result.response.usageMetadata });
       const raw = result.response.text();
       const parsed = parseAlternateNamesPayload(raw);
       const cleaned = filterPlausibleAlternateNames(parsed ?? []);
       if (cleaned.length >= 3) return cleaned.slice(0, 3);
     } catch (e) {
+      logLlmCall({ task: "naming", model: modelId, startedAt: tLlm });
       rethrowIfInvalidApiKey(e);
       lastErr = e;
       if (shouldTryNextTextModel(e)) {
@@ -630,15 +633,18 @@ ${req}
       }
       throw e;
     }
+    const tLlmPlain = Date.now();
     try {
       const modelPlain = genAI.getGenerativeModel({ model: modelId });
       const result = await modelPlain.generateContent(
         `${prompt}\n\n반드시 JSON 형식으로만 응답하고 다른 텍스트는 포함하지 마세요.\n\n응답: {"names":["…"]} 형태의 JSON만 출력하세요.`
       );
+      logLlmCall({ task: "naming", model: modelId, startedAt: tLlmPlain, usage: result.response.usageMetadata });
       const parsed = parseAlternateNamesPayload(result.response.text());
       const cleaned = filterPlausibleAlternateNames(parsed ?? []);
       if (cleaned.length >= 3) return cleaned.slice(0, 3);
     } catch (e) {
+      logLlmCall({ task: "naming", model: modelId, startedAt: tLlmPlain });
       rethrowIfInvalidApiKey(e);
       lastErr = e;
       if (shouldTryNextTextModel(e)) continue;
@@ -1738,7 +1744,7 @@ ${req}
 4) 출력은 JSON 한 개만. 스키마 키 이름을 정확히 맞추세요.${generateExtraRule}${jsonOnlyFooter}`;
 
   let lastErr: unknown;
-  for (const modelId of textModelCandidates()) {
+  for (const modelId of modelCandidates("naming")) {
     const model = genAI.getGenerativeModel({
       model: modelId,
       generationConfig: {
@@ -1746,13 +1752,16 @@ ${req}
         responseSchema: brandNamingResponseSchema
       }
     });
+    const tLlm = Date.now();
     try {
       const result = await model.generateContent(prompt);
+      logLlmCall({ task: "naming", model: modelId, startedAt: tLlm, usage: result.response.usageMetadata });
       const raw = result.response.text();
       console.log("[gemini] brand naming raw response:", raw);
       const parsed = parseBrandNamingPayload(raw);
       if (parsed) return finishWithAuditNoGoFill(parsed);
     } catch (e) {
+      logLlmCall({ task: "naming", model: modelId, startedAt: tLlm });
       rethrowIfInvalidApiKey(e);
       lastErr = e;
       if (shouldTryNextTextModel(e)) {
@@ -1761,16 +1770,19 @@ ${req}
       }
       throw e;
     }
+    const tLlmPlain = Date.now();
     try {
       const modelPlain = genAI.getGenerativeModel({ model: modelId });
       const result = await modelPlain.generateContent(
         `${prompt}\n\n응답: 위 필드를 모두 포함한 JSON만 출력하세요.`
       );
+      logLlmCall({ task: "naming", model: modelId, startedAt: tLlmPlain, usage: result.response.usageMetadata });
       const rawPlain = result.response.text();
       console.log("[gemini] brand naming raw response (plain):", rawPlain);
       const parsed = parseBrandNamingPayload(rawPlain);
       if (parsed) return finishWithAuditNoGoFill(parsed);
     } catch (e) {
+      logLlmCall({ task: "naming", model: modelId, startedAt: tLlmPlain });
       rethrowIfInvalidApiKey(e);
       lastErr = e;
       if (shouldTryNextTextModel(e)) continue;

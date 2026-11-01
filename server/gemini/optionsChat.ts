@@ -7,8 +7,8 @@ import {
   getKey,
   rethrowIfInvalidApiKey,
   shouldTryNextTextModel,
-  textModelCandidates,
 } from "./shared.js";
+import { logLlmCall, modelCandidates } from "../llm/router.js";
 import { excerptGuidelineForInspection } from "./guideline.js";
 import { DESIGN_EDITOR_INSPECTION_GUIDELINE_ID } from "../fixedGuidelines.js";
 
@@ -148,7 +148,8 @@ ${guidelineContext}`;
   const genAI = new GoogleGenerativeAI(key);
   let lastErr: unknown;
 
-  for (const mid of textModelCandidates()) {
+  for (const mid of modelCandidates("options_chat")) {
+    const tLlm = Date.now();
     try {
       const model = genAI.getGenerativeModel({
         model: mid,
@@ -156,10 +157,17 @@ ${guidelineContext}`;
       });
       const chat = model.startChat({ history });
       const result = await chat.sendMessage(lastUserText);
+      logLlmCall({
+        task: "options_chat",
+        model: mid,
+        startedAt: tLlm,
+        usage: result.response.usageMetadata,
+      });
       const text = result.response.text();
       if (text?.trim()) return text;
       return "(빈 응답이 반환되었습니다. 다시 시도해 주세요.)";
     } catch (e) {
+      logLlmCall({ task: "options_chat", model: mid, startedAt: tLlm });
       rethrowIfInvalidApiKey(e);
       lastErr = e;
       if (shouldTryNextTextModel(e)) {
