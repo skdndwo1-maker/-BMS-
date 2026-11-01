@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { apiUrl } from "@/lib/apiUrl";
+import { ApiHttpError, apiFetch } from "@/lib/apiFetch";
 import { readAccessToken, readAuthedUserId } from "@/lib/supabaseClient";
 
 export const LIBRARY_BUCKET = "brand-library";
@@ -148,7 +148,7 @@ export async function fetchLibraryAssetsFromApi(args?: {
   if (args?.query?.trim()) params.set("q", args.query.trim());
   const qs = params.toString();
 
-  const r = await fetch(apiUrl(`/api/library/assets${qs ? `?${qs}` : ""}`));
+  const r = await apiFetch(`/api/library/assets${qs ? `?${qs}` : ""}`);
   const out = (await r.json().catch(() => ({}))) as {
     ok?: boolean;
     assets?: LibraryAssetRow[];
@@ -241,9 +241,8 @@ async function tryUploadLibraryAssetViaApi(
 
   try {
     onProgress?.(15);
-    const r = await fetch(apiUrl("/api/library/upload"), {
+    const r = await apiFetch("/api/library/upload", {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
       body: form,
     });
     const out = (await r.json().catch(() => ({}))) as {
@@ -258,21 +257,21 @@ async function tryUploadLibraryAssetViaApi(
       return out.asset;
     }
 
-    if (r.status === 401 || out.error === "not_logged_in") {
-      if (await shouldFallbackLibraryUploadDirect(sb)) return "fallback";
-      throw new Error("로그인 후 업로드할 수 있습니다.");
-    }
-
-    if (r.status === 403 || out.error === "forbidden") {
-      throw new Error(out.message || (await getLibraryAdminHint(sb)));
-    }
-
     if (r.status === 404 || r.status === 502 || r.status === 503 || r.status === 500) {
       if (await shouldFallbackLibraryUploadDirect(sb)) return "fallback";
     }
 
     throw new Error(out.message || `업로드 실패 (${r.status})`);
   } catch (e) {
+    if (e instanceof ApiHttpError) {
+      if (e.status === 401) {
+        if (await shouldFallbackLibraryUploadDirect(sb)) return "fallback";
+        throw new Error("로그인 후 업로드할 수 있습니다.");
+      }
+      if (e.status === 403) {
+        throw new Error(e.message || (await getLibraryAdminHint(sb)));
+      }
+    }
     if (e instanceof Error && (e.message.includes("admin_users") || e.message.includes("user_id:"))) {
       throw e;
     }
@@ -421,9 +420,8 @@ export async function isCurrentUserAdmin(
     const token = opts?.accessToken ?? (await readAccessToken(sb));
     if (token) {
       try {
-        const r = await fetch(apiUrl("/api/admin/me"), {
+        const r = await apiFetch("/api/admin/me", {
           method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
         });
         const out = (await r.json().catch(() => ({}))) as { isAdmin?: boolean };
         if (r.ok && out.isAdmin === true) return true;

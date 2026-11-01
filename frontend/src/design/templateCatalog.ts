@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import { apiUrl } from "@/lib/apiUrl";
+import { apiFetch } from "@/lib/apiFetch";
 import { templateCategories as builtinCategories, templates as builtinTemplates } from "./templates";
 import type { Template, TemplateCategoryDef } from "./types";
 
@@ -86,7 +86,7 @@ export function loadTemplateCatalog(): Promise<void> {
   setState({ status: "loading" });
   inflight = (async () => {
     try {
-      const r = await fetch(apiUrl("/api/templates/catalog"), { cache: "no-store" });
+      const r = await apiFetch("/api/templates/catalog", { cache: "no-store" });
       const out = (await r.json().catch(() => ({}))) as { catalog?: unknown; error?: string };
       if (!r.ok) throw new Error(out.error ?? `catalog ${r.status}`);
       const catalog = out.catalog ? normalizeCatalog(out.catalog) : emptyTemplateCatalog();
@@ -103,9 +103,9 @@ export function loadTemplateCatalog(): Promise<void> {
 
 export async function saveTemplateCatalog(next: TemplateCatalog, accessToken: string | null): Promise<TemplateCatalog> {
   if (!accessToken) throw new Error("관리자 계정으로 로그인해야 저장할 수 있습니다.");
-  const r = await fetch(apiUrl("/api/templates/catalog"), {
+  const r = await apiFetch("/api/templates/catalog", {
     method: "PUT",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ catalog: next }),
   });
   const out = (await r.json().catch(() => ({}))) as { catalog?: unknown; error?: string; message?: string };

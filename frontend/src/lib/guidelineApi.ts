@@ -1,3 +1,4 @@
+import { apiFetch } from "./apiFetch.ts";
 import { apiUrl } from "./apiUrl.ts";
 
 export type GuidelineInfo = {
@@ -30,7 +31,7 @@ export type InspectionRunResult = {
 
 /** 번들에 포함된 고정 PDF로 해당 슬롯을 덮어쓰고 AI 요약까지 시도 */
 export async function syncGuidelineFromSupabase(id: string): Promise<{ guideline: GuidelineInfo }> {
-  const r = await fetch(apiUrl(`/api/guidelines/${encodeURIComponent(id)}/sync-supabase`), {
+  const r = await apiFetch(`/api/guidelines/${encodeURIComponent(id)}/sync-supabase`, {
     method: "POST",
   });
   if (!r.ok) {
@@ -42,7 +43,7 @@ export async function syncGuidelineFromSupabase(id: string): Promise<{ guideline
 
 /** 슬롯이 비어 있으면 Supabase·로컬 고정 PDF로 채움 (AI 요약 없음 — 상태 확인용) */
 export async function ensureGuidelineSlot(id: string): Promise<{ guideline: GuidelineInfo }> {
-  const r = await fetch(apiUrl(`/api/guidelines/${encodeURIComponent(id)}/ensure`), {
+  const r = await apiFetch(`/api/guidelines/${encodeURIComponent(id)}/ensure`, {
     method: "POST",
   });
   if (!r.ok) {
@@ -54,7 +55,7 @@ export async function ensureGuidelineSlot(id: string): Promise<{ guideline: Guid
 
 /** 번들에 포함된 고정 PDF로 해당 슬롯을 덮어쓰고 AI 요약까지 시도 */
 export async function syncGuidelineFromFixed(id: string): Promise<{ guideline: GuidelineInfo }> {
-  const r = await fetch(apiUrl(`/api/guidelines/${encodeURIComponent(id)}/sync-fixed`), {
+  const r = await apiFetch(`/api/guidelines/${encodeURIComponent(id)}/sync-fixed`, {
     method: "POST"
   });
   if (!r.ok) {
@@ -65,7 +66,7 @@ export async function syncGuidelineFromFixed(id: string): Promise<{ guideline: G
 }
 
 export async function fetchGuideline(id: string): Promise<GuidelineInfo | null> {
-  const r = await fetch(apiUrl(`/api/guidelines/${encodeURIComponent(id)}`));
+  const r = await apiFetch(`/api/guidelines/${encodeURIComponent(id)}`);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`guideline: ${r.status}`);
   return (await r.json()) as GuidelineInfo;
@@ -79,7 +80,7 @@ export async function uploadGuideline(
   const fd = new FormData();
   fd.append("file", file);
   if (displayName) fd.append("displayName", displayName);
-  const r = await fetch(apiUrl(`/api/guidelines/${encodeURIComponent(id)}/upload`), {
+  const r = await apiFetch(`/api/guidelines/${encodeURIComponent(id)}/upload`, {
     method: "POST",
     body: fd
   });
@@ -118,7 +119,7 @@ export async function runInspection(opts: {
   if (opts.supplementaryReference) {
     fd.append("supplementaryReference", opts.supplementaryReference);
   }
-  const r = await fetch(apiUrl("/api/inspection/run"), {
+  const r = await apiFetch("/api/inspection/run", {
     method: "POST",
     body: fd
   });
@@ -169,7 +170,7 @@ export async function inspectionAgentFollowup(opts: {
       revisionBase64 = m[2];
     }
   }
-  const r = await fetch(apiUrl("/api/inspection/followup"), {
+  const r = await apiFetch("/api/inspection/followup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -224,7 +225,7 @@ export async function runAdditionalRevisionImage(opts: {
     supplementaryMime = opts.supplementaryFile.type || "application/octet-stream";
     supplementaryBase64 = await readFileAsBase64(opts.supplementaryFile);
   }
-  const r = await fetch(apiUrl("/api/inspection/additional-revision"), {
+  const r = await apiFetch("/api/inspection/additional-revision", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -580,7 +581,7 @@ export async function runBrandNaming(opts: {
   if (opts.supplementaryReference) {
     fd.append("supplementaryReference", opts.supplementaryReference);
   }
-  const r = await fetch(apiUrl("/api/naming/run"), {
+  const r = await apiFetch("/api/naming/run", {
     method: "POST",
     body: fd
   });
@@ -632,7 +633,7 @@ export async function fetchHealth(): Promise<HealthStatus> {
 
 /** 서버에 저장된 가이드 파일로 AI 요약 재생성 (GEMINI_API_KEY 필요) */
 export async function analyzeGuideline(id: string): Promise<{ aiSummary: string; aiAnalyzedAt: string }> {
-  const r = await fetch(apiUrl(`/api/guidelines/${encodeURIComponent(id)}/analyze`), {
+  const r = await apiFetch(`/api/guidelines/${encodeURIComponent(id)}/analyze`, {
     method: "POST"
   });
   if (!r.ok) {

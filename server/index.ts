@@ -1,5 +1,6 @@
 import "./load-env.js";
 import { app } from "./app.js";
+import { startOutboxRelay } from "./outboxRelay.js";
 import { getPublicApiBaseUrl } from "./publicApiUrl.js";
 
 /**
@@ -26,4 +27,7 @@ app.listen(port, () => {
     : "PORT unset — using local default 3001";
   const publicBase = getPublicApiBaseUrl();
   console.error(`[guideline-api] listening on port ${port} (${detail}); public API base: ${publicBase}`);
+  // Railway 단일 서비스에서도 승인 아웃박스 RAG 색인이 돌아가도록 기본 기동.
+  // 전용 워커만 쓰려면 OUTBOX_RELAY_DISABLED=1 후 `npm run worker:outbox`.
+  startOutboxRelay({ intervalMs: 5_000 });
 });

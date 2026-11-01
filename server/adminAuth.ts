@@ -1,16 +1,9 @@
 import type { Request } from "express";
+import { authenticateRequest } from "./middleware/requireAuth.js";
 import { getSupabaseServiceClient } from "./supabase.js";
 
 type AdminOk = { ok: true; userId?: string };
 type AdminFail = { ok: false; status: number; error: string };
-
-function getBearerToken(req: Request): string {
-  const h = req.headers.authorization;
-  if (!h) return "";
-  const s = Array.isArray(h) ? h[0] : h;
-  const m = /^Bearer\s+(.+)$/i.exec(s.trim());
-  return (m?.[1] ?? "").trim();
-}
 
 async function isAdminUserId(userId: string, email?: string | null): Promise<boolean> {
   const sb = getSupabaseServiceClient();
@@ -24,33 +17,42 @@ async function isAdminUserId(userId: string, email?: string | null): Promise<boo
 }
 
 /**
- * Admin auth (A안):
- * - Prefer Supabase 로그인 사용자(JWT bearer) 기반 admin_users 체크
- * - Backward-compatible: legacy x-admin-key도 계속 허용
+ * 인증 → admin_users 확인.
+ * - Bearer: requireAuth와 동일 검증 후 admin_users
+ * - legacy X-Admin-Key: 유지 + 경고 로그 (authenticateRequest에서 이미 warn)
  */
 export async function requireAdmin(req: Request): Promise<AdminOk | AdminFail> {
-  // 1) A안: bearer token -> supabase user -> admin_users
-  const token = getBearerToken(req);
-  if (token) {
+  // 미들웨어에서 이미 인증된 경우 재사용
+  if (req.authViaAdminKey) {
+    return { ok: true };
+  }
+  if (req.user?.id) {
     try {
-      // service role로 JWT 검증 — SUPABASE_ANON_KEY 불일치(publishable key 등)에도 동작
-      const sb = getSupabaseServiceClient();
-      const { data, error } = await sb.auth.getUser(token);
-      if (error) return { ok: false, status: 401, error: "not_logged_in" };
-      const uid = data.user?.id;
-      if (!uid) return { ok: false, status: 401, error: "not_logged_in" };
-      const ok = await isAdminUserId(uid, data.user?.email);
+      const ok = await isAdminUserId(req.user.id, req.user.email);
       if (!ok) return { ok: false, status: 403, error: "forbidden" };
-      return { ok: true, userId: uid };
+      return { ok: true, userId: req.user.id };
     } catch (e) {
       return { ok: false, status: 500, error: e instanceof Error ? e.message : String(e) };
     }
   }
 
-  // 2) Legacy: x-admin-key (existing behavior)
-  const expected = process.env.ADMIN_API_KEY?.trim() || "";
-  const got = typeof req.headers["x-admin-key"] === "string" ? req.headers["x-admin-key"].trim() : "";
-  if (!expected) return { ok: false, status: 503, error: "ADMIN_API_KEY is not set" };
-  if (!got || got !== expected) return { ok: false, status: 403, error: "forbidden" };
-  return { ok: true };
+  // 미들웨어 없이 직접 호출되는 경우 (또는 키만 있는 경우)
+  const auth = await authenticateRequest(req);
+  if (!auth.ok) {
+    if (auth.status === 401) return { ok: false, status: 401, error: "not_logged_in" };
+    return { ok: false, status: auth.status, error: auth.error };
+  }
+  if (req.authViaAdminKey) {
+    return { ok: true };
+  }
+  if (!auth.userId) {
+    return { ok: false, status: 401, error: "not_logged_in" };
+  }
+  try {
+    const ok = await isAdminUserId(auth.userId, auth.email);
+    if (!ok) return { ok: false, status: 403, error: "forbidden" };
+    return { ok: true, userId: auth.userId };
+  } catch (e) {
+    return { ok: false, status: 500, error: e instanceof Error ? e.message : String(e) };
+  }
 }

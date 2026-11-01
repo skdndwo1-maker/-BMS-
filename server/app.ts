@@ -61,14 +61,12 @@ import {
   deleteChunksForSource,
   fileSha256Hex,
   insertChunksWithEmbeddings,
-  isSupabaseRagEnabled,
   matchRagChunks,
   splitIntoChunks,
   upsertGuidelineSource,
-  upsertRunQaSource
 } from "./rag.js";
-import { normalizeRunForRag } from "./ragNormalize.js";
 import { requireAdmin } from "./adminAuth.js";
+import { requireAuth } from "./middleware/requireAuth.js";
 import { handleLibraryUpload } from "./libraryUpload.js";
 import { handleLibraryList } from "./libraryAssets.js";
 import { handleTemplateCatalogGet, handleTemplateCatalogPut } from "./templateCatalog.js";
@@ -369,6 +367,9 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+/** /api 기본 차단 — health만 위에서 예외. CORS → requireAuth → 라우트 */
+app.use("/api", requireAuth);
+
 /** 옵션 페이지 하단 채팅 — Gemini + 브랜드/VI 가이드라인 + (선택) RAG 통합 맥락 */
 app.post("/api/options/chat", async (req, res) => {
   try {
@@ -519,6 +520,11 @@ app.put("/api/templates/catalog", (req, res) => {
 
 /** 국가법령정보센터 Open API 연동 상태. `?probe=1`이면 상표법 검색 1회로 실제 호출 성공 여부 확인(OC·IP 등록 필요) */
 app.get("/api/law/status", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
   const configured = Boolean(resolveLawApiOc());
   const base = {
     configured,
@@ -619,6 +625,11 @@ app.get("/api/guidelines/:id/file", (req, res) => {
 });
 
 app.post("/api/guidelines/:id/upload", uploadGuideline.single("file"), async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
   const id = String(req.params.id);
   const displayName = (req.body?.displayName as string) || "Axis VI Brand guidelines";
   const file = req.file;
@@ -680,6 +691,11 @@ app.post("/api/guidelines/:id/upload", uploadGuideline.single("file"), async (re
 });
 
 app.post("/api/guidelines/:id/sync-fixed", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
   const id = req.params.id;
   try {
     let record = copyFixedGuidelineToSlot(id);
@@ -718,6 +734,11 @@ app.post("/api/guidelines/:id/sync-fixed", async (req, res) => {
 
 /** Supabase Brand Library(guide) → 로컬 슬롯 동기화 — VI·Simply U+ 등 */
 app.post("/api/guidelines/:id/sync-supabase", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
   const id = req.params.id;
   try {
     if (!canSyncGuidelineFromSupabase()) {
@@ -816,6 +837,11 @@ app.post("/api/guidelines/:id/ensure", async (req, res) => {
 });
 
 app.post("/api/guidelines/:id/analyze", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
   const rec = getGuideline(req.params.id);
   if (!rec) {
     res.status(404).json({ error: "not_found" });
@@ -1983,88 +2009,20 @@ app.post("/api/admin/runs/:id/approve", async (req, res) => {
     }
     const reviewer = typeof req.body?.reviewer === "string" ? req.body.reviewer.trim() : "";
 
+    // 승인 + outbox 이벤트는 Postgres approve_run RPC 한 트랜잭션으로 커밋.
+    // RAG 임베딩·색인은 outbox 릴레이 워커가 비동기로 처리한다.
     const sb = getSupabaseServiceClient();
-    const { data: run, error: runErr } = await sb
-      .from("runs")
-      .select("id,type,guideline_id,input_text,output_text,input_json,output_json")
-      .eq("id", id)
-      .single();
-    if (runErr) throw new Error(runErr.message);
-
-    const { error: upErr } = await sb
-      .from("runs")
-      .update({ status: "approved", updated_at: new Date().toISOString() })
-      .eq("id", id);
-    if (upErr) throw new Error(upErr.message);
-
-    const { error: revErr } = await sb.from("reviews").insert({
-      run_id: id,
-      decision: "approved",
-      reason: null,
-      reviewer: reviewer || null,
+    const { error } = await sb.rpc("approve_run", {
+      p_run_id: id,
+      p_reviewer: reviewer || null,
     });
-    if (revErr) console.error("[supabase] insert review failed:", revErr.message);
-
-    // Approved run -> RAG run_qa indexing
-    // 승인된 산출물은 type별 표준 MD 양식으로 정제한 뒤 청크 → 임베딩 → rag_*에 적재합니다.
-    const geminiKeyPresent = Boolean(process.env.GEMINI_API_KEY?.trim());
-    const ragEnabled = isSupabaseRagEnabled();
-    if (geminiKeyPresent) {
-      try {
-        const title = `Approved ${String(run.type)} — ${id.slice(0, 8)}`;
-        const src = await upsertRunQaSource({ runId: id, title, guidelineId: run.guideline_id ?? null });
-        if (!ragEnabled) {
-          console.warn("[rag] approve: Supabase RAG env missing — skipped indexing (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY required)");
-        } else if (!src?.sourceId) {
-          console.warn(`[rag] approve: upsertRunQaSource returned no sourceId for run=${id.slice(0, 8)}`);
-        }
-        if (src?.sourceId) {
-          const normalized = normalizeRunForRag({
-            type: String(run.type ?? ""),
-            guidelineId: run.guideline_id ?? null,
-            outputJson: run.output_json,
-            outputText: run.output_text,
-            inputJson: run.input_json,
-            inputText: run.input_text,
-          });
-          const normalizedTrim = normalized.trim();
-          const fallbackText = String(run.output_text ?? "").trim();
-          const fallbackJson = JSON.stringify(run.output_json ?? {});
-          const corpus = normalizedTrim || fallbackText || fallbackJson;
-          const corpusSource = normalizedTrim
-            ? "normalized"
-            : fallbackText
-              ? "output_text"
-              : "output_json_string";
-          const chunks = splitIntoChunks(corpus, { chunkChars: 1000, overlapChars: 140 });
-          console.log(
-            `[rag] approve indexing run=${id.slice(0, 8)} type=${String(run.type)} corpus=${corpusSource} chars=${corpus.length} chunks=${chunks.length}`
-          );
-          if (chunks.length === 0) {
-            console.warn(
-              `[rag] approve: empty corpus after chunking — run=${id.slice(0, 8)} type=${String(run.type)} (no rag_chunks will be written)`
-            );
-          }
-          await deleteChunksForSource(src.sourceId);
-          const result = await insertChunksWithEmbeddings({
-            sourceId: src.sourceId,
-            chunks,
-            embeddingModel: "gemini-embedding-001",
-            embed: (t) => embedTextWithGemini(t, { model: "gemini-embedding-001" }),
-          });
-          if (result) {
-            console.log(
-              `[rag] approve persisted run=${id.slice(0, 8)} type=${String(run.type)} requested=${chunks.length} inserted=${result.inserted} embedded=${result.embedded} failed=${result.failed}`
-            );
-          } else {
-            console.warn(`[rag] approve: insertChunksWithEmbeddings returned null (isSupabaseRagEnabled=false?) run=${id.slice(0, 8)}`);
-          }
-        }
-      } catch (e) {
-        console.error("[rag] run approve indexing failed:", e instanceof Error ? e.message : String(e));
+    if (error) {
+      const msg = error.message || String(error);
+      if (/run_not_found/i.test(msg)) {
+        res.status(404).json({ ok: false, error: "run_not_found" });
+        return;
       }
-    } else {
-      console.warn("[rag] approve: GEMINI_API_KEY unset — RAG indexing skipped after approval");
+      throw new Error(msg);
     }
 
     res.json({ ok: true });

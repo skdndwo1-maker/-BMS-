@@ -191,6 +191,10 @@ export async function deleteChunksForSource(sourceId: string): Promise<void> {
   }
 }
 
+/**
+ * 청크·임베딩을 (source_id, chunk_index) / chunk_id 기준으로 upsert.
+ * 재승인·아웃박스 재시도에도 멱등하며, 남는 고인덱스 청크는 정리한다.
+ */
 export async function insertChunksWithEmbeddings(args: {
   sourceId: string;
   chunks: string[];
@@ -206,34 +210,36 @@ export async function insertChunksWithEmbeddings(args: {
   let embedded = 0;
   let failed = 0;
 
-  console.log(`[rag] insertChunksWithEmbeddings start source=${args.sourceId.slice(0, 8)} total=${total}`);
+  console.log(`[rag] insertChunksWithEmbeddings(upsert) start source=${args.sourceId.slice(0, 8)} total=${total}`);
 
   for (let idx = 0; idx < total; idx++) {
     const content = args.chunks[idx];
     const contentHash = sha256Hex(content);
 
-    // 1) chunk row 적재
+    // 1) chunk upsert — unique (source_id, chunk_index)
     const { data: chunkRow, error: chunkErr } = await sb
       .from("rag_chunks")
-      .insert({
-        source_id: args.sourceId,
-        chunk_index: idx,
-        content,
-        content_hash: contentHash,
-        meta: {},
-      })
+      .upsert(
+        {
+          source_id: args.sourceId,
+          chunk_index: idx,
+          content,
+          content_hash: contentHash,
+          meta: {},
+        },
+        { onConflict: "source_id,chunk_index" }
+      )
       .select("id")
       .single();
     if (chunkErr || !chunkRow?.id) {
       failed += 1;
-      console.error(`[rag] insert chunk ${idx}/${total} failed:`, chunkErr?.message ?? "no row returned");
+      console.error(`[rag] upsert chunk ${idx}/${total} failed:`, chunkErr?.message ?? "no row returned");
       continue;
     }
     inserted += 1;
     const chunkId = chunkRow.id as string;
 
     // 2) embedding (1회 자동 재시도 — Gemini 일시 오류 대응)
-    //    embed가 throw해도 루프가 끊기지 않도록 반드시 try/catch로 감싼다.
     let vec: number[] | null = null;
     let lastErr: string | null = null;
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -251,14 +257,10 @@ export async function insertChunksWithEmbeddings(args: {
     if (!vec) {
       failed += 1;
       console.error(`[rag] embed chunk ${idx}/${total} failed:`, lastErr);
-      // orphan chunk 정리 (embedding 없으면 검색에 잡히지 않으므로 DB를 깨끗이 유지)
-      const { error: delErr } = await sb.from("rag_chunks").delete().eq("id", chunkId);
-      if (delErr) console.error(`[rag] cleanup orphan chunk ${idx} failed:`, delErr.message);
-      else inserted -= 1;
       continue;
     }
 
-    // 3) embedding 행 적재
+    // 3) embedding upsert (insert_rag_embedding RPC already ON CONFLICT)
     const vecText = `[${vec.join(",")}]`;
     const { error: embErr } = await sb.rpc("insert_rag_embedding", {
       p_chunk_id: chunkId,
@@ -267,22 +269,28 @@ export async function insertChunksWithEmbeddings(args: {
     });
     if (embErr) {
       failed += 1;
-      console.error(`[rag] insert embedding ${idx}/${total} failed:`, embErr.message);
-      const { error: delErr } = await sb.from("rag_chunks").delete().eq("id", chunkId);
-      if (delErr) console.error(`[rag] cleanup orphan chunk ${idx} failed:`, delErr.message);
-      else inserted -= 1;
+      console.error(`[rag] upsert embedding ${idx}/${total} failed:`, embErr.message);
       continue;
     }
     embedded += 1;
 
-    // 4) rate-limit 회피용 짧은 간격
     if (idx + 1 < total) {
       await new Promise((r) => setTimeout(r, 150));
     }
   }
 
+  // 이전 색인보다 청크 수가 줄면 남은 고인덱스 행 제거 (임베딩은 cascade)
+  const { error: pruneErr } = await sb
+    .from("rag_chunks")
+    .delete()
+    .eq("source_id", args.sourceId)
+    .gte("chunk_index", total);
+  if (pruneErr) {
+    console.error(`[rag] prune stale chunks failed source=${args.sourceId.slice(0, 8)}:`, pruneErr.message);
+  }
+
   console.log(
-    `[rag] insertChunksWithEmbeddings done source=${args.sourceId.slice(0, 8)} total=${total} inserted=${inserted} embedded=${embedded} failed=${failed}`
+    `[rag] insertChunksWithEmbeddings(upsert) done source=${args.sourceId.slice(0, 8)} total=${total} inserted=${inserted} embedded=${embedded} failed=${failed}`
   );
 
   return { chunkCount: embedded, embedded, inserted, failed };
