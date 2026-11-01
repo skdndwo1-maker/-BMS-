@@ -920,6 +920,7 @@ app.post(
       typeof req.body?.additionalNotes === "string" ? req.body.additionalNotes.trim() : "";
 
     if (g && !g.aiSummary?.trim() && process.env.GEMINI_API_KEY?.trim()) {
+      const tSummary = Date.now();
       try {
         const abs = resolveStoredPath(g.storedRelativePath);
         if (existsSync(abs)) {
@@ -930,6 +931,7 @@ app.post(
       } catch {
         /* 검수는 PDF 발췌 등으로 계속 진행 */
       }
+      console.log(`[inspection][가이드라인 요약] ${Date.now() - tSummary}ms`);
     }
 
     // 참조 가이드라인(요약/발췌) + RAG 발췌(가능하면)
@@ -941,7 +943,9 @@ app.post(
     ]
       .filter(Boolean)
       .join("\n");
+    const tRag = Date.now();
     let guidelineSummary = await buildPrimaryGuidelineBlock(guidelineId, ragQuerySeed);
+    console.log(`[inspection][RAG 검색] ${Date.now() - tRag}ms`);
 
     /** 0) 카테고리 선택 맥락(추가 검수 원칙 확장 가능) */
     const categoryLines: string[] = [];
@@ -954,6 +958,7 @@ app.post(
 
     /** 2) 검수 참조 파일 업로드(선택) — 고정 옵션 자료에 덧붙이는 보조 맥락 */
     if (supplementary?.buffer?.length) {
+      const tSupp = Date.now();
       try {
         const suppText = await supplementaryReferenceToSummary(supplementary);
         const name = supplementary.originalname || "추가참조파일";
@@ -961,15 +966,18 @@ app.post(
       } catch (e) {
         guidelineSummary += `\n\n[검수 참조 추가 업로드 자료 처리 실패] ${e instanceof Error ? e.message : String(e)}`;
       }
+      console.log(`[inspection][파일 받기/변환] ${Date.now() - tSupp}ms supplementary`);
     }
 
     if (extra) {
       guidelineSummary = `${guidelineSummary}\n\n[사용자 직접 입력 검수 사항]\n${extra}`;
     }
 
+    const tFile = Date.now();
     const buf = file.buffer;
     const designBase64 = buf.toString("base64");
     const designMime = file.mimetype;
+    console.log(`[inspection][파일 받기/변환] ${Date.now() - tFile}ms designMime=${designMime} bytes=${buf.length}`);
 
     try {
       const t0 = Date.now();
@@ -986,14 +994,17 @@ app.post(
       if (designMime === "application/pdf") {
         revisionNote = "검수 대상이 PDF인 경우 수정 이미지 생성은 지원하지 않습니다. 이미지(PNG/JPEG)를 올리면 AI 수정본이 함께 생성됩니다.";
       } else if (designMime.startsWith("image/") && process.env.GEMINI_API_KEY?.trim()) {
+        const tRev = Date.now();
         const rev = await generateRevisedBrandingImage({
           designBase64,
           designMime,
           guidelineContext: guidelineSummary,
           overallSummary: result.overallSummary,
           violations: result.violations,
-          userNotes: extra
+          userNotes: extra,
+          logInspectionTiming: true,
         });
+        console.log(`[inspection][수정 이미지] ${Date.now() - tRev}ms ${rev ? "ok" : "fail"}`);
         if (rev) {
           revisedImage = { mimeType: rev.mimeType, data: rev.base64 };
           revisionCaption = rev.caption;
@@ -1004,6 +1015,7 @@ app.post(
       }
 
       // Auto-save run (non-blocking if Supabase env missing or insert fails)
+      const tDb = Date.now();
       const runSaved = await persistRun({
         req,
         type: "inspection",
@@ -1050,6 +1062,7 @@ app.post(
           });
         }
       }
+      console.log(`[inspection][DB 저장] ${Date.now() - tDb}ms runId=${runSaved?.runId ?? "none"}`);
 
       res.json({
         ok: true,

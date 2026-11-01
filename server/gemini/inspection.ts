@@ -82,6 +82,17 @@ function parseInspectionPayload(raw: string): {
   }
 }
 
+function logInspectionTiming(step: string, startedAt: number, extra = ""): void {
+  const suffix = extra ? ` ${extra}` : "";
+  console.log(`[inspection][${step}] ${Date.now() - startedAt}ms${suffix}`);
+}
+
+function formatUsageExtra(modelId: string, usage: { promptTokenCount?: number; candidatesTokenCount?: number } | undefined): string {
+  const inn = usage?.promptTokenCount;
+  const out = usage?.candidatesTokenCount;
+  return `model=${modelId} in=${inn ?? "?"} out=${out ?? "?"}`;
+}
+
 export async function runInspectionWithGemini(opts: {
   designBase64: string;
   designMime: string;
@@ -136,23 +147,38 @@ ${guideBlock}`;
 
     async function runOnce(useStructured: boolean) {
       const model = useStructured ? modelStructured : modelPlain;
-      if (opts.designMime === "application/pdf") {
-        const buf = Buffer.from(opts.designBase64, "base64");
-        const designExcerpt = (await parsePdfBufferToText(buf)).slice(0, 16_000);
-        const prompt = `${basePrompt}
+      const label = useStructured ? "검수 LLM" : "검수 LLM(plain)";
+      let tLlm = Date.now();
+      try {
+        if (opts.designMime === "application/pdf") {
+          const buf = Buffer.from(opts.designBase64, "base64");
+          const tPdf = Date.now();
+          const designExcerpt = (await parsePdfBufferToText(buf)).slice(0, 16_000);
+          logInspectionTiming("파일 받기/변환", tPdf, "pdf_text");
+          const prompt = `${basePrompt}
 
 [검수 대상 PDF에서 추출한 텍스트]
 ${designExcerpt || "(텍스트 추출 없음 — 가능한 경우 시각적 규칙은 가이드와 대조)"}${useStructured ? "" : jsonOnlySuffix}`;
-        return model.generateContent(prompt);
-      }
-      const prompt = `${basePrompt}
+          tLlm = Date.now();
+          const result = await model.generateContent(prompt);
+          logInspectionTiming(label, tLlm, formatUsageExtra(modelId, result.response.usageMetadata));
+          return result;
+        }
+        const prompt = `${basePrompt}
 
 [검수 대상]
 첨부 이미지를 브랜드 디자인 시안/산출물로 간주하고 위 기준으로 평가하세요.${useStructured ? "" : jsonOnlySuffix}`;
-      return model.generateContent([
-        prompt,
-        { inlineData: { mimeType: opts.designMime, data: opts.designBase64 } }
-      ]);
+        tLlm = Date.now();
+        const result = await model.generateContent([
+          prompt,
+          { inlineData: { mimeType: opts.designMime, data: opts.designBase64 } }
+        ]);
+        logInspectionTiming(label, tLlm, formatUsageExtra(modelId, result.response.usageMetadata));
+        return result;
+      } catch (e) {
+        logInspectionTiming(label, tLlm, `model=${modelId} error`);
+        throw e;
+      }
     }
 
     try {
@@ -165,12 +191,16 @@ ${designExcerpt || "(텍스트 추출 없음 — 가능한 경우 시각적 규�
         raw = result.response.text();
       }
 
+      const tValidate = Date.now();
       let parsed = parseInspectionPayload(raw);
+      logInspectionTiming("결과 검증", tValidate);
       if (!parsed) {
         try {
           const result = await runOnce(false);
           raw = result.response.text();
+          const tValidate2 = Date.now();
           parsed = parseInspectionPayload(raw);
+          logInspectionTiming("결과 검증", tValidate2, "retry");
         } catch {
           parsed = null;
         }
@@ -256,6 +286,8 @@ export async function generateRevisedBrandingImage(opts: {
   userNotes?: string;
   /** true면 VI PDF(참조 가이드라인)가 [사용자 직접 입력]보다 우선 — 디자인 에디터 교정용 */
   viGuidelineTakesPrecedence?: boolean;
+  /** POST /api/inspection/run 경로에서만 단계 타이밍 로그 */
+  logInspectionTiming?: boolean;
 }): Promise<{ mimeType: string; base64: string; caption: string } | null> {
   const key = getKey();
   if (!key) return null;
@@ -343,6 +375,7 @@ ${userBlock}`;
 
   for (const model of models) {
     for (const body of bodies) {
+      const tImg = Date.now();
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
           model
@@ -355,21 +388,35 @@ ${userBlock}`;
         if (!res.ok) {
           const errBody = await res.text();
           console.error(`[gemini image] ${model} HTTP ${res.status}`, errBody.slice(0, 400));
+          if (opts.logInspectionTiming) {
+            logInspectionTiming("수정 이미지 LLM", tImg, `model=${model} http=${res.status}`);
+          }
           if (res.status === 400 && /API_KEY_INVALID|API key expired/i.test(errBody)) {
             return null;
           }
           continue;
         }
-        const json = (await res.json()) as unknown;
+        const json = (await res.json()) as {
+          usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+        };
         const extracted = extractTextAndImageFromGeminiResponse(json);
         if (extracted) {
+          if (opts.logInspectionTiming) {
+            logInspectionTiming("수정 이미지 LLM", tImg, formatUsageExtra(model, json.usageMetadata));
+          }
           return {
             mimeType: extracted.mimeType,
             base64: extracted.base64,
             caption: extracted.text || "수정 이미지가 생성되었습니다."
           };
         }
+        if (opts.logInspectionTiming) {
+          logInspectionTiming("수정 이미지 LLM", tImg, `model=${model} no_image`);
+        }
       } catch (e) {
+        if (opts.logInspectionTiming) {
+          logInspectionTiming("수정 이미지 LLM", tImg, `model=${model} error`);
+        }
         console.error(`[gemini image] ${model}`, e);
       }
     }
