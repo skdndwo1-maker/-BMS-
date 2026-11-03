@@ -11,6 +11,53 @@ import {
 } from "./shared.js";
 import { logLlmCall, modelCandidates } from "../llm/router.js";
 
+/** 요약 프롬프트 문구를 바꾸면 버전을 올려 캐시가 자동 무효화됨. */
+export const GUIDELINE_SUMMARY_PROMPT_VERSION = "v1";
+
+const GUIDELINE_SUMMARY_INSTRUCTION = `다음은 브랜드/ VI 가이드라인 문서에서 추출한 텍스트입니다.
+디자인 검수에 쓸 수 있도록 핵심 규칙(로고, 색상, 타이포, 여백, 금지 사항 등)을 한국어로 구조화해 요약하세요.
+불릿과 짧은 문장으로, 800자 이내로 작성하세요.
+
+--- 문서 본문 ---
+`;
+
+/** 프롬프트에 실제로 넣는 원문 상한 (기존 summarizeGuidelineFile과 동일). */
+export const GUIDELINE_SUMMARY_SOURCE_CHAR_LIMIT = 60_000;
+
+export type GuidelineSummarySource =
+  | { kind: "text"; sourceText: string; extractFull: string }
+  | { kind: "image"; base64: string; mimeType: string }
+  | { kind: "empty" };
+
+/** 요약 LLM에 들어가는 원문(텍스트) 또는 이미지 페이로드를 추출. */
+export async function extractGuidelineSummarySource(
+  filePath: string,
+  mimeType: string
+): Promise<GuidelineSummarySource> {
+  if (mimeType === "application/pdf") {
+    const buf = readFileSync(filePath);
+    const extractFull = (await parsePdfBufferToText(buf)).slice(0, 120_000);
+    const sourceText = extractFull.slice(0, GUIDELINE_SUMMARY_SOURCE_CHAR_LIMIT);
+    if (!sourceText.trim()) return { kind: "empty" };
+    return { kind: "text", sourceText, extractFull };
+  }
+  if (mimeType.startsWith("text/")) {
+    const extractFull = readFileSync(filePath, "utf8").slice(0, 120_000);
+    const sourceText = extractFull.slice(0, GUIDELINE_SUMMARY_SOURCE_CHAR_LIMIT);
+    if (!sourceText.trim()) return { kind: "empty" };
+    return { kind: "text", sourceText, extractFull };
+  }
+  if (mimeType === "image/png" || mimeType === "image/jpeg") {
+    const buf = readFileSync(filePath);
+    return { kind: "image", base64: buf.toString("base64"), mimeType };
+  }
+  return { kind: "empty" };
+}
+
+export function buildGuidelineSummaryPrompt(sourceText: string): string {
+  return `${GUIDELINE_SUMMARY_INSTRUCTION}${sourceText}`;
+}
+
 /** 검수 API 키 없을 때도 PDF에서 규칙 맥락을 주기 위한 발췌 */
 export async function excerptGuidelineForInspection(g: GuidelineRecord): Promise<string> {
   const abs = resolveStoredPath(g.storedRelativePath);
@@ -36,45 +83,36 @@ export async function excerptGuidelineForInspection(g: GuidelineRecord): Promise
 export async function summarizeGuidelineFile(
   filePath: string,
   mimeType: string
-): Promise<{ summary: string; excerpt: string }> {
+): Promise<{ summary: string; excerpt: string; model: string | null }> {
   const key = getKey();
-  let text = "";
+  const source = await extractGuidelineSummarySource(filePath, mimeType);
 
-  if (mimeType === "application/pdf") {
-    const buf = readFileSync(filePath);
-    text = (await parsePdfBufferToText(buf)).slice(0, 120_000);
-  } else if (mimeType.startsWith("text/")) {
-    text = readFileSync(filePath, "utf8").slice(0, 120_000);
-  } else if (mimeType === "image/png" || mimeType === "image/jpeg") {
-    const buf = readFileSync(filePath);
-    const b64 = buf.toString("base64");
-    return summarizeImageWithGemini(b64, mimeType);
+  if (source.kind === "image") {
+    return summarizeImageWithGemini(source.base64, source.mimeType);
   }
+
+  if (source.kind === "empty") {
+    return {
+      summary: "이 파일 형식에서는 텍스트를 추출하지 못했습니다. PDF 또는 텍스트 형식을 권장합니다.",
+      excerpt: "",
+      model: null,
+    };
+  }
+
+  const text = source.extractFull;
 
   if (!key) {
     const excerpt = text.slice(0, 2000);
     return {
       summary:
         "[GEMINI_API_KEY 없음] 가이드 텍스트 일부만 저장되었습니다. .env에 GEMINI_API_KEY를 설정하면 AI 요약이 생성됩니다.",
-      excerpt
-    };
-  }
-
-  if (!text.trim()) {
-    return {
-      summary: "이 파일 형식에서는 텍스트를 추출하지 못했습니다. PDF 또는 텍스트 형식을 권장합니다.",
-      excerpt: ""
+      excerpt,
+      model: null,
     };
   }
 
   const genAI = new GoogleGenerativeAI(key);
-  const prompt = `다음은 브랜드/ VI 가이드라인 문서에서 추출한 텍스트입니다.
-디자인 검수에 쓸 수 있도록 핵심 규칙(로고, 색상, 타이포, 여백, 금지 사항 등)을 한국어로 구조화해 요약하세요.
-불릿과 짧은 문장으로, 800자 이내로 작성하세요.
-
---- 문서 본문 ---
-${text.slice(0, 60_000)}
-`;
+  const prompt = buildGuidelineSummaryPrompt(source.sourceText);
 
   let lastErr: unknown;
   for (const mid of modelCandidates("guideline_summarize")) {
@@ -89,7 +127,7 @@ ${text.slice(0, 60_000)}
         usage: result.response.usageMetadata,
       });
       const summary = result.response.text();
-      return { summary, excerpt: text.slice(0, 2000) };
+      return { summary, excerpt: text.slice(0, 2000), model: mid };
     } catch (e) {
       logLlmCall({ task: "guideline_summarize", model: mid, startedAt: tLlm });
       rethrowIfInvalidApiKey(e);
@@ -107,13 +145,14 @@ ${text.slice(0, 60_000)}
 async function summarizeImageWithGemini(
   base64: string,
   mimeType: string
-): Promise<{ summary: string; excerpt: string }> {
+): Promise<{ summary: string; excerpt: string; model: string | null }> {
   const key = getKey();
   if (!key) {
     return {
       summary:
         "[GEMINI_API_KEY 없음] 이미지 가이드는 API 키 설정 후 분석됩니다.",
-      excerpt: ""
+      excerpt: "",
+      model: null,
     };
   }
   const genAI = new GoogleGenerativeAI(key);
@@ -135,7 +174,7 @@ async function summarizeImageWithGemini(
         usage: result.response.usageMetadata,
       });
       const summary = result.response.text();
-      return { summary, excerpt: "" };
+      return { summary, excerpt: "", model: mid };
     } catch (e) {
       logLlmCall({ task: "guideline_summarize", model: mid, startedAt: tLlm });
       rethrowIfInvalidApiKey(e);
