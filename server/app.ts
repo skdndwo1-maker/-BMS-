@@ -41,6 +41,7 @@ import {
   NAMING_FIXED_GUIDELINE_IDS
 } from "./fixedGuidelines.js";
 import { syncGuidelineFromSupabaseLibrary, canSyncGuidelineFromSupabase } from "./guidelineSupabaseSync.js";
+import { ensureGuidelineAiSummary } from "./guidelineSummaryCache.js";
 import { extractPdfTextFromBase64, runSimplyHeartStep } from "./simplyHeart.js";
 import { buildExternalNamingReferences } from "./namingExternalContext.js";
 import { resolveLawApiOc, searchLawsJson } from "./lawApi.js";
@@ -134,12 +135,8 @@ async function buildPrimaryGuidelineBlock(guidelineId: string, queryText?: strin
   let g = getGuideline(guidelineId);
   if (g && !g.aiSummary?.trim() && process.env.GEMINI_API_KEY?.trim()) {
     try {
-      const abs = resolveStoredPath(g.storedRelativePath);
-      if (existsSync(abs)) {
-        const { summary } = await summarizeGuidelineFile(abs, g.mimeType);
-        g = { ...g, aiSummary: summary, aiAnalyzedAt: new Date().toISOString() };
-        setGuideline(g);
-      }
+      const ensured = await ensureGuidelineAiSummary(g);
+      g = ensured.record;
     } catch {
       /* 검수는 발췌로 계속 */
     }
@@ -921,17 +918,17 @@ app.post(
 
     if (g && !g.aiSummary?.trim() && process.env.GEMINI_API_KEY?.trim()) {
       const tSummary = Date.now();
+      let cacheLabel: "hit" | "miss" | "skip" | "local" = "skip";
       try {
-        const abs = resolveStoredPath(g.storedRelativePath);
-        if (existsSync(abs)) {
-          const { summary } = await summarizeGuidelineFile(abs, g.mimeType);
-          g = { ...g, aiSummary: summary, aiAnalyzedAt: new Date().toISOString() };
-          setGuideline(g);
-        }
+        const ensured = await ensureGuidelineAiSummary(g);
+        g = ensured.record;
+        cacheLabel = ensured.cache;
       } catch {
         /* 검수는 PDF 발췌 등으로 계속 진행 */
       }
-      console.log(`[inspection][가이드라인 요약] ${Date.now() - tSummary}ms`);
+      console.log(
+        `[inspection][guideline_summary] cache=${cacheLabel} ms=${Date.now() - tSummary}`
+      );
     }
 
     // 참조 가이드라인(요약/발췌) + RAG 발췌(가능하면)
