@@ -4,8 +4,8 @@ import {
   getKey,
   rethrowIfInvalidApiKey,
   shouldTryNextTextModel,
-  textModelCandidates,
 } from "./shared.js";
+import { logLlmCall, modelCandidates } from "../llm/router.js";
 import { generateImageFromTextPrompt, generateRevisedBrandingImage, generateImageDevelopFromReference } from "./inspection.js";
 
 /** 브랜드 제작(디자인 에디터) 캔버스 — 위반 항목별 수정 힌트 포함 */
@@ -236,7 +236,7 @@ ${contentBlock}`;
 출력: JSON 한 개만. 키: score, overallSummary, violations (항목별 fixKind·제안 필드 포함).`;
 
   let lastErr: unknown;
-  for (const modelId of textModelCandidates()) {
+  for (const modelId of modelCandidates("design_editor_inspect")) {
     const modelStructured = genAI.getGenerativeModel({
       model: modelId,
       generationConfig: {
@@ -249,10 +249,23 @@ ${contentBlock}`;
     async function runOnce(useStructured: boolean) {
       const model = useStructured ? modelStructured : modelPlain;
       const prompt = `${basePrompt}${useStructured ? "" : jsonOnlySuffix}`;
-      return model.generateContent([
-        prompt,
-        { inlineData: { mimeType: opts.designMime, data: opts.designBase64 } }
-      ]);
+      const tLlm = Date.now();
+      try {
+        const result = await model.generateContent([
+          prompt,
+          { inlineData: { mimeType: opts.designMime, data: opts.designBase64 } }
+        ]);
+        logLlmCall({
+          task: "design_editor_inspect",
+          model: modelId,
+          startedAt: tLlm,
+          usage: result.response.usageMetadata,
+        });
+        return result;
+      } catch (e) {
+        logLlmCall({ task: "design_editor_inspect", model: modelId, startedAt: tLlm });
+        throw e;
+      }
     }
 
     try {
@@ -450,7 +463,7 @@ ${guide}
 ${ctx}`;
 
   let lastErr: unknown;
-  for (const modelId of textModelCandidates()) {
+  for (const modelId of modelCandidates("suggest_text")) {
     const model = genAI.getGenerativeModel({
       model: modelId,
       generationConfig: {
@@ -458,8 +471,11 @@ ${ctx}`;
         responseSchema: textSuggestionSchema
       }
     });
+    const tLlm = Date.now();
     try {
-      const raw = (await model.generateContent(prompt)).response.text();
+      const result = await model.generateContent(prompt);
+      logLlmCall({ task: "suggest_text", model: modelId, startedAt: tLlm, usage: result.response.usageMetadata });
+      const raw = result.response.text();
       const parsed = JSON.parse(raw) as {
         mainTitle?: string;
         subtitleLine?: string;
@@ -482,6 +498,7 @@ ${ctx}`;
         emphasizedTitle: s(parsed.emphasizedTitle)
       };
     } catch (e) {
+      logLlmCall({ task: "suggest_text", model: modelId, startedAt: tLlm });
       rethrowIfInvalidApiKey(e);
       lastErr = e;
       if (shouldTryNextTextModel(e)) continue;
@@ -664,7 +681,7 @@ ${opts.guidelineContext?.trim() ? `\n[참조 VI 가이드라인 — 색·스타�
 ${direction}`;
 
   let lastErr: unknown;
-  for (const modelId of textModelCandidates()) {
+  for (const modelId of modelCandidates("asset_prompt")) {
     const model = genAI.getGenerativeModel({
       model: modelId,
       generationConfig: {
@@ -672,14 +689,23 @@ ${direction}`;
         responseSchema: assetGenerationSchema
       }
     });
+    const tLlm = Date.now();
     try {
-      const raw = (await model.generateContent(prompt)).response.text();
+      const result = await model.generateContent(prompt);
+      logLlmCall({
+        task: "asset_prompt",
+        model: modelId,
+        startedAt: tLlm,
+        usage: result.response.usageMetadata,
+      });
+      const raw = result.response.text();
       const parsed = JSON.parse(raw) as unknown;
       const alternatives = parseAssetAlternatives(parsed);
       if (alternatives.length >= 1) {
         return { alternatives: alternatives.slice(0, 3) };
       }
     } catch (e) {
+      logLlmCall({ task: "asset_prompt", model: modelId, startedAt: tLlm });
       rethrowIfInvalidApiKey(e);
       lastErr = e;
       if (shouldTryNextTextModel(e)) continue;
@@ -1155,7 +1181,7 @@ ${guide}
 ${ctx || "{}"}`;
 
   let lastErr: unknown;
-  for (const modelId of textModelCandidates()) {
+  for (const modelId of modelCandidates("propose_draft")) {
     const model = genAI.getGenerativeModel({
       model: modelId,
       generationConfig: {
@@ -1163,12 +1189,21 @@ ${ctx || "{}"}`;
         responseSchema: designDraftProposalSchema,
       },
     });
+    const tLlm = Date.now();
     try {
-      const raw = (await model.generateContent(prompt)).response.text();
+      const result = await model.generateContent(prompt);
+      logLlmCall({
+        task: "propose_draft",
+        model: modelId,
+        startedAt: tLlm,
+        usage: result.response.usageMetadata,
+      });
+      const raw = result.response.text();
       const parsed = JSON.parse(raw) as unknown;
       const proposal = parseDraftProposalPayload(parsed);
       if (proposal) return proposal;
     } catch (e) {
+      logLlmCall({ task: "propose_draft", model: modelId, startedAt: tLlm });
       rethrowIfInvalidApiKey(e);
       lastErr = e;
       if (shouldTryNextTextModel(e)) continue;

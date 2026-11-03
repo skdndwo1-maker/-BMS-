@@ -8,8 +8,8 @@ import {
   parsePdfBufferToText,
   rethrowIfInvalidApiKey,
   shouldTryNextTextModel,
-  textModelCandidates,
 } from "./shared.js";
+import { logLlmCall, modelCandidates } from "../llm/router.js";
 
 /** 검수 API 키 없을 때도 PDF에서 규칙 맥락을 주기 위한 발췌 */
 export async function excerptGuidelineForInspection(g: GuidelineRecord): Promise<string> {
@@ -77,13 +77,21 @@ ${text.slice(0, 60_000)}
 `;
 
   let lastErr: unknown;
-  for (const mid of textModelCandidates()) {
+  for (const mid of modelCandidates("guideline_summarize")) {
+    const tLlm = Date.now();
     try {
       const model = genAI.getGenerativeModel({ model: mid });
       const result = await model.generateContent(prompt);
+      logLlmCall({
+        task: "guideline_summarize",
+        model: mid,
+        startedAt: tLlm,
+        usage: result.response.usageMetadata,
+      });
       const summary = result.response.text();
       return { summary, excerpt: text.slice(0, 2000) };
     } catch (e) {
+      logLlmCall({ task: "guideline_summarize", model: mid, startedAt: tLlm });
       rethrowIfInvalidApiKey(e);
       lastErr = e;
       if (shouldTryNextTextModel(e)) {
@@ -112,16 +120,24 @@ async function summarizeImageWithGemini(
   const prompt =
     "이 이미지는 브랜드 가이드라인 문서의 일부입니다. 디자인 검수에 필요한 핵심 규칙을 한국어로 요약하세요 (800자 이내).";
   let lastErr: unknown;
-  for (const mid of textModelCandidates()) {
+  for (const mid of modelCandidates("guideline_summarize")) {
+    const tLlm = Date.now();
     try {
       const model = genAI.getGenerativeModel({ model: mid });
       const result = await model.generateContent([
         prompt,
         { inlineData: { mimeType, data: base64 } }
       ]);
+      logLlmCall({
+        task: "guideline_summarize",
+        model: mid,
+        startedAt: tLlm,
+        usage: result.response.usageMetadata,
+      });
       const summary = result.response.text();
       return { summary, excerpt: "" };
     } catch (e) {
+      logLlmCall({ task: "guideline_summarize", model: mid, startedAt: tLlm });
       rethrowIfInvalidApiKey(e);
       lastErr = e;
       if (shouldTryNextTextModel(e)) {

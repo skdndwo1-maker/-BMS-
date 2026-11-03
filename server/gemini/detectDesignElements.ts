@@ -4,8 +4,8 @@ import {
   getKey,
   rethrowIfInvalidApiKey,
   shouldTryNextTextModel,
-  textModelCandidates,
 } from "./shared.js";
+import { logLlmCall, modelCandidates } from "../llm/router.js";
 
 /** design_guideline_reference.applies_to 매핑용 구성 요소 판별 결과 */
 export type DesignElementDetection = {
@@ -161,7 +161,7 @@ export async function detectDesignElements(opts: {
   const genAI = new GoogleGenerativeAI(key);
   let lastErr: unknown;
 
-  for (const modelId of textModelCandidates()) {
+  for (const modelId of modelCandidates("inspection_classify")) {
     const model = genAI.getGenerativeModel({
       model: modelId,
       generationConfig: {
@@ -169,14 +169,22 @@ export async function detectDesignElements(opts: {
         responseSchema: designElementDetectionSchema,
       },
     });
+    const tLlm = Date.now();
     try {
       const result = await model.generateContent([
         DETECTION_PROMPT,
         { inlineData: { mimeType: mime, data: b64 } },
       ]);
+      logLlmCall({
+        task: "inspection_classify",
+        model: modelId,
+        startedAt: tLlm,
+        usage: result.response.usageMetadata,
+      });
       const parsed = parseDetectionPayload(result.response.text());
       if (parsed) return parsed;
     } catch (e) {
+      logLlmCall({ task: "inspection_classify", model: modelId, startedAt: tLlm });
       rethrowIfInvalidApiKey(e);
       lastErr = e;
       if (shouldTryNextTextModel(e)) {
