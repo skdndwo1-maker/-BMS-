@@ -12,6 +12,7 @@ import {
   formatGeminiFailureMessage,
   geminiApiKeyCandidates,
   isPrepaymentCreditsDepletedError,
+  parsePdfBufferToText,
   rethrowIfInvalidApiKey,
   shouldTryNextTextModel,
 } from "./gemini/shared.js";
@@ -32,11 +33,7 @@ const CORE_GUIDES: readonly { id: string; title: string; cap?: number }[] = [
 
 export async function extractPdfTextFromBase64(base64: string): Promise<string> {
   const buf = Buffer.from(base64, "base64");
-  const pdfParseMod = (await import("pdf-parse")) as unknown as {
-    default: (b: Buffer) => Promise<{ text: string }>;
-  };
-  const out = await pdfParseMod.default(buf);
-  const t = String(out.text ?? "").trim();
+  const t = (await parsePdfBufferToText(buf)).trim();
   return t.slice(0, 85_000);
 }
 
