@@ -3,6 +3,7 @@
  * - design-editor-brand-guideline → Jason B2C Brand Guidelines (디자인 AI 시각·텍스트)
  * - uplus-brand-guideline → V1.1 (라이브러리 보관만, AI 미사용)
  * - simply-uplus-guideline → Simply_U+_Guidelines.pdf
+ * - uplus-company-brand-2026 → 2026 U+ 전사 브랜드 가이드라인 (네이밍)
  */
 export const DESIGN_EDITOR_INSPECTION_GUIDELINE_ID = "design-editor-brand-guideline" as const;
 
@@ -17,8 +18,8 @@ export const GUIDELINE_REFERENCE_OPTIONS = [
 
 export type GuidelineReferenceId = (typeof GUIDELINE_REFERENCE_OPTIONS)[number]["id"];
 
-/** 브랜드 네이밍 — 사용자 선택 없이 항상 참조(VI 제외) */
+/** 브랜드 네이밍 — 사용자 선택 없이 항상 참조 */
 export const NAMING_FIXED_GUIDELINE_OPTIONS = [
   { id: "simply-uplus-guideline", name: "Simply. U+ Guidebook" },
-  { id: DESIGN_EDITOR_INSPECTION_GUIDELINE_ID, name: "B2C Brand Guidelines (Jason)" },
+  { id: "uplus-company-brand-2026", name: "2026 U+ 전사 브랜드 가이드라인" },
 ] as const;

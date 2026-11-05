@@ -14,6 +14,7 @@ const GUIDELINE_LABELS: Record<string, string> = {
   "design-editor-brand-guideline": "LG U+ B2C Brand Guidelines (디자인 검수·교정)",
   "simply-uplus-guideline": "Simply U+ 가이드라인",
   "simply-uplus-job-guide": "직무별 Simply U+ 실행 가이드",
+  "uplus-company-brand-2026": "2026 U+ 전사 브랜드 가이드라인",
 };
 
 function asObj(v: unknown): AnyRec {

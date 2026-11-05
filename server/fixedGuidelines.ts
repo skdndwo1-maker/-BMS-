@@ -47,6 +47,11 @@ export const FIXED_GUIDELINE_SOURCES: Record<string, FixedGuidelineSpec> = {
       "data/guidelines/Simply U+ 직무별 실행 가이드/직무별 Simply. U+ 실행 가이드_v1_학습용.pdf",
     displayName: "직무별 Simply U+ 실행 가이드 v1 (학습용)",
   },
+  /** 네이밍 생성·검수 — 전사 브랜드 규정 (조형 Jason PDF와 별개) */
+  "uplus-company-brand-2026": {
+    relativeSource: "data/guidelines/U_2026_Company_Brand_Guidelines.pdf",
+    displayName: "2026 U+ 전사 브랜드 가이드라인",
+  },
 };
 
 /** `simplyHeart` 통합 분석에서 항상 레포 고정 PDF로 맥락에 넣는 id (브랜드/VI 제외) */
@@ -55,21 +60,24 @@ export const SIMPLY_HEART_FIXED_GUIDE_IDS: readonly string[] = [
   "simply-uplus-job-guide",
 ];
 
-/** 브랜드 네이밍 생성·검수 — 항상 자동 참조(VI 제외) */
 /** 디자인 제작 — 시각(검수·교정·이미지 시안) AI 전용 Jason PDF 슬롯 */
 export const DESIGN_EDITOR_INSPECTION_GUIDELINE_ID = "design-editor-brand-guideline" as const;
+
+/** 네이밍 생성·검수 — 전사 브랜드 가이드 */
+export const COMPANY_BRAND_GUIDELINE_2026_ID = "uplus-company-brand-2026" as const;
 
 /** AI 추론에 사용 금지 — Brand Library(V1.1) 슬롯 id */
 export const LEGACY_LIBRARY_ONLY_GUIDELINE_ID = "uplus-brand-guideline" as const;
 
+/** 브랜드 네이밍 생성·검수 — Simply(언어·감성) + 2026 전사 브랜드 가이드 */
 export const NAMING_FIXED_GUIDELINE_IDS = [
   "simply-uplus-guideline",
-  DESIGN_EDITOR_INSPECTION_GUIDELINE_ID,
+  COMPANY_BRAND_GUIDELINE_2026_ID,
 ] as const;
 
 export const NAMING_FIXED_GUIDELINE_DISPLAY: Record<(typeof NAMING_FIXED_GUIDELINE_IDS)[number], string> = {
   "simply-uplus-guideline": "Simply. U+ Guidebook",
-  [DESIGN_EDITOR_INSPECTION_GUIDELINE_ID]: "B2C Brand Guidelines (Jason)",
+  [COMPANY_BRAND_GUIDELINE_2026_ID]: "2026 U+ 전사 브랜드 가이드라인",
 };
 
 function resolveLocalSourcePath(spec: FixedGuidelineSpec): string | null {

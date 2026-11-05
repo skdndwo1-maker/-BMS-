@@ -174,7 +174,8 @@ function parseDesignEditorInspectionPayload(raw: string): {
 export async function runDesignEditorCanvasInspection(opts: {
   designBase64: string;
   designMime: string;
-  guidelineSummary: string;
+  visualGuideline: string;
+  textGuideline: string;
   designContentJson: string;
   templateLabel: string;
   /** 제작물 주제·목적 (창작자 입력) */
@@ -211,23 +212,29 @@ export async function runDesignEditorCanvasInspection(opts: {
   }
 
   const genAI = new GoogleGenerativeAI(key);
-  const guideBlock = opts.guidelineSummary.slice(0, 72_000);
+  const visualBlock = opts.visualGuideline.slice(0, 48_000);
+  const textBlock = opts.textGuideline.slice(0, 24_000);
   const contentBlock = opts.designContentJson.slice(0, 24_000);
 
-  const basePrompt = `역할: LG U+ B2C Brand Guidelines(Jason)를 준수하는 시니어 디자인 QA입니다.
+  const basePrompt = `역할: LG U+ 시니어 디자인 QA입니다.
 
 작업:
 1) 첨부 이미지는 브랜드 제작 에디터의 캔버스 화면 캡처입니다.
-2) 아래 [캔버스 텍스트/설정 JSON]과 이미지가 일치한다고 가정하고, **Jason B2C Brand Guidelines PDF** 기준으로 로고·컬러·타이포·여백·톤·레이아웃을 평가하세요.
-3) 텍스트 수정이 필요하면 간결·고객 친화 톤으로 proposed* 필드에 한국어 문안을 제안하세요. 변경이 필요 없으면 해당 필드는 빈 문자열("")입니다.
-4) 이미지/일러스트가 부적절하면 fixKind=image, imageReplacementBrief에 교체 방향을 구체적으로 적으세요.
-5) 배치·그리드·여백 문제는 fixKind=layout, layoutReset을 poster_defaults(포스터형 템플릿) 또는 clear_text_overrides(사용자 임의 폰트크기 초기화) 등으로 제안하세요.
-6) violations는 실제 개선점만 나열하고, fixKind를 반드시 채우세요.
+2) 아래 [캔버스 텍스트/설정 JSON]과 이미지가 일치한다고 가정하세요.
+3) **조형**(로고·컬러·타이포·여백·톤·레이아웃)은 [조형 가이드 — Jason B2C]만 기준으로 평가하세요.
+4) **이미지 안 문안**(어법·톤·표현)은 [문안 가이드 — Simply U+]만 기준으로 평가하세요.
+5) 텍스트 수정이 필요하면 간결·고객 친화 톤으로 proposed* 필드에 한국어 문안을 제안하세요. 변경이 필요 없으면 해당 필드는 빈 문자열("")입니다.
+6) 이미지/일러스트가 부적절하면 fixKind=image, imageReplacementBrief에 교체 방향을 구체적으로 적으세요.
+7) 배치·그리드·여백 문제는 fixKind=layout, layoutReset을 poster_defaults(포스터형 템플릿) 또는 clear_text_overrides(사용자 임의 폰트크기 초기화) 등으로 제안하세요.
+8) violations는 실제 개선점만 나열하고, fixKind를 반드시 채우세요.
 
 템플릿: ${opts.templateLabel}
 ${opts.creativeTopic?.trim() ? `\n[제작 주제·의도]\n${opts.creativeTopic.trim()}\n` : ""}
-[참조 가이드라인 — Jason B2C Brand Guidelines PDF]
-${guideBlock}
+[조형 가이드 — Jason B2C Brand Guidelines PDF]
+${visualBlock}
+
+[문안 가이드 — Simply U+]
+${textBlock || "(Simply U+ 추출문 없음)"}
 
 [캔버스 텍스트/설정 JSON]
 ${contentBlock}`;
@@ -449,14 +456,14 @@ ${SIMPLY_FEW_SHOT_INSTRUCTION}
 
 작업:
 1) 아래 [캔버스 JSON]의 목적·톤·메시지 방향을 파악하세요.
-2) **카피·어법·톤**은 Simply Guide를 최우선으로, B2C Brand Guidelines(Jason)는 브랜드 금지·표기 등 보조 규정으로만 참고하세요.
+2) **카피·어법·톤**은 Simply Guide만 기준으로 작성하세요.
 3) 요청된 슬롯만 채우고, 요청되지 않은 필드는 반드시 빈 문자열 "" 입니다.
 ${slotHelp}
 4) JSON만 출력합니다.
 
 템플릿: ${opts.templateLabel}
 ${opts.creativeTopic?.trim() ? `\n[제작 주제·의도]\n${opts.creativeTopic.trim()}\n` : ""}
-[참조 가이드라인 — Simply U+ (주) + Jason B2C (보조)]
+[참조 가이드라인 — Simply U+]
 ${guide}
 
 [캔버스 JSON]
@@ -1150,7 +1157,7 @@ ${SIMPLY_COPY_COT_BLOCK}
 ${SIMPLY_FEW_SHOT_INSTRUCTION}
 
 작업: [제작 주제]와 [캔버스 정보]에 맞는 **완성형 디자인 초안**을 JSON으로 설계하세요.
-**타이틀·부제·본문·유의사항(footer) 카피**는 Simply Guide 어법을 최우선으로 작성하고, 레이아웃·로고·색·이미지/에셋 배치는 Jason B2C VI를 따르세요. 캔버스 비율 안에서 겹치지 않게 합니다.
+**타이틀·부제·본문·유의사항(footer) 카피**는 Simply Guide 어법만 따르세요. 레이아웃은 아래 규칙을 따르고, 캔버스 비율 안에서 겹치지 않게 합니다.
 
 [캔버스 정보]
 - 템플릿 ID: ${opts.templateLabel}
@@ -1174,7 +1181,7 @@ ${SIMPLY_FEW_SHOT_INSTRUCTION}
 [제작 주제]
 ${topic}
 
-[참조 가이드라인 — Jason B2C + Simply U+ (텍스트·레이아웃)]
+[참조 가이드라인 — Simply U+]
 ${guide}
 
 [현재 캔버스 JSON]
