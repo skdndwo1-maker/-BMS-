@@ -48,11 +48,13 @@ async function lookupByChecksum(sourceKey: string, fileChecksum: string): Promis
   return text || null;
 }
 
-async function lookupLatest(sourceKey: string): Promise<string | null> {
+async function lookupLatest(
+  sourceKey: string
+): Promise<{ text: string; fileChecksum: string | null } | null> {
   const sb = getSupabaseServiceClient();
   const { data, error } = await sb
     .from("guideline_extracts")
-    .select("extract_text")
+    .select("extract_text, file_checksum")
     .eq("source_key", sourceKey)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -62,7 +64,11 @@ async function lookupLatest(sourceKey: string): Promise<string | null> {
     return null;
   }
   const text = typeof data?.extract_text === "string" ? data.extract_text.trim() : "";
-  return text || null;
+  if (!text) return null;
+  return {
+    text,
+    fileChecksum: typeof data?.file_checksum === "string" ? data.file_checksum : null,
+  };
 }
 
 async function upsertExtract(sourceKey: string, fileChecksum: string, extractText: string): Promise<void> {
@@ -100,7 +106,7 @@ export async function loadGuidelineExtract(sourceKey: string): Promise<{
   if (!abs) {
     if (supabaseConfigured()) {
       const latest = await lookupLatest(sourceKey);
-      if (latest) return { text: latest, cache: "db_latest" };
+      if (latest) return { text: latest.text, cache: "db_latest" };
     }
     return { text: "", cache: "empty" };
   }
@@ -119,4 +125,95 @@ export async function loadGuidelineExtract(sourceKey: string): Promise<{
     return { text: extracted, cache: "miss" };
   }
   return { text: extracted, cache: "local" };
+}
+
+/**
+ * Extract text plus checksum/path for RAG indexing.
+ * Local PDF preferred. When `persistExtract` is true (default), new PDF extracts are upserted.
+ * Use `persistExtract: false` for dry-run / read-only planning.
+ */
+export async function loadGuidelineExtractWithMeta(
+  sourceKey: string,
+  opts?: { persistExtract?: boolean }
+): Promise<{
+  text: string;
+  checksum: string | null;
+  cache: GuidelineExtractCache;
+  storedRelativePath: string | null;
+  mimeType: string | null;
+  title: string;
+}> {
+  const persistExtract = opts?.persistExtract !== false;
+  const title =
+    getGuideline(sourceKey)?.displayName ??
+    FIXED_GUIDELINE_SOURCES[sourceKey]?.displayName ??
+    sourceKey;
+
+  try {
+    await ensureFixedGuidelineSlotAsync(sourceKey);
+  } catch (e) {
+    console.warn(
+      `[guideline_extract] ensure ${sourceKey}:`,
+      e instanceof Error ? e.message : String(e)
+    );
+  }
+
+  const g = getGuideline(sourceKey);
+  const abs = resolveExistingPdf(sourceKey);
+  if (abs) {
+    const checksum = sha256File(abs);
+    let text = "";
+    let cache: GuidelineExtractCache = "empty";
+    if (supabaseConfigured()) {
+      const hit = await lookupByChecksum(sourceKey, checksum);
+      if (hit) {
+        text = hit;
+        cache = "hit";
+      }
+    }
+    if (!text) {
+      text = (await extractGuidelineText(abs, "application/pdf")).trim();
+      if (text && supabaseConfigured() && persistExtract) {
+        await upsertExtract(sourceKey, checksum, text);
+        cache = "miss";
+      } else if (text) {
+        cache = "local";
+      }
+    }
+    const storedRelativePath =
+      g?.storedRelativePath ??
+      FIXED_GUIDELINE_SOURCES[sourceKey]?.relativeSource ??
+      null;
+    return {
+      text,
+      checksum,
+      cache: text ? cache : "empty",
+      storedRelativePath,
+      mimeType: g?.mimeType ?? "application/pdf",
+      title: g?.displayName ?? title,
+    };
+  }
+
+  if (supabaseConfigured()) {
+    const latest = await lookupLatest(sourceKey);
+    if (latest) {
+      return {
+        text: latest.text,
+        checksum: latest.fileChecksum,
+        cache: "db_latest",
+        storedRelativePath: g?.storedRelativePath ?? null,
+        mimeType: g?.mimeType ?? "application/pdf",
+        title: g?.displayName ?? title,
+      };
+    }
+  }
+
+  return {
+    text: "",
+    checksum: null,
+    cache: "empty",
+    storedRelativePath: g?.storedRelativePath ?? null,
+    mimeType: g?.mimeType ?? null,
+    title,
+  };
 }

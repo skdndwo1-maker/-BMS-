@@ -56,16 +56,9 @@ import {
   loadMeta
 } from "./store.js";
 import { persistRun, persistRunArtifact } from "./runPersistence.js";
-import { extractGuidelineText } from "./guidelineExtract.js";
 import { embedTextWithGemini } from "./geminiEmbeddings.js";
-import {
-  deleteChunksForSource,
-  fileSha256Hex,
-  insertChunksWithEmbeddings,
-  matchRagChunks,
-  splitIntoChunks,
-  upsertGuidelineSource,
-} from "./rag.js";
+import { matchRagChunks } from "./rag.js";
+import { indexGuidelineFromExtract } from "./guidelineRagIndex.js";
 import { requireAdmin } from "./adminAuth.js";
 import { requireAuth } from "./middleware/requireAuth.js";
 import { handleLibraryUpload } from "./libraryUpload.js";
@@ -130,8 +123,11 @@ for (const id of [
   });
 }
 
-/** 검수·에이전트 채팅용: 선택된 참조 가이드라인 슬롯의 본문(요약/발췌) */
-async function buildPrimaryGuidelineBlock(guidelineId: string, queryText?: string): Promise<string> {
+/** 검수·에이전트 채팅용: 선택된 참조 가이드라인 슬롯의 본문(요약/발췌) + 선택적 RAG */
+async function buildPrimaryGuidelineBlock(
+  guidelineId: string,
+  queryText?: string
+): Promise<{ block: string; ragPicked: number }> {
   let g = getGuideline(guidelineId);
   if (g && !g.aiSummary?.trim() && process.env.GEMINI_API_KEY?.trim()) {
     try {
@@ -152,6 +148,7 @@ async function buildPrimaryGuidelineBlock(guidelineId: string, queryText?: strin
   }
 
   let out = `[참조 가이드라인 — 우선 적용 (${g?.displayName ?? guidelineId})]\n${primaryBlock}`;
+  let ragPicked = 0;
 
   // RAG: retrieve guideline chunks relevant to queryText and attach as context.
   if (queryText?.trim() && process.env.GEMINI_API_KEY?.trim() && process.env.SUPABASE_URL?.trim()) {
@@ -160,6 +157,7 @@ async function buildPrimaryGuidelineBlock(guidelineId: string, queryText?: strin
       const qEmb = await embedTextWithGemini(q, { model: "gemini-embedding-001" });
       const matches = await matchRagChunks({ queryEmbedding: qEmb, guidelineId, sourceType: "guideline", topK: 8 });
       const picked = matches.filter((m) => typeof m.similarity === "number" && m.similarity >= 0.2).slice(0, 6);
+      ragPicked = picked.length;
       if (picked.length > 0) {
         const lines = picked.map(
           (m, i) =>
@@ -172,7 +170,7 @@ async function buildPrimaryGuidelineBlock(guidelineId: string, queryText?: strin
     }
   }
 
-  return out;
+  return { block: out, ragPicked };
 }
 
 const NAMING_EXTRACT_CHARS = 20_000;
@@ -817,52 +815,76 @@ app.post("/api/guidelines/:id/analyze", async (req, res) => {
     res.status(auth.status).json({ ok: false, error: auth.error });
     return;
   }
-  const rec = getGuideline(req.params.id);
-  if (!rec) {
+  const id = String(req.params.id ?? "").trim();
+  let rec = getGuideline(id);
+  if (!rec && FIXED_GUIDELINE_SOURCES[id]) {
+    try {
+      await ensureFixedGuidelineSlotAsync(id);
+      rec = getGuideline(id);
+    } catch {
+      /* fall through */
+    }
+  }
+  if (!rec && !FIXED_GUIDELINE_SOURCES[id]) {
     res.status(404).json({ error: "not_found" });
     return;
   }
-  const abs = resolveStoredPath(rec.storedRelativePath);
-  if (!existsSync(abs)) {
-    res.status(404).json({ error: "file_missing" });
-    return;
-  }
-  try {
-    const { summary } = await summarizeGuidelineFile(abs, rec.mimeType);
-    rec.aiSummary = summary;
-    rec.aiAnalyzedAt = new Date().toISOString();
-    setGuideline(rec);
 
-    // RAG indexing (text extract -> chunk -> embedding -> store)
-    // - PDF: extract text via pdf-parse
-    // - Others: skip (no OCR) but still keep summary in local store
-    if (process.env.GEMINI_API_KEY?.trim()) {
-      try {
-        const checksum = fileSha256Hex(abs);
-        const src = await upsertGuidelineSource({
-          guidelineId: rec.id,
-          title: rec.displayName || rec.originalName || rec.id,
-          storedRelativePath: rec.storedRelativePath || null,
-          mimeType: rec.mimeType || null,
-          checksum,
-        });
-        if (src?.sourceId) {
-          const fullText = await extractGuidelineText(abs, rec.mimeType);
-          const chunks = splitIntoChunks(fullText, { chunkChars: 1200, overlapChars: 160 });
-          await deleteChunksForSource(src.sourceId);
-          await insertChunksWithEmbeddings({
-            sourceId: src.sourceId,
-            chunks,
-            embeddingModel: "gemini-embedding-001",
-            embed: (t) => embedTextWithGemini(t, { model: "gemini-embedding-001" }),
-          });
-        }
-      } catch (e) {
-        console.error("[rag] guideline analyze indexing failed:", e instanceof Error ? e.message : String(e));
-      }
+  const abs = rec?.storedRelativePath ? resolveStoredPath(rec.storedRelativePath) : "";
+  const hasFile = Boolean(abs && existsSync(abs));
+
+  try {
+    let summary = rec?.aiSummary?.trim() ?? "";
+    let aiAnalyzedAt = rec?.aiAnalyzedAt ?? null;
+
+    if (hasFile && rec) {
+      const generated = await summarizeGuidelineFile(abs, rec.mimeType);
+      summary = generated.summary;
+      aiAnalyzedAt = new Date().toISOString();
+      rec = {
+        ...rec,
+        aiSummary: summary,
+        aiAnalyzedAt,
+      };
+      setGuideline(rec);
+    } else if (!summary) {
+      // No PDF on disk — index from extracts; leave summary empty unless already cached.
+      summary = "";
     }
 
-    res.json({ ok: true, aiSummary: summary, aiAnalyzedAt: rec.aiAnalyzedAt });
+    let ragIndexed = false;
+    let ragError: string | null = null;
+    if (process.env.GEMINI_API_KEY?.trim()) {
+      const indexResult = await indexGuidelineFromExtract(id);
+      if (indexResult.skipped && indexResult.ok) {
+        ragIndexed = true;
+      } else if (indexResult.ok && !indexResult.skipped) {
+        ragIndexed = true;
+      } else if (indexResult.skipped && !indexResult.ok) {
+        ragError = indexResult.skipReason ?? "skipped";
+      } else {
+        ragError = indexResult.error ?? indexResult.skipReason ?? "index_failed";
+        console.error("[rag] guideline analyze indexing failed:", ragError);
+      }
+    } else {
+      ragError = "GEMINI_API_KEY unset";
+    }
+
+    if (!hasFile && !ragIndexed && !summary) {
+      res.status(404).json({
+        error: "file_missing_and_no_extract",
+        detail: ragError,
+      });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      aiSummary: summary || null,
+      aiAnalyzedAt,
+      rag_indexed: ragIndexed,
+      rag_error: ragError,
+    });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -919,8 +941,9 @@ app.post(
       .filter(Boolean)
       .join("\n");
     const tRag = Date.now();
-    let guidelineSummary = await buildPrimaryGuidelineBlock(guidelineId, ragQuerySeed);
-    console.log(`[inspection][RAG 검색] ${Date.now() - tRag}ms`);
+    const primary = await buildPrimaryGuidelineBlock(guidelineId, ragQuerySeed);
+    let guidelineSummary = primary.block;
+    console.log(`[inspection][RAG 검색] ${Date.now() - tRag}ms picked=${primary.ragPicked}`);
 
     /** 0) 카테고리 선택 맥락(추가 검수 원칙 확장 가능) */
     const categoryLines: string[] = [];
@@ -1267,7 +1290,7 @@ app.post("/api/inspection/followup", async (req, res) => {
       return;
     }
 
-    let guidelineContext = await buildPrimaryGuidelineBlock(guidelineId, message);
+    let guidelineContext = (await buildPrimaryGuidelineBlock(guidelineId, message)).block;
     if (additionalNotes) {
       guidelineContext += `\n\n[사용자 직접 입력 검수 사항]\n${additionalNotes}`;
     }
@@ -1349,7 +1372,12 @@ app.post("/api/inspection/additional-revision", async (req, res) => {
       return;
     }
 
-    let guidelineContext = await buildPrimaryGuidelineBlock(guidelineId, [additionalNotes, overallSummary].filter(Boolean).join("\n\n"));
+    let guidelineContext = (
+      await buildPrimaryGuidelineBlock(
+        guidelineId,
+        [additionalNotes, overallSummary].filter(Boolean).join("\n\n")
+      )
+    ).block;
     if (additionalNotes) {
       guidelineContext += `\n\n[사용자 직접 입력 검수 사항]\n${additionalNotes}`;
     }

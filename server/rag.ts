@@ -54,14 +54,14 @@ export async function upsertGuidelineSource(args: {
   if (!isSupabaseRagEnabled()) return null;
   const sb = getSupabaseServiceClient();
 
-  // Upsert pdf_auto only (human_supplement is admin-managed and PDF-update-safe)
+  // Upsert pdf_auto only (human_supplement is admin-managed and PDF-update-safe).
+  // Match by guideline_id + origin (not title) so renames do not create duplicate sources.
   const { data: existing, error: exErr } = await sb
     .from("rag_sources")
     .select("id")
     .eq("type", "guideline")
     .eq("origin", "pdf_auto")
     .eq("guideline_id", args.guidelineId)
-    .eq("title", args.title)
     .limit(1);
   if (exErr) {
     console.error("[supabase] upsertGuidelineSource select failed:", exErr.message);
@@ -73,6 +73,7 @@ export async function upsertGuidelineSource(args: {
     const { error } = await sb
       .from("rag_sources")
       .update({
+        title: args.title,
         stored_relative_path: args.storedRelativePath,
         mime_type: args.mimeType,
         checksum: args.checksum,
