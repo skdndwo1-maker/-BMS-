@@ -1,4 +1,4 @@
-import { Fragment, useState, useRef, useEffect, type ChangeEvent } from "react";
+import { Fragment, useMemo, useState, useRef, useEffect, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   analyzeGuideline,
@@ -37,6 +37,14 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InspectionSectionTitle } from "@/components/InspectionSectionTitle";
+import { SavedResultsControls } from "@/components/SavedResultsControls";
+import { getSupabaseClient } from "@/lib/supabaseClient";
+import {
+  dataUrlToFile,
+  downscaleDataUrl,
+  getSavedInspection,
+  saveInspectionResult,
+} from "@/lib/savedResultsApi";
 import {
   DESIGN_GROUPS,
   DESIGN_TYPES,
@@ -94,6 +102,29 @@ interface PassedCriteria {
   description: string;
 }
 
+type SavedInspectionInput = {
+  v: number;
+  selectedDesignGroup: DesignGroup;
+  selectedDesignType: DesignType | null;
+  guidelineText: string;
+  selectedGuidelineLibrary: string;
+  designFileName: string | null;
+};
+
+type SavedInspectionResultData = {
+  v: number;
+  score: number;
+  overallSummary: string | null;
+  violations: Violation[];
+  revisionNote: string | null;
+};
+
+function formatDefaultSavedName(prefix: string): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${prefix} ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function BrandInspection() {
   const navigate = useNavigate();
   const [designFile, setDesignFile] = useState<File | null>(null);
@@ -125,6 +156,7 @@ export function BrandInspection() {
 
   const [selectedDesignGroup, setSelectedDesignGroup] = useState<DesignGroup>("online");
   const [selectedDesignType, setSelectedDesignType] = useState<DesignType | null>(null);
+  const [savedInspectionId, setSavedInspectionId] = useState<string | null>(null);
 
   const designInputRef = useRef<HTMLInputElement>(null);
   const guidelineInputRef = useRef<HTMLInputElement>(null);
@@ -289,6 +321,7 @@ export function BrandInspection() {
 
   const handleStopAndResetFromProgress = () => {
     inspectionEpochRef.current += 1;
+    setSavedInspectionId(null);
     setCurrentStep("idle");
     setShowResults(false);
     setBrandScore(null);
@@ -357,8 +390,96 @@ export function BrandInspection() {
     })();
   };
 
+  const inspectionSb = useMemo(() => {
+    try {
+      return getSupabaseClient();
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const handleSaveInspection = async (name: string, asNew: boolean) => {
+    if (!inspectionSb) throw new Error("Supabase 설정이 필요합니다.");
+    if (brandScore == null) throw new Error("저장할 결과가 없습니다.");
+    const designImage = designPreview ? await downscaleDataUrl(designPreview, 1600) : null;
+    const revisedImage = revisedImageAsset ? await downscaleDataUrl(revisedImageAsset.dataUrl, 2048, 0.9) : null;
+    const id = await saveInspectionResult(
+      inspectionSb,
+      {
+        name,
+        score: brandScore,
+        summary: inspectionOverallSummary ? inspectionOverallSummary.slice(0, 300) : `위반 ${violations.length}건`,
+        input: {
+          v: 1,
+          selectedDesignGroup,
+          selectedDesignType,
+          guidelineText,
+          selectedGuidelineLibrary,
+          designFileName: designFile?.name ?? null,
+        } satisfies SavedInspectionInput,
+        result: {
+          v: 1,
+          score: brandScore,
+          overallSummary: inspectionOverallSummary,
+          violations,
+          revisionNote,
+        } satisfies SavedInspectionResultData,
+        design_image: designImage,
+        revised_image: revisedImage,
+      },
+      asNew ? null : savedInspectionId
+    );
+    setSavedInspectionId(id);
+  };
+
+  const handleLoadInspection = async (id: string) => {
+    if (!inspectionSb) throw new Error("Supabase 설정이 필요합니다.");
+    const row = await getSavedInspection(inspectionSb, id);
+    if (!row) throw new Error("저장된 항목을 찾을 수 없습니다.");
+    inspectionEpochRef.current += 1;
+    const input = (row.input ?? {}) as Partial<SavedInspectionInput>;
+    const result = (row.result ?? {}) as Partial<SavedInspectionResultData>;
+
+    if (input.selectedDesignGroup === "online" || input.selectedDesignGroup === "offline") {
+      setSelectedDesignGroup(input.selectedDesignGroup);
+    }
+    setSelectedDesignType(normalizeDesignType(input.selectedDesignType ?? undefined) ?? null);
+    setGuidelineText(typeof input.guidelineText === "string" ? input.guidelineText : "");
+    if (typeof input.selectedGuidelineLibrary === "string" && input.selectedGuidelineLibrary) {
+      setSelectedGuidelineLibrary(input.selectedGuidelineLibrary);
+    }
+    setGuidelineFile(null);
+    if (guidelineInputRef.current) guidelineInputRef.current.value = "";
+
+    if (row.design_image) {
+      setDesignPreview(row.design_image);
+      setDesignFile(dataUrlToFile(row.design_image, input.designFileName || "saved-design.jpg"));
+    } else {
+      setDesignPreview(null);
+      setDesignFile(null);
+    }
+    if (row.revised_image) {
+      const mimeType = /data:([^;]+)/.exec(row.revised_image)?.[1] ?? "image/jpeg";
+      setRevisedImageAsset({ mimeType, dataUrl: row.revised_image });
+    } else {
+      setRevisedImageAsset(null);
+    }
+
+    const score = typeof result.score === "number" ? result.score : row.score;
+    setBrandScore(score ?? null);
+    setInspectionOverallSummary(result.overallSummary ?? null);
+    setViolations(Array.isArray(result.violations) ? result.violations : []);
+    setRevisionNote(result.revisionNote ?? null);
+    setInspectionError(null);
+    const hasResult = score != null;
+    setCurrentStep(hasResult ? "complete" : "idle");
+    setShowResults(hasResult);
+    setSavedInspectionId(row.id);
+  };
+
   const handlePrimaryCta = () => {
     if (currentStep === "complete") {
+      setSavedInspectionId(null);
       setCurrentStep("idle");
       setShowResults(false);
       setBrandScore(null);
@@ -387,6 +508,15 @@ export function BrandInspection() {
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <AxisBrandTitle subtitle="브랜드 디자인 검수" />
             </div>
+            <SavedResultsControls
+              kind="inspection"
+              canSave={currentStep === "complete" && brandScore != null}
+              currentId={savedInspectionId}
+              defaultName={formatDefaultSavedName(designFile?.name ? `검수 ${designFile.name}` : "디자인 검수")}
+              onSave={handleSaveInspection}
+              onLoad={handleLoadInspection}
+              onCurrentDeleted={() => setSavedInspectionId(null)}
+            />
           </div>
         </div>
         <GlobalBrandNav className="bg-white/95" innerClassName="max-w-7xl px-6" />
