@@ -37,6 +37,9 @@ import { NAMING_FIXED_GUIDELINE_OPTIONS } from "@/constants/guidelineReferences"
 import { buildAuditCategoryContext } from "@/constants/namingCategoryRules";
 import { downloadBrandNamingReport, type ExportFormat } from "@/lib/inspectionExport";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { SavedResultsControls } from "@/components/SavedResultsControls";
+import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getSavedNaming, saveNamingResult } from "@/lib/savedResultsApi";
 import {
   EMPTY_NAMING_OVERVIEW,
   ETC_TOOLTIP_TEXT,
@@ -76,6 +79,29 @@ import {
   type NamingAuditMajor,
   type NamingOverviewFields,
 } from "./namingSections";
+
+type NamingInputSnapshot = {
+  v?: number;
+  auditName?: string;
+  auditOverview?: NamingOverviewFields;
+  generateOverview?: NamingOverviewFields;
+  auditCategoryMajor?: NamingAuditMajor | null;
+  auditCategoryMinor?: string;
+  namingMode?: "generate" | "audit";
+  generateStyle?: "general" | "tiered";
+  tierStepCount?: number;
+  tierLabels?: string[];
+  generateLanguageMode?: NamingLanguageMode;
+  generateFormat?: NamingFormatMode;
+  collaborationBrand?: string;
+  namingExportFormat?: ExportFormat;
+};
+
+function formatDefaultSavedName(prefix: string): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${prefix} ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 /**
  * 브랜드 네이밍 생성·검수 메인 컴포넌트.
@@ -119,26 +145,27 @@ export function BrandNaming() {
   const namingStepTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const runTokenRef = useRef(0);
 
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(NAMING_NAV_DRAFT_KEY);
-      if (!raw) return;
-      const d = JSON.parse(raw) as {
-        v?: number;
-        auditName?: string;
-        auditOverview?: NamingOverviewFields;
-        generateOverview?: NamingOverviewFields;
-        auditCategoryMajor?: NamingAuditMajor | null;
-        auditCategoryMinor?: string;
-        namingMode?: "generate" | "audit";
-        generateStyle?: "general" | "tiered";
-        tierStepCount?: number;
-        tierLabels?: string[];
-        generateLanguageMode?: NamingLanguageMode;
-        generateFormat?: NamingFormatMode;
-        collaborationBrand?: string;
-        namingExportFormat?: ExportFormat;
-      };
+  const [savedNamingId, setSavedNamingId] = useState<string | null>(null);
+
+  /** 화면 입력 스냅샷 — 탭 이동 임시 저장(sessionStorage)과 계정 저장(saved_namings.input)에 공용 */
+  const buildNamingInputSnapshot = (): NamingInputSnapshot => ({
+    v: 1,
+    auditName,
+    auditOverview,
+    generateOverview,
+    auditCategoryMajor,
+    auditCategoryMinor,
+    namingMode,
+    generateStyle,
+    tierStepCount,
+    tierLabels,
+    generateLanguageMode,
+    generateFormat,
+    collaborationBrand,
+    namingExportFormat,
+  });
+
+  const applyNamingInputSnapshot = (d: NamingInputSnapshot) => {
       if (d.v !== 1) return;
       if (typeof d.auditName === "string") setAuditName(d.auditName);
       if (d.auditOverview && typeof d.auditOverview === "object") {
@@ -170,6 +197,13 @@ export function BrandNaming() {
       if (d.namingExportFormat === "pdf" || d.namingExportFormat === "png" || d.namingExportFormat === "jpeg") {
         setNamingExportFormat(d.namingExportFormat);
       }
+  };
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(NAMING_NAV_DRAFT_KEY);
+      if (!raw) return;
+      applyNamingInputSnapshot(JSON.parse(raw) as NamingInputSnapshot);
     } catch {
       /* ignore */
     }
@@ -178,25 +212,23 @@ export function BrandNaming() {
   useEffect(() => {
     return registerGlobalNavPersist(() => {
       try {
-        sessionStorage.setItem(
-          NAMING_NAV_DRAFT_KEY,
-          JSON.stringify({
-            v: 1,
-            auditName,
-            auditOverview,
-            generateOverview,
-            auditCategoryMajor,
-            auditCategoryMinor,
-            namingMode,
-            generateStyle,
-            tierStepCount,
-            tierLabels,
-            generateLanguageMode,
-            generateFormat,
-            collaborationBrand,
-            namingExportFormat,
-          }),
-        );
+        const snapshot: NamingInputSnapshot = {
+          v: 1,
+          auditName,
+          auditOverview,
+          generateOverview,
+          auditCategoryMajor,
+          auditCategoryMinor,
+          namingMode,
+          generateStyle,
+          tierStepCount,
+          tierLabels,
+          generateLanguageMode,
+          generateFormat,
+          collaborationBrand,
+          namingExportFormat,
+        };
+        sessionStorage.setItem(NAMING_NAV_DRAFT_KEY, JSON.stringify(snapshot));
       } catch (e) {
         console.warn("[namingNavDraft]", e);
       }
@@ -391,8 +423,54 @@ export function BrandNaming() {
     );
   };
 
+  const namingSb = useMemo(() => {
+    try {
+      return getSupabaseClient();
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const handleSaveNaming = async (name: string, asNew: boolean) => {
+    if (!namingSb) throw new Error("Supabase 설정이 필요합니다.");
+    if (!namingResult) throw new Error("저장할 결과가 없습니다.");
+    const summary =
+      namingMode === "audit"
+        ? `${auditName.trim() || "(검수명 없음)"} · ${namingResult.overallScore}점 · ${namingResult.goRecommendation === "go" ? "Go" : "No-Go"}`
+        : (namingResult.namingProposals ?? []).map((p) => p.name).filter(Boolean).slice(0, 6).join(", ") ||
+          namingResult.suggestedNames.slice(0, 6).join(", ") ||
+          null;
+    const id = await saveNamingResult(
+      namingSb,
+      { name, mode: namingMode, summary, input: buildNamingInputSnapshot(), result: namingResult },
+      asNew ? null : savedNamingId
+    );
+    setSavedNamingId(id);
+  };
+
+  const handleLoadNaming = async (id: string) => {
+    if (!namingSb) throw new Error("Supabase 설정이 필요합니다.");
+    const row = await getSavedNaming(namingSb, id);
+    if (!row) throw new Error("저장된 항목을 찾을 수 없습니다.");
+    namingStepTimersRef.current.forEach(clearTimeout);
+    namingStepTimersRef.current = [];
+    runTokenRef.current += 1;
+    setAuditLogicModalOpen(false);
+    setAuditZoomDimension(null);
+    setRunError(null);
+    setReferenceFile(null);
+    if (referenceInputRef.current) referenceInputRef.current.value = "";
+    applyNamingInputSnapshot({ ...(row.input as NamingInputSnapshot), v: 1, namingMode: row.mode });
+    const result = row.result as BrandNamingRunResult | null;
+    setNamingResult(result);
+    setShowResults(Boolean(result));
+    setCurrentStep(result ? "complete" : "idle");
+    setSavedNamingId(row.id);
+  };
+
   /** 검수 결과에서 입력·참고·결과 상태를 초기화하고 검수 입력부터 다시 시작 */
   const handleAuditResetToInput = () => {
+    setSavedNamingId(null);
     namingStepTimersRef.current.forEach(clearTimeout);
     namingStepTimersRef.current = [];
     runTokenRef.current += 1;
@@ -484,6 +562,15 @@ export function BrandNaming() {
             <div className="flex min-w-0 flex-1 items-center">
               <AxisBrandTitle subtitle="브랜드 네이밍" />
             </div>
+            <SavedResultsControls
+              kind="naming"
+              canSave={Boolean(namingResult) && !isRunning}
+              currentId={savedNamingId}
+              defaultName={formatDefaultSavedName(namingMode === "audit" ? "네이밍 검수" : "네이밍 생성")}
+              onSave={handleSaveNaming}
+              onLoad={handleLoadNaming}
+              onCurrentDeleted={() => setSavedNamingId(null)}
+            />
           </div>
         </div>
         <GlobalBrandNav className="bg-white" innerClassName="max-w-7xl px-6" />

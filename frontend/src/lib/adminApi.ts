@@ -44,6 +44,7 @@ async function adminFetch(adminKey: string, path: string, init?: RequestInit) {
     error?: string;
     message?: string;
     runs?: AdminRunRow[];
+    [key: string]: unknown;
   };
   if (!r.ok || payload?.ok === false) {
     if (r.status === 403 || payload?.error === "forbidden") {
@@ -76,5 +77,121 @@ export async function rejectRun(adminKey: string, runId: string, reason: string,
     method: "POST",
     body: JSON.stringify({ reason, reviewer: reviewer ?? "" }),
   });
+}
+
+/* ── 가이드 관리 (/admin/guidelines) ─────────────────────────────── */
+
+export type AdminGuidelineSlotOverview = {
+  slotId: string;
+  title: string;
+  extract: { charCount: number; fileChecksum: string | null; createdAt: string | null } | null;
+  summary: { charCount: number; createdAt: string | null; editedAt: string | null } | null;
+  pdfAuto: { sourceId: string; checksum: string | null; chunkCount: number; updatedAt: string | null } | null;
+  supplementCount: number;
+};
+
+export type AdminGuidelineSummaryRow = {
+  id: string;
+  checksum: string;
+  summary: string;
+  model: string | null;
+  promptVersion: string;
+  createdAt: string;
+  editedAt: string | null;
+  editedBy: string | null;
+};
+
+export type AdminGuidelineSupplement = {
+  sourceId: string;
+  title: string;
+  body: string;
+  status: string;
+  chunkCount: number;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminGuidelineDetail = {
+  slotId: string;
+  title: string;
+  extract: { text: string; charCount: number; fileChecksum: string | null; createdAt: string | null } | null;
+  localSummary: string | null;
+  summaries: AdminGuidelineSummaryRow[];
+  pdfAuto: {
+    sourceId: string;
+    checksum: string | null;
+    updatedAt: string | null;
+    chunks: { chunkIndex: number; content: string }[];
+  } | null;
+  supplements: AdminGuidelineSupplement[];
+};
+
+export type AdminGuidelineEmbedResult = { sourceId: string; chunkCount: number; embedded: number; failed: number };
+
+export type AdminGuidelineReindexResult = {
+  slotId: string;
+  ok: boolean;
+  skipped: boolean;
+  skipReason: string | null;
+  chunkCount: number;
+  embedded: number;
+  failed: number;
+  error: string | null;
+};
+
+export async function listAdminGuidelines(): Promise<AdminGuidelineSlotOverview[]> {
+  const payload = await adminFetch("", "/api/admin/guidelines", { method: "GET" });
+  return (payload.slots ?? []) as AdminGuidelineSlotOverview[];
+}
+
+export async function getAdminGuidelineDetail(slotId: string): Promise<AdminGuidelineDetail> {
+  const payload = await adminFetch("", `/api/admin/guidelines/${encodeURIComponent(slotId)}`, { method: "GET" });
+  return payload.detail as AdminGuidelineDetail;
+}
+
+export async function saveAdminGuidelineSummary(slotId: string, summary: string): Promise<void> {
+  await adminFetch("", `/api/admin/guidelines/${encodeURIComponent(slotId)}/summary`, {
+    method: "PUT",
+    body: JSON.stringify({ summary }),
+  });
+}
+
+export async function createAdminGuidelineSupplement(
+  slotId: string,
+  title: string,
+  body: string
+): Promise<AdminGuidelineEmbedResult> {
+  const payload = await adminFetch("", `/api/admin/guidelines/${encodeURIComponent(slotId)}/supplements`, {
+    method: "POST",
+    body: JSON.stringify({ title, body }),
+  });
+  return payload as unknown as AdminGuidelineEmbedResult;
+}
+
+export async function updateAdminGuidelineSupplement(
+  sourceId: string,
+  title: string,
+  body: string
+): Promise<AdminGuidelineEmbedResult> {
+  const payload = await adminFetch("", `/api/admin/guidelines/supplements/${encodeURIComponent(sourceId)}`, {
+    method: "PUT",
+    body: JSON.stringify({ title, body }),
+  });
+  return payload as unknown as AdminGuidelineEmbedResult;
+}
+
+export async function archiveAdminGuidelineSupplement(sourceId: string): Promise<void> {
+  await adminFetch("", `/api/admin/guidelines/supplements/${encodeURIComponent(sourceId)}/archive`, {
+    method: "POST",
+  });
+}
+
+export async function reindexAdminGuideline(slotId: string, force: boolean): Promise<AdminGuidelineReindexResult> {
+  const payload = await adminFetch("", `/api/admin/guidelines/${encodeURIComponent(slotId)}/reindex`, {
+    method: "POST",
+    body: JSON.stringify({ force }),
+  });
+  return payload.result as AdminGuidelineReindexResult;
 }
 
