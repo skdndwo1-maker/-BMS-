@@ -8,6 +8,7 @@ import { approveRun, listRuns, rejectRun, type AdminRunRow } from "@/lib/adminAp
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { toast } from "sonner";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
+import { AdminSectionTabs } from "@/components/admin/AdminSectionTabs";
 import { Loader2 } from "lucide-react";
 
 export function AdminReview() {
@@ -78,6 +79,9 @@ export function AdminReview() {
             <p className="mt-2 text-sm text-gray-500">
               Supabase에 저장된 검수·생성 결과를 선별해 승인하거나 거부합니다.
             </p>
+            <div className="mt-3">
+              <AdminSectionTabs />
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Button

@@ -59,6 +59,15 @@ import { persistRun, persistRunArtifact } from "./runPersistence.js";
 import { embedTextWithGemini } from "./geminiEmbeddings.js";
 import { matchRagChunks } from "./rag.js";
 import { indexGuidelineFromExtract } from "./guidelineRagIndex.js";
+import {
+  archiveGuidelineSupplement,
+  createGuidelineSupplement,
+  getGuidelineAdminDetail,
+  isGuidelineAdminSlot,
+  listGuidelineAdminOverview,
+  saveGuidelineSummary,
+  updateGuidelineSupplement,
+} from "./guidelineAdmin.js";
 import { requireAdmin } from "./adminAuth.js";
 import { requireAuth } from "./middleware/requireAuth.js";
 import { handleLibraryUpload } from "./libraryUpload.js";
@@ -173,10 +182,35 @@ async function buildPrimaryGuidelineBlock(
   return { block: out, ragPicked };
 }
 
+/** 슬롯별 RAG 발췌(pdf_auto + 관리자 보완 자료). 임베딩은 질의당 1회. */
+async function buildGuidelineRagSection(
+  queryText: string | undefined,
+  guidelineIds: readonly string[],
+  logTag: string
+): Promise<string> {
+  if (!queryText?.trim() || !process.env.GEMINI_API_KEY?.trim() || !process.env.SUPABASE_URL?.trim()) return "";
+  try {
+    const qEmb = await embedTextWithGemini(queryText.trim().slice(0, 6000), { model: "gemini-embedding-001" });
+    const lines: string[] = [];
+    for (const guidelineId of guidelineIds) {
+      const matches = await matchRagChunks({ queryEmbedding: qEmb, guidelineId, sourceType: "guideline", topK: 6 });
+      const picked = matches.filter((m) => typeof m.similarity === "number" && m.similarity >= 0.2).slice(0, 4);
+      console.log(`[rag] ${logTag} guideline=${guidelineId} picked=${picked.length}`);
+      for (const m of picked) {
+        lines.push(`(${lines.length + 1}) [${m.source_title}] (sim=${m.similarity.toFixed(3)})\n${String(m.content).trim()}`);
+      }
+    }
+    return lines.length ? `\n\n[관련 가이드 구절 — RAG]\n${lines.join("\n\n---\n")}` : "";
+  } catch (e) {
+    console.error(`[rag] ${logTag} retrieval failed:`, e instanceof Error ? e.message : String(e));
+    return "";
+  }
+}
+
 const NAMING_EXTRACT_CHARS = 20_000;
 
 /** 브랜드 네이밍: Simply(언어·감성) + 2026 전사 브랜드 가이드. 슬롯당 상한 후 합쳐 4만 자 안에 넣습니다. */
-async function buildNamingGuidelineBlock(_queryText?: string): Promise<string> {
+async function buildNamingGuidelineBlock(queryText?: string): Promise<string> {
   const blocks: string[] = [];
   for (const id of NAMING_FIXED_GUIDELINE_IDS) {
     const loaded = await loadGuidelineExtract(id);
@@ -190,7 +224,8 @@ async function buildNamingGuidelineBlock(_queryText?: string): Promise<string> {
         : `[${NAMING_FIXED_GUIDELINE_DISPLAY[id]}]\n가이드라인 추출문을 찾지 못했습니다.`
     );
   }
-  return blocks.join("\n\n---\n\n");
+  const rag = await buildGuidelineRagSection(queryText, NAMING_FIXED_GUIDELINE_IDS, "naming");
+  return blocks.join("\n\n---\n\n") + rag;
 }
 
 const VISUAL_EXTRACT_CHARS = 48_000;
@@ -248,7 +283,7 @@ async function buildMandatoryViPdfContextForDesignEditor(
 
 /** 디자인 에디터 텍스트 제안·초안 문구 — Simply U+ 추출문만 */
 async function buildDesignEditorTextGuidelineBlock(
-  _queryText?: string
+  queryText?: string
 ): Promise<{ ok: true; block: string } | { ok: false; error: string; status: number }> {
   const loaded = await loadGuidelineExtract("simply-uplus-guideline");
   const body = loaded.text.trim().slice(0, 72_000);
@@ -264,7 +299,7 @@ async function buildDesignEditorTextGuidelineBlock(
   }
   return {
     ok: true,
-    block: `[텍스트 제안 — Simply U+]\n\n${body}`,
+    block: `[텍스트 제안 — Simply U+]\n\n${body}${await buildGuidelineRagSection(queryText, ["simply-uplus-guideline"], "text")}`,
   };
 }
 
@@ -2092,6 +2127,149 @@ app.post("/api/admin/runs/:id/reject", async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+/** 관리자 가이드 관리: 원문·요약·RAG 청크 열람, 요약 편집, 보완 자료(human_supplement) 관리 */
+function adminEditorLabel(req: express.Request, userId: string | undefined): string {
+  return req.user?.email ?? userId ?? "admin_key";
+}
+
+function sendAdminGuidelineError(res: express.Response, e: unknown) {
+  const msg = e instanceof Error ? e.message : String(e);
+  const clientError =
+    /^(summary_empty|summary_source_unavailable|title_required|body_required|body_too_long|not_a_supplement)/.test(msg);
+  const status = msg === "supplement_not_found" ? 404 : clientError ? 400 : 500;
+  res.status(status).json({ ok: false, error: msg });
+}
+
+app.get("/api/admin/guidelines", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  try {
+    res.json({ ok: true, slots: await listGuidelineAdminOverview() });
+  } catch (e) {
+    sendAdminGuidelineError(res, e);
+  }
+});
+
+app.get("/api/admin/guidelines/:slotId", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  const slotId = String(req.params.slotId ?? "");
+  if (!isGuidelineAdminSlot(slotId)) {
+    res.status(404).json({ ok: false, error: "unknown_slot" });
+    return;
+  }
+  try {
+    res.json({ ok: true, detail: await getGuidelineAdminDetail(slotId) });
+  } catch (e) {
+    sendAdminGuidelineError(res, e);
+  }
+});
+
+app.put("/api/admin/guidelines/:slotId/summary", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  const slotId = String(req.params.slotId ?? "");
+  if (!isGuidelineAdminSlot(slotId)) {
+    res.status(404).json({ ok: false, error: "unknown_slot" });
+    return;
+  }
+  try {
+    const summary = typeof req.body?.summary === "string" ? req.body.summary : "";
+    const saved = await saveGuidelineSummary({ slotId, summary, editor: adminEditorLabel(req, auth.userId) });
+    res.json({ ok: true, ...saved });
+  } catch (e) {
+    sendAdminGuidelineError(res, e);
+  }
+});
+
+app.post("/api/admin/guidelines/:slotId/supplements", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  const slotId = String(req.params.slotId ?? "");
+  if (!isGuidelineAdminSlot(slotId)) {
+    res.status(404).json({ ok: false, error: "unknown_slot" });
+    return;
+  }
+  try {
+    const created = await createGuidelineSupplement({
+      slotId,
+      title: typeof req.body?.title === "string" ? req.body.title : "",
+      body: typeof req.body?.body === "string" ? req.body.body : "",
+      editor: adminEditorLabel(req, auth.userId),
+    });
+    res.json({ ok: true, ...created });
+  } catch (e) {
+    sendAdminGuidelineError(res, e);
+  }
+});
+
+app.put("/api/admin/guidelines/supplements/:sourceId", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  try {
+    const updated = await updateGuidelineSupplement({
+      sourceId: String(req.params.sourceId ?? ""),
+      title: typeof req.body?.title === "string" ? req.body.title : "",
+      body: typeof req.body?.body === "string" ? req.body.body : "",
+      editor: adminEditorLabel(req, auth.userId),
+    });
+    res.json({ ok: true, ...updated });
+  } catch (e) {
+    sendAdminGuidelineError(res, e);
+  }
+});
+
+app.post("/api/admin/guidelines/supplements/:sourceId/archive", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  try {
+    await archiveGuidelineSupplement(String(req.params.sourceId ?? ""), adminEditorLabel(req, auth.userId));
+    res.json({ ok: true });
+  } catch (e) {
+    sendAdminGuidelineError(res, e);
+  }
+});
+
+app.post("/api/admin/guidelines/:slotId/reindex", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  const slotId = String(req.params.slotId ?? "");
+  if (!isGuidelineAdminSlot(slotId)) {
+    res.status(404).json({ ok: false, error: "unknown_slot" });
+    return;
+  }
+  try {
+    const result = await indexGuidelineFromExtract(slotId, { force: req.body?.force === true });
+    console.log(
+      `[guideline_admin] reindex slot=${slotId} ok=${result.ok} skipped=${result.skipped} chunks=${result.chunkCount} embedded=${result.embedded} failed=${result.failed}`
+    );
+    res.json({ ok: true, result });
+  } catch (e) {
+    sendAdminGuidelineError(res, e);
   }
 });
 
