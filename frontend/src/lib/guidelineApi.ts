@@ -91,6 +91,27 @@ export async function uploadGuideline(
   return (await r.json()) as { guideline: Partial<GuidelineInfo> };
 }
 
+export type PublicDeliverable = {
+  id: string;
+  key: string;
+  name: string;
+  channel: string;
+  sort_order: number;
+  template_ids: string[];
+  has_active_guide: boolean;
+  active_rule_count: number;
+};
+
+export async function listPublicDeliverables(): Promise<PublicDeliverable[]> {
+  const r = await apiFetch("/api/deliverables", { method: "GET" });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error ?? `deliverables ${r.status}`);
+  }
+  const payload = (await r.json()) as { deliverables?: PublicDeliverable[] };
+  return payload.deliverables ?? [];
+}
+
 export async function runInspection(opts: {
   design: File;
   guidelineId: string;
@@ -100,6 +121,8 @@ export async function runInspection(opts: {
   businessCategory?: string;
   designGroup?: "online" | "offline";
   designType?: string;
+  deliverableId?: string;
+  templateIds?: string[];
 }): Promise<InspectionRunResult> {
   const fd = new FormData();
   fd.append("design", opts.design);
@@ -115,6 +138,14 @@ export async function runInspection(opts: {
   }
   if (opts.designType?.trim()) {
     fd.append("designType", opts.designType.trim());
+  }
+  if (opts.deliverableId?.trim()) {
+    fd.append("deliverableId", opts.deliverableId.trim());
+  }
+  if (opts.templateIds?.length) {
+    for (const id of opts.templateIds) {
+      if (id.trim()) fd.append("templateIds", id.trim());
+    }
   }
   if (opts.supplementaryReference) {
     fd.append("supplementaryReference", opts.supplementaryReference);

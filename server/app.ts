@@ -68,6 +68,23 @@ import {
   saveGuidelineSummary,
   updateGuidelineSupplement,
 } from "./guidelineAdmin.js";
+import {
+  createDeliverable,
+  createGuideDraft,
+  getGuide,
+  listDeliverables,
+  listGuidesForDeliverable,
+  publishGuide,
+  rollbackGuide,
+  updateDeliverable,
+  updateGuideDraft,
+} from "./deliverables/deliverableAdmin.js";
+import {
+  listActiveDeliverablesPublic,
+  loadInspectionGuidePack,
+  retrieveRuleSeededRag,
+  wrapSecondaryViSummary,
+} from "./deliverables/inspectionContext.js";
 import { requireAdmin } from "./adminAuth.js";
 import { requireAuth } from "./middleware/requireAuth.js";
 import { handleLibraryUpload } from "./libraryUpload.js";
@@ -938,12 +955,34 @@ app.post(
     const designGroupRaw = typeof req.body?.designGroup === "string" ? req.body.designGroup.trim() : "";
     const designGroup = designGroupRaw === "online" || designGroupRaw === "offline" ? designGroupRaw : "";
     const designType = typeof req.body?.designType === "string" ? req.body.designType.trim() : "";
+    const deliverableId =
+      typeof req.body?.deliverableId === "string" ? req.body.deliverableId.trim() : "";
+    const deliverableKey =
+      typeof req.body?.deliverableKey === "string" ? req.body.deliverableKey.trim() : "";
+    const templateIdsRaw = req.body?.templateIds;
+    const templateIds: string[] = Array.isArray(templateIdsRaw)
+      ? templateIdsRaw
+          .filter((t: unknown): t is string => typeof t === "string" && t.trim().length > 0)
+          .map((t: string) => t.trim())
+      : typeof templateIdsRaw === "string"
+        ? templateIdsRaw
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : [];
+    const templateIdSingle =
+      typeof req.body?.templateId === "string" ? req.body.templateId.trim() : "";
+    if (templateIdSingle && !templateIds.includes(templateIdSingle)) templateIds.push(templateIdSingle);
 
     const files = req.files as Record<string, Express.Multer.File[]> | undefined;
     const file = files?.design?.[0];
     const supplementary = files?.supplementaryReference?.[0];
     if (!file) {
       res.status(400).json({ error: "design_required" });
+      return;
+    }
+    if (templateIds.length === 0 && !deliverableId && !deliverableKey) {
+      res.status(400).json({ error: "template_required", message: "제작물유형(템플릿)을 하나 이상 선택해 주세요." });
       return;
     }
 
@@ -966,25 +1005,84 @@ app.post(
       );
     }
 
-    // 참조 가이드라인(요약/발췌) + RAG 발췌(가능하면)
-    const ragQuerySeed = [
-      businessCategory ? `사업 영역: ${businessCategory}` : "",
-      designGroup ? `디자인 그룹: ${designGroup}` : "",
-      designType ? `디자인 유형: ${designType}` : "",
-      extra ? `추가 검수 요청: ${extra}` : ""
-    ]
-      .filter(Boolean)
-      .join("\n");
+    /**
+     * 검수 컨텍스트 우선순위:
+     * 1) 제작물/공통 가이드 규칙 체크리스트
+     * 2) 규칙 문장·source로 좁힌 VI RAG
+     * 3) VI 요약은 보조
+     * 규칙이 없으면 기존 광역 요약+RAG로 폴백
+     */
+    let guidePack: Awaited<ReturnType<typeof loadInspectionGuidePack>> | null = null;
+    try {
+      guidePack = await loadInspectionGuidePack({
+        deliverableId: deliverableId || null,
+        deliverableKey: deliverableKey || null,
+        templateIds,
+      });
+    } catch (e) {
+      console.error(
+        "[inspection] deliverable guide pack failed:",
+        e instanceof Error ? e.message : String(e)
+      );
+    }
+
+    let guidelineSummary = "";
+    let ragPicked = 0;
     const tRag = Date.now();
-    const primary = await buildPrimaryGuidelineBlock(guidelineId, ragQuerySeed);
-    let guidelineSummary = primary.block;
-    console.log(`[inspection][RAG 검색] ${Date.now() - tRag}ms picked=${primary.ragPicked}`);
+
+    if (guidePack && guidePack.ruleCount > 0) {
+      guidelineSummary = guidePack.rulesBlock;
+      const seeded = await retrieveRuleSeededRag({
+        guidelineId,
+        queryText: guidePack.ragQueryFromRules,
+      });
+      ragPicked = seeded.picked;
+      guidelineSummary += seeded.block;
+
+      let viSecondary = "";
+      if (g?.aiSummary?.trim()) viSecondary = g.aiSummary;
+      else if (g) {
+        try {
+          viSecondary = await excerptGuidelineForInspection(g);
+        } catch {
+          viSecondary = "";
+        }
+      }
+      guidelineSummary += wrapSecondaryViSummary(
+        g?.displayName ?? guidelineId,
+        viSecondary
+      );
+      console.log(
+        `[inspection][rule-first] deliverable=${guidePack.deliverable?.key ?? "-"} rules=${guidePack.ruleCount} rag=${ragPicked} ms=${Date.now() - tRag}`
+      );
+    } else {
+      const ragQuerySeed = [
+        guidePack?.ragQueryFromRules || "",
+        templateIds.length ? `템플릿: ${templateIds.join(", ")}` : "",
+        guidePack?.deliverable ? `제작물: ${guidePack.deliverable.name}` : "",
+        businessCategory ? `사업 영역: ${businessCategory}` : "",
+        designGroup ? `디자인 그룹: ${designGroup}` : "",
+        designType ? `디자인 유형: ${designType}` : "",
+        extra ? `추가 검수 요청: ${extra}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const primary = await buildPrimaryGuidelineBlock(guidelineId, ragQuerySeed);
+      guidelineSummary = (guidePack?.rulesBlock ? `${guidePack.rulesBlock}\n\n` : "") + primary.block;
+      ragPicked = primary.ragPicked;
+      console.log(`[inspection][RAG 검색 fallback] ${Date.now() - tRag}ms picked=${ragPicked}`);
+    }
 
     /** 0) 카테고리 선택 맥락(추가 검수 원칙 확장 가능) */
     const categoryLines: string[] = [];
     if (businessCategory) categoryLines.push(`- 사업 영역: ${businessCategory}`);
     if (designGroup) categoryLines.push(`- 디자인 그룹: ${designGroup === "online" ? "온라인" : "오프라인"}`);
     if (designType) categoryLines.push(`- 디자인 유형: ${designType}`);
+    if (guidePack?.deliverable) {
+      categoryLines.push(
+        `- 제작물 가이드: ${guidePack.deliverable.name} (${guidePack.deliverable.key})`
+      );
+    }
     if (categoryLines.length > 0) {
       guidelineSummary = `${guidelineSummary}\n\n[검수 카테고리]\n${categoryLines.join("\n")}`;
     }
@@ -1055,11 +1153,19 @@ app.post(
         status: "pending_review",
         guidelineId,
         mediaType: designGroup || null,
+        deliverableId: guidePack?.deliverable?.id ?? null,
+        commonGuideId: guidePack?.commonGuide?.id ?? null,
+        deliverableGuideId: guidePack?.deliverableGuide?.id ?? null,
         inputJson: {
           guidelineId,
           businessCategory,
           designGroup,
           designType,
+          deliverableId: guidePack?.deliverable?.id ?? null,
+          deliverableKey: guidePack?.deliverable?.key ?? null,
+          templateIds,
+          ruleCount: guidePack?.ruleCount ?? 0,
+          ragPicked,
           additionalNotes: extra || null,
           supplementaryUploaded: Boolean(supplementary?.buffer?.length),
           designMime,
@@ -1906,6 +2012,15 @@ app.post("/api/design-editor/correct-canvas", async (req, res) => {
   }
 });
 
+app.get("/api/deliverables", async (_req, res) => {
+  try {
+    const deliverables = await listActiveDeliverablesPublic();
+    res.json({ ok: true, deliverables });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
 app.post("/api/design-editor/inspect", async (req, res) => {
   try {
     const guidelineId = DESIGN_EDITOR_INSPECTION_GUIDELINE_ID;
@@ -1922,14 +2037,37 @@ app.post("/api/design-editor/inspect", async (req, res) => {
     const creativeTopic =
       typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
     await ensureFixedGuidelineSlotAsync(guidelineId);
-    const viPdf = await buildMandatoryViPdfContextForDesignEditor(
-      guidelineId,
-      [templateId, creativeTopic].filter(Boolean).join("\n\n")
-    );
+
+    let guidePack: Awaited<ReturnType<typeof loadInspectionGuidePack>> | null = null;
+    try {
+      guidePack = await loadInspectionGuidePack({ templateId: templateId || null });
+    } catch (e) {
+      console.error(
+        "[design-editor/inspect] guide pack failed:",
+        e instanceof Error ? e.message : String(e)
+      );
+    }
+
+    const ragSeed =
+      guidePack && guidePack.ruleCount > 0
+        ? guidePack.ragQueryFromRules
+        : [templateId, creativeTopic].filter(Boolean).join("\n\n");
+
+    const viPdf = await buildMandatoryViPdfContextForDesignEditor(guidelineId, ragSeed);
     if (!viPdf.ok) {
       res.status(viPdf.status).json({ error: viPdf.error });
       return;
     }
+
+    let visualGuideline = viPdf.block;
+    if (guidePack && guidePack.ruleCount > 0) {
+      // Rules first; Jason PDF excerpt becomes supporting evidence.
+      visualGuideline = `${guidePack.rulesBlock}\n\n---\n${viPdf.block}`;
+      console.log(
+        `[design-editor/inspect][rule-first] deliverable=${guidePack.deliverable?.key ?? "-"} rules=${guidePack.ruleCount}`
+      );
+    }
+
     const simply = await loadGuidelineExtract("simply-uplus-guideline");
     const textGuideline = simply.text.trim().slice(0, 24_000);
     console.log(
@@ -1938,7 +2076,7 @@ app.post("/api/design-editor/inspect", async (req, res) => {
     const result = await runDesignEditorCanvasInspection({
       designBase64: imageBase64,
       designMime: imageMime,
-      visualGuideline: viPdf.block,
+      visualGuideline,
       textGuideline,
       designContentJson: JSON.stringify(designContent ?? {}),
       templateLabel: templateId || "template",
@@ -1951,9 +2089,14 @@ app.post("/api/design-editor/inspect", async (req, res) => {
       status: "pending_review",
       guidelineId,
       templateId: templateId || null,
+      deliverableId: guidePack?.deliverable?.id ?? null,
+      commonGuideId: guidePack?.commonGuide?.id ?? null,
+      deliverableGuideId: guidePack?.deliverableGuide?.id ?? null,
       inputJson: {
         guidelineId,
         textGuidelineId: "simply-uplus-guideline",
+        deliverableKey: guidePack?.deliverable?.key ?? null,
+        ruleCount: guidePack?.ruleCount ?? 0,
         templateId: templateId || null,
         imageMime,
         creativeTopic: creativeTopic || null,
@@ -2270,6 +2413,181 @@ app.post("/api/admin/guidelines/:slotId/reindex", async (req, res) => {
     res.json({ ok: true, result });
   } catch (e) {
     sendAdminGuidelineError(res, e);
+  }
+});
+
+/* ── 제작물 가이드 (/api/admin/deliverables · /api/admin/guides) ───────────── */
+
+function sendAdminDeliverableError(res: express.Response, e: unknown): void {
+  const err = e as Error & { details?: string[] };
+  const msg = err instanceof Error ? err.message : String(e);
+  if (msg === "guide_schema_invalid") {
+    res.status(400).json({ ok: false, error: msg, details: err.details ?? [] });
+    return;
+  }
+  const map: Record<string, number> = {
+    deliverable_not_found: 404,
+    guide_not_found: 404,
+    invalid_deliverable_id: 400,
+    invalid_guide_id: 400,
+    invalid_key: 400,
+    invalid_channel: 400,
+    invalid_status: 400,
+    name_required: 400,
+    key_conflict: 409,
+    guide_not_draft: 409,
+  };
+  res.status(map[msg] ?? 500).json({ ok: false, error: msg });
+}
+
+app.get("/api/admin/deliverables", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  try {
+    res.json({ ok: true, deliverables: await listDeliverables() });
+  } catch (e) {
+    sendAdminDeliverableError(res, e);
+  }
+});
+
+app.post("/api/admin/deliverables", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  try {
+    const created = await createDeliverable({
+      key: typeof req.body?.key === "string" ? req.body.key : "",
+      name: typeof req.body?.name === "string" ? req.body.name : "",
+      channel: typeof req.body?.channel === "string" ? req.body.channel : "",
+      sort_order: typeof req.body?.sort_order === "number" ? req.body.sort_order : undefined,
+      template_ids: Array.isArray(req.body?.template_ids)
+        ? req.body.template_ids.filter((t: unknown): t is string => typeof t === "string")
+        : undefined,
+    });
+    res.status(201).json({ ok: true, deliverable: created });
+  } catch (e) {
+    sendAdminDeliverableError(res, e);
+  }
+});
+
+app.patch("/api/admin/deliverables/:id", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  try {
+    const updated = await updateDeliverable(String(req.params.id ?? ""), {
+      name: typeof req.body?.name === "string" ? req.body.name : undefined,
+      channel: typeof req.body?.channel === "string" ? req.body.channel : undefined,
+      status: typeof req.body?.status === "string" ? req.body.status : undefined,
+      sort_order: typeof req.body?.sort_order === "number" ? req.body.sort_order : undefined,
+      template_ids: Array.isArray(req.body?.template_ids)
+        ? req.body.template_ids.filter((t: unknown): t is string => typeof t === "string")
+        : undefined,
+    });
+    res.json({ ok: true, deliverable: updated });
+  } catch (e) {
+    sendAdminDeliverableError(res, e);
+  }
+});
+
+app.get("/api/admin/deliverables/:id/guides", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  try {
+    res.json({ ok: true, guides: await listGuidesForDeliverable(String(req.params.id ?? "")) });
+  } catch (e) {
+    sendAdminDeliverableError(res, e);
+  }
+});
+
+app.post("/api/admin/deliverables/:id/guides", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  try {
+    const guide = await createGuideDraft({
+      deliverableRef: String(req.params.id ?? ""),
+      content: req.body?.content,
+      note: typeof req.body?.note === "string" ? req.body.note : null,
+      createdBy: auth.userId ?? null,
+    });
+    res.status(201).json({ ok: true, guide });
+  } catch (e) {
+    sendAdminDeliverableError(res, e);
+  }
+});
+
+app.get("/api/admin/guides/:guideId", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  try {
+    res.json({ ok: true, guide: await getGuide(String(req.params.guideId ?? "")) });
+  } catch (e) {
+    sendAdminDeliverableError(res, e);
+  }
+});
+
+app.put("/api/admin/guides/:guideId", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  try {
+    const guide = await updateGuideDraft(String(req.params.guideId ?? ""), {
+      content: req.body?.content,
+      note: typeof req.body?.note === "string" ? req.body.note : undefined,
+    });
+    res.json({ ok: true, guide });
+  } catch (e) {
+    sendAdminDeliverableError(res, e);
+  }
+});
+
+app.post("/api/admin/guides/:guideId/publish", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  try {
+    const result = await publishGuide(String(req.params.guideId ?? ""));
+    res.json({ ok: true, result });
+  } catch (e) {
+    sendAdminDeliverableError(res, e);
+  }
+});
+
+app.post("/api/admin/guides/:guideId/rollback", async (req, res) => {
+  const auth = await requireAdmin(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
+    return;
+  }
+  try {
+    const result = await rollbackGuide({
+      guideId: String(req.params.guideId ?? ""),
+      createdBy: auth.userId ?? null,
+      note: typeof req.body?.note === "string" ? req.body.note : null,
+    });
+    res.json({ ok: true, result });
+  } catch (e) {
+    sendAdminDeliverableError(res, e);
   }
 });
 

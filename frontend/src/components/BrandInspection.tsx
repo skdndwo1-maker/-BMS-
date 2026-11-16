@@ -9,6 +9,7 @@ import {
   syncGuidelineFromFixed,
   type GuidelineInfo,
 } from "@/lib/guidelineApi";
+import { useTemplateCatalog } from "@/design/templateCatalog";
 import { GUIDELINE_REFERENCE_OPTIONS, DESIGN_EDITOR_INSPECTION_GUIDELINE_ID } from "@/constants/guidelineReferences";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
 import { GlobalBrandNav } from "@/components/GlobalBrandNav";
@@ -45,14 +46,6 @@ import {
   getSavedInspection,
   saveInspectionResult,
 } from "@/lib/savedResultsApi";
-import {
-  DESIGN_GROUPS,
-  DESIGN_TYPES,
-  normalizeDesignType,
-  type DesignGroup,
-  type DesignType,
-} from "@/constants/brandDesignTypes";
-
 type InspectionStep = "idle" | "uploading" | "analyzing" | "reviewing" | "complete";
 
 /** 대시보드 ref: 필터·칩 — 비활성 베이지 톤, 활성 검은 pill */
@@ -61,11 +54,6 @@ const categoryTabBase =
 const categoryTabIdle =
   "border-[rgba(0,0,0,0.08)] bg-white text-[#5C5C5C] hover:bg-[#EBE9E1] hover:border-[rgba(0,0,0,0.1)]";
 const categoryTabActive = "border-black bg-black text-white shadow-[0_4px_14px_-4px_rgba(0,0,0,0.25)]";
-/** 세부 유형(사내공지~안전&주의) — 코랄 액센트 */
-const designTypeTabIdle =
-  "border-[rgba(255,127,102,0.4)] bg-white text-[#5C5C5C] hover:bg-[#FFF7F5] hover:border-[rgba(255,127,102,0.55)]";
-const designTypeTabActive =
-  "border-[#FF7F66] bg-[#FF7F66] text-white shadow-[0_4px_14px_-4px_rgba(255,127,102,0.45)]";
 
 const inspectionCard =
   "rounded-[22px] border border-[rgba(0,0,0,0.06)] bg-white p-6 shadow-[0_4px_28px_-10px_rgba(0,0,0,0.08),0_2px_12px_-6px_rgba(0,0,0,0.04)]";
@@ -104,8 +92,9 @@ interface PassedCriteria {
 
 type SavedInspectionInput = {
   v: number;
-  selectedDesignGroup: DesignGroup;
-  selectedDesignType: DesignType | null;
+  selectedTemplateIds?: string[];
+  /** @deprecated */
+  selectedDeliverableId?: string | null;
   guidelineText: string;
   selectedGuidelineLibrary: string;
   designFileName: string | null;
@@ -127,6 +116,8 @@ function formatDefaultSavedName(prefix: string): string {
 
 export function BrandInspection() {
   const navigate = useNavigate();
+  const { templates: designTemplates } = useTemplateCatalog();
+  const [templateMediaFilter, setTemplateMediaFilter] = useState<"online" | "offline">("online");
   const [designFile, setDesignFile] = useState<File | null>(null);
   const [designPreview, setDesignPreview] = useState<string | null>(null);
   const [guidelineFile, setGuidelineFile] = useState<File | null>(null);
@@ -154,8 +145,7 @@ export function BrandInspection() {
   const [reportExportFormat, setReportExportFormat] = useState<ExportFormat>("png");
   const [revisedExportFormat, setRevisedExportFormat] = useState<ExportFormat>("png");
 
-  const [selectedDesignGroup, setSelectedDesignGroup] = useState<DesignGroup>("online");
-  const [selectedDesignType, setSelectedDesignType] = useState<DesignType | null>(null);
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
   const [savedInspectionId, setSavedInspectionId] = useState<string | null>(null);
 
   const designInputRef = useRef<HTMLInputElement>(null);
@@ -179,16 +169,13 @@ export function BrandInspection() {
       if (!raw) return;
       const d = JSON.parse(raw) as {
         v?: number;
-        selectedDesignGroup?: DesignGroup;
-        selectedDesignType?: DesignType | null;
+        selectedTemplateIds?: string[];
         guidelineText?: string;
         selectedGuidelineLibrary?: string;
       };
       if (d.v !== 1) return;
-      if (d.selectedDesignGroup === "online" || d.selectedDesignGroup === "offline") setSelectedDesignGroup(d.selectedDesignGroup);
-      const normalizedType = normalizeDesignType(d.selectedDesignType ?? undefined);
-      if (d.selectedDesignType === null || normalizedType) {
-        setSelectedDesignType(normalizedType);
+      if (Array.isArray(d.selectedTemplateIds)) {
+        setSelectedTemplateIds(d.selectedTemplateIds.filter((id) => typeof id === "string"));
       }
       if (typeof d.guidelineText === "string") setGuidelineText(d.guidelineText);
       if (typeof d.selectedGuidelineLibrary === "string") setSelectedGuidelineLibrary(d.selectedGuidelineLibrary);
@@ -204,8 +191,7 @@ export function BrandInspection() {
           INSPECTION_NAV_DRAFT_KEY,
           JSON.stringify({
             v: 1,
-            selectedDesignGroup,
-            selectedDesignType,
+            selectedTemplateIds,
             guidelineText,
             selectedGuidelineLibrary,
           }),
@@ -214,12 +200,7 @@ export function BrandInspection() {
         console.warn("[inspectionNavDraft]", e);
       }
     });
-  }, [
-    selectedDesignGroup,
-    selectedDesignType,
-    guidelineText,
-    selectedGuidelineLibrary,
-  ]);
+  }, [selectedTemplateIds, guidelineText, selectedGuidelineLibrary]);
 
   useEffect(() => {
     if (!guidelineDetailOpen) return;
@@ -337,8 +318,14 @@ export function BrandInspection() {
     setGuidelineText("");
   };
 
+  const toggleTemplate = (templateId: string) => {
+    setSelectedTemplateIds((prev) =>
+      prev.includes(templateId) ? prev.filter((id) => id !== templateId) : [...prev, templateId]
+    );
+  };
+
   const handleRunAudit = () => {
-    if (!designFile) return;
+    if (!designFile || selectedTemplateIds.length === 0) return;
 
     inspectionEpochRef.current += 1;
     const epoch = inspectionEpochRef.current;
@@ -350,13 +337,22 @@ export function BrandInspection() {
 
     void (async () => {
       try {
+        const mediaTypes = designTemplates
+          .filter((t) => selectedTemplateIds.includes(t.id))
+          .map((t) => t.mediaType);
+        const designGroup =
+          mediaTypes.every((m) => m === "offline")
+            ? "offline"
+            : mediaTypes.every((m) => m === "online")
+              ? "online"
+              : undefined;
         const res = await runInspection({
           design: designFile,
           guidelineId: selectedGuidelineLibrary,
           additionalNotes: guidelineText,
           supplementaryReference: guidelineFile ?? undefined,
-          designGroup: selectedDesignGroup,
-          designType: selectedDesignType ?? undefined,
+          designGroup,
+          templateIds: selectedTemplateIds,
         });
         if (epoch !== inspectionEpochRef.current) return;
         setBrandScore(res.score);
@@ -411,8 +407,7 @@ export function BrandInspection() {
         summary: inspectionOverallSummary ? inspectionOverallSummary.slice(0, 300) : `위반 ${violations.length}건`,
         input: {
           v: 1,
-          selectedDesignGroup,
-          selectedDesignType,
+          selectedTemplateIds,
           guidelineText,
           selectedGuidelineLibrary,
           designFileName: designFile?.name ?? null,
@@ -440,10 +435,11 @@ export function BrandInspection() {
     const input = (row.input ?? {}) as Partial<SavedInspectionInput>;
     const result = (row.result ?? {}) as Partial<SavedInspectionResultData>;
 
-    if (input.selectedDesignGroup === "online" || input.selectedDesignGroup === "offline") {
-      setSelectedDesignGroup(input.selectedDesignGroup);
-    }
-    setSelectedDesignType(normalizeDesignType(input.selectedDesignType ?? undefined) ?? null);
+    setSelectedTemplateIds(
+      Array.isArray(input.selectedTemplateIds)
+        ? input.selectedTemplateIds.filter((id): id is string => typeof id === "string")
+        : []
+    );
     setGuidelineText(typeof input.guidelineText === "string" ? input.guidelineText : "");
     if (typeof input.selectedGuidelineLibrary === "string" && input.selectedGuidelineLibrary) {
       setSelectedGuidelineLibrary(input.selectedGuidelineLibrary);
@@ -580,7 +576,10 @@ export function BrandInspection() {
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <InspectionSectionTitle>제작물유형</InspectionSectionTitle>
-                <p className="mt-2 text-sm text-[#6B6B6B]">검수 맥락에 맞는 온라인·오프라인과 세부 유형을 지정하세요.</p>
+                <p className="mt-2 text-sm text-[#6B6B6B]">
+                  디자인 제작 템플릿과 동일합니다. 하나 이상 선택해야 검수를 실행할 수 있습니다. 규칙이 아직 없으면 공통 VI
+                  가이드로 광역 검수합니다.
+                </p>
               </div>
               <div className="flex shrink-0 items-center gap-2 sm:ml-auto" role="group" aria-label="브랜드 디자인 모드">
                 <Button
@@ -605,30 +604,55 @@ export function BrandInspection() {
 
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
-                {DESIGN_GROUPS.map((g) => (
+                {(
+                  [
+                    { id: "online" as const, label: "온라인" },
+                    { id: "offline" as const, label: "오프라인" },
+                  ] as const
+                ).map((g) => (
                   <button
                     key={g.id}
                     type="button"
-                    onClick={() => setSelectedDesignGroup(g.id)}
-                    className={`${categoryTabBase} ${selectedDesignGroup === g.id ? categoryTabActive : categoryTabIdle}`}
+                    onClick={() => setTemplateMediaFilter(g.id)}
+                    className={`${categoryTabBase} ${
+                      templateMediaFilter === g.id ? categoryTabActive : categoryTabIdle
+                    }`}
                   >
                     {g.label}
                   </button>
                 ))}
               </div>
               <div className="flex flex-wrap gap-2">
-                {DESIGN_TYPES.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setSelectedDesignType(t)}
-                    className={`${categoryTabBase} ${selectedDesignType === t ? designTypeTabActive : designTypeTabIdle}`}
-                  >
-                    {t}
-                  </button>
-                ))}
+                {designTemplates
+                  .filter((t) => t.mediaType === templateMediaFilter)
+                  .map((t) => {
+                    const active = selectedTemplateIds.includes(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => toggleTemplate(t.id)}
+                        className={`${categoryTabBase} ${active ? categoryTabActive : categoryTabIdle}`}
+                        title={`${t.size.name} · ${t.mediaType}`}
+                      >
+                        {t.name}
+                      </button>
+                    );
+                  })}
               </div>
-              <p className="text-[11px] text-gray-400">온라인/오프라인 전환 시에도 세부 유형 선택은 유지됩니다.</p>
+              {selectedTemplateIds.length === 0 ? (
+                <p className="text-[11px] text-amber-700">제작물유형을 하나 이상 선택해 주세요.</p>
+              ) : (
+                <p className="text-[11px] text-[#6B6B6B]">
+                  {selectedTemplateIds.length}개 선택됨
+                  {selectedTemplateIds.some(
+                    (id) => designTemplates.find((t) => t.id === id)?.mediaType !== templateMediaFilter
+                  )
+                    ? " (다른 탭에서 고른 항목 포함)"
+                    : ""}
+                  . 연결 제작물에 게시된 규칙이 있으면 규칙 우선, 없으면 VI 광역 검수입니다.
+                </p>
+              )}
             </div>
           </div>
 
@@ -914,7 +938,7 @@ export function BrandInspection() {
             <button
               type="button"
               onClick={handlePrimaryCta}
-              disabled={!designFile || isBusy}
+              disabled={!designFile || selectedTemplateIds.length === 0 || isBusy}
               className="brand-btn-primary h-14 w-full text-base font-semibold disabled:pointer-events-none disabled:opacity-45"
             >
               {isBusy ? (
