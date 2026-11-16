@@ -22,6 +22,9 @@ export async function persistRun(args: {
   guidelineId?: string | null;
   templateId?: string | null;
   mediaType?: "online" | "offline" | null;
+  deliverableId?: string | null;
+  commonGuideId?: string | null;
+  deliverableGuideId?: string | null;
   inputJson: Record<string, unknown>;
   outputJson: Record<string, unknown>;
   inputText?: string | null;
@@ -55,6 +58,9 @@ export async function persistRun(args: {
       guideline_id: args.guidelineId ?? null,
       template_id: args.templateId ?? null,
       media_type: args.mediaType ?? null,
+      deliverable_id: args.deliverableId ?? null,
+      common_guide_id: args.commonGuideId ?? null,
+      deliverable_guide_id: args.deliverableGuideId ?? null,
       input_json: args.inputJson ?? {},
       output_json: args.outputJson ?? {},
       input_text: args.inputText ?? null,
