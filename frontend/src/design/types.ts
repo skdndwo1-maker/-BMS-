@@ -96,6 +96,19 @@ export interface Template {
   customizable?: boolean;
   /** 관리자 템플릿 빌더에서 만든 기본 배치 */
   layout?: TemplateLayout;
+  /**
+   * RCS 전용: 카테고리(상품×메시지) 선택 시 들어가는 기본 문구·타이포.
+   * Admin 「문구·폰트 편집」에서 저장. 줄바꿈은 title 문자열의 \\n.
+   */
+  rcsPresets?: {
+    defaults?: {
+      titleSize?: number;
+      titleWeight?: "light" | "standard" | "semi-bold" | "bold";
+      titleFont?: string;
+      titleLineHeight?: number;
+    };
+    cells?: Record<string, Record<string, { title?: string }>>;
+  };
   /** 관리자가 새로 만든 템플릿 */
   isCustom?: boolean;
 }
@@ -236,6 +249,11 @@ export interface DesignContent {
   // ── 텍스트 상세 옵션 ───────────────────────────────────────────
   titleFont?: string;
   titleSize?: number;
+  /** RCS 등: light | standard | semi-bold | bold */
+  titleWeight?: string;
+  bodyWeight?: string;
+  /** RCS 메시지 유형 (가입안내 등) — 배경색 동기화 */
+  rcsMessageType?: string | null;
   titleAlign?: 'left' | 'center' | 'right';
   titleStyle?: 'normal' | 'italic';
   subtitleFont?: string;
@@ -339,6 +357,21 @@ export interface DesignContent {
   posterFooterColorRanges?: Array<{ start: number; end: number; color: string }>;
   posterBodyColorRanges?: Record<string, Array<{ start: number; end: number; color: string }>>;
   posterSubtitleColorRanges?: Record<string, Array<{ start: number; end: number; color: string }>>;
+
+  /** 부분 글꼴 — plain 기준 */
+  posterTitleFontFamilyRanges?: Array<{ start: number; end: number; fontFamily: string }>;
+  posterFooterFontFamilyRanges?: Array<{ start: number; end: number; fontFamily: string }>;
+  posterBodyFontFamilyRanges?: Record<string, Array<{ start: number; end: number; fontFamily: string }>>;
+  posterSubtitleFontFamilyRanges?: Record<
+    string,
+    Array<{ start: number; end: number; fontFamily: string }>
+  >;
+
+  /** 부분 크기 배율 % — 요소 기본 크기 대비 */
+  posterTitleFontScaleRanges?: Array<{ start: number; end: number; scale: number }>;
+  posterFooterFontScaleRanges?: Array<{ start: number; end: number; scale: number }>;
+  posterBodyFontScaleRanges?: Record<string, Array<{ start: number; end: number; scale: number }>>;
+  posterSubtitleFontScaleRanges?: Record<string, Array<{ start: number; end: number; scale: number }>>;
 
   posterFooterRect?: { x: number; y: number; width: number; height: number };
 

@@ -10,6 +10,7 @@ import { AdminReview } from "@/components/AdminReview";
 import { TemplateBuilder } from "@/components/admin/TemplateBuilder";
 import { AdminGuidelines } from "@/components/admin/AdminGuidelines";
 import { AdminDeliverables } from "@/components/admin/AdminDeliverables";
+import { AdminAiGeneration } from "@/components/admin/AdminAiGeneration";
 import { MyDesignsDashboard } from "@/components/MyDesignsDashboard";
 import { SimplyHeart } from "@/components/SimplyHeart";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -32,6 +33,7 @@ export const appRouter = createBrowserRouter([
   { path: "/admin/review", element: guarded(<AdminReview />) },
   { path: "/admin/guidelines", element: guarded(<AdminGuidelines />) },
   { path: "/admin/deliverables", element: guarded(<AdminDeliverables />) },
+  { path: "/admin/ai-generation", element: guarded(<AdminAiGeneration />) },
   { path: "/admin/templates/:templateId/builder", element: guarded(<TemplateBuilder />) },
   { path: "*", element: <Navigate to="/" replace /> },
 ]);

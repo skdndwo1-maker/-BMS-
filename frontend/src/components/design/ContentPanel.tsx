@@ -65,6 +65,15 @@ import { useTemplateCatalog } from "@/design/templateCatalog";
 import { resolvePosterBodyBlocksForRender, applyBodyBlockTextEdit } from "@/design/posterBodyDisplay";
 import { VI_COLORS } from "@/design/viCanvasConstants";
 import { isSafetyCautionTemplate } from "@/design/safetyCautionPreset";
+import {
+  RCS_MESSAGE_TYPES,
+  RCS_PRODUCTS,
+  resolveRcsTitle,
+  resolveRcsTypo,
+  type RcsMessageType,
+  type RcsPresetsConfig,
+  type RcsProduct,
+} from "@/design/rcsPresets";
 
 interface ContentPanelProps {
   content: DesignContent;
@@ -126,39 +135,6 @@ const POSTER_CATEGORIES: {
 }[] = [
   { key: "basic", label: "기본형", emoji: "📄", color: "#6B7280", preset: { backgroundColor: "#FFFFFF", titleColor: "#1A1A1A", subtitle: "", title: "", bodyText: "", emphasizedTitle: "" } },
 ];
-
-const rcsTemplates = {
-  요금제: {
-    가입안내: "요금제 가입 환영해요",
-    해지안내: "아쉽지만 또 만나요",
-    "서비스 종료안내": "요금제 이용이 곧 종료됩니다",
-    혜택안내: "함께하면 더 특별한 요금제 혜택",
-  },
-  모바일서비스: {
-    가입안내: "모바일 서비스 가입을 환영해요",
-    해지안내: "다음에 또 만나요",
-    "서비스 종료안내": "모바일 서비스 이용이 곧 종료됩니다",
-    혜택안내: "유플러스 사전예약 혜택 5.14(화)~5.20(화)",
-  },
-  결합: {
-    가입안내: "이제 함께 할인받을 수 있어요",
-    해지안내: "아쉽지만 또 만나요",
-    "서비스 종료안내": "결합 이용이 곧 종료됩니다",
-    혜택안내: "가족과 함께하면 네이버페이 100% 증정!",
-  },
-  요금할인: {
-    가입안내: "요금부담을 덜었어요",
-    해지안내: "아쉽지만 또 만나요",
-    "서비스 종료안내": "요금할인 이용이 곧 종료됩니다",
-    혜택안내: "쓰던 폰 그대로, 가족 모두 할인",
-  },
-  로밍: {
-    가입안내: "로밍 가입을 환영해요",
-    해지안내: "안전한 귀국길 되셨나요?",
-    "서비스 종료안내": "로밍 이용이 곧 종료됩니다",
-    혜택안내: "밝은 여행길을 위해, 데이터 2배 증정 혜택",
-  },
-} as const;
 
 function normalizePosterCategory(k: string | undefined): PosterCategory {
   if (!k) return "basic";
@@ -315,15 +291,19 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
     setImageAiAspectRatio(defaultImageAiAspectRatio);
   }, [defaultImageAiAspectRatio]);
 
-  // RCS 20종 문구 선택 UI (우측 패널 전용)
-  const [rcsProduct, setRcsProduct] = useState<keyof typeof rcsTemplates | null>(null);
-  const [rcsMessageType, setRcsMessageType] = useState<keyof (typeof rcsTemplates)["요금제"] | null>(null);
+  // RCS 20종 문구 선택 UI (우측 패널 전용) — Admin rcsPresets 반영
+  const rcsPresetsConfig = (templateMeta?.rcsPresets ?? null) as RcsPresetsConfig | null;
+  const [rcsProduct, setRcsProduct] = useState<RcsProduct | null>(null);
+  const [rcsMessageType, setRcsMessageType] = useState<RcsMessageType | null>(null);
   const rcsCanApply = Boolean(rcsProduct && rcsMessageType);
-  const rcsNextTitle = rcsCanApply ? rcsTemplates[rcsProduct!][rcsMessageType!] : "";
+  const rcsNextTitle =
+    rcsCanApply && rcsProduct && rcsMessageType
+      ? resolveRcsTitle(rcsPresetsConfig, rcsProduct, rcsMessageType)
+      : "";
   const rcsTypeForPanel =
     rcsMessageType ?? (content as DesignContent & { rcsMessageType?: string | null }).rcsMessageType ?? null;
 
-  const setRcsMessageTypeOnContent = (t: keyof (typeof rcsTemplates)["요금제"] | null) => {
+  const setRcsMessageTypeOnContent = (t: RcsMessageType | null) => {
     onContentChange((prev) => ({
       ...prev,
       rcsMessageType: t,
@@ -344,9 +324,26 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
   );
 
   const applyRcsTitle = (nextTitle: string) => {
-    const t = (nextTitle ?? "").trim();
+    // 끝 공백만 trim — 중간 줄바꿈(\\n)은 유지
+    const t = (nextTitle ?? "").replace(/^\s+|\s+$/g, "");
     if (!t.length) return;
-    onContentChange((prev) => ({ ...prev, title: t }));
+    const typo = resolveRcsTypo(rcsPresetsConfig);
+    onContentChange((prev) => ({
+      ...prev,
+      title: t,
+      titleFont: typo.titleFont,
+      titleSize: typo.titleSize,
+      titleWeight: typo.titleWeight,
+      posterTitleTypography: {
+        ...(prev.posterTitleTypography ?? {}),
+        fontFamily: typo.titleFont,
+        lineHeight: typo.titleLineHeight,
+      },
+    }));
+  };
+
+  const applyRcsPreset = (product: RcsProduct, message: RcsMessageType) => {
+    applyRcsTitle(resolveRcsTitle(rcsPresetsConfig, product, message));
   };
 
   const { getRootProps:getImageRP,  getInputProps:getImageIP,  isDragActive:isImageDrag  } = useDropzone({ onDrop:(f)=>{ if(f[0]){
@@ -817,6 +814,9 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
         disabled={imageAiBusy}
         autoComplete="off"
       />
+      <p className="text-[10px] text-gray-400">
+        Admin 「AI 생성 설정」의 기본 프롬프트가 자동으로 앞에 붙습니다.
+      </p>
       <Button
         type="button"
         size="sm"
@@ -1225,7 +1225,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               <div className="space-y-2">
                 <p className="text-[11px] font-semibold text-gray-700">상품 선택</p>
                 <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-0.5">
-                  {(["요금제", "모바일서비스", "결합", "요금할인", "로밍"] as const).map((k) => {
+                  {RCS_PRODUCTS.map((k) => {
                     const active = rcsProduct === k;
                     return (
                       <button
@@ -1233,7 +1233,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                         type="button"
                         onClick={() => {
                           setRcsProduct(k);
-                          if (rcsMessageType) applyRcsTitle(rcsTemplates[k][rcsMessageType]);
+                          if (rcsMessageType) applyRcsPreset(k, rcsMessageType);
                         }}
                         className={`shrink-0 inline-flex items-center justify-center whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] font-semibold transition-colors ${
                           active
@@ -1251,7 +1251,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
               <div className="space-y-2">
                 <p className="text-[11px] font-semibold text-gray-700">메시지 유형</p>
                 <div className="grid grid-cols-1 gap-2 min-w-0">
-                  {(["가입안내", "해지안내", "서비스 종료안내", "혜택안내"] as const).map((k) => {
+                  {RCS_MESSAGE_TYPES.map((k) => {
                     const active = rcsMessageType === k;
                     return (
                       <button
@@ -1260,7 +1260,7 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                         onClick={() => {
                           setRcsMessageType(k);
                           setRcsMessageTypeOnContent(k);
-                          if (rcsProduct) applyRcsTitle(rcsTemplates[rcsProduct][k]);
+                          if (rcsProduct) applyRcsPreset(rcsProduct, k);
                         }}
                         className={`w-full min-w-0 rounded-xl border-2 p-2.5 text-left transition-all ${
                           active ? "border-[#FF7F66] bg-[#FF7F66]/6" : "border-gray-200 bg-white hover:border-gray-300"
@@ -1269,8 +1269,10 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
                         <div className={`text-[12px] font-semibold ${active ? "text-[#FF7F66]" : "text-gray-800"}`}>
                           {k}
                         </div>
-                        <div className="mt-0.5 text-[10px] text-gray-400 break-words whitespace-normal">
-                          {rcsProduct ? rcsTemplates[rcsProduct][k] : "상품을 먼저 선택하세요"}
+                        <div className="mt-0.5 text-[10px] text-gray-400 break-words whitespace-pre-wrap">
+                          {rcsProduct
+                            ? resolveRcsTitle(rcsPresetsConfig, rcsProduct, k)
+                            : "상품을 먼저 선택하세요"}
                         </div>
                       </button>
                     );

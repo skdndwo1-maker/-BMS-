@@ -97,8 +97,9 @@ export function AdminDeliverables() {
     [guides, selectedGuideId]
   );
 
-  /** 새 초안 작성 중이거나 기존 draft면 편집 가능 */
-  const guideEditable = !selectedGuide || selectedGuide.status === "draft";
+  /** statement 등 필드는 항상 수정 가능. draft가 아니면 「초안으로 저장」으로 새 버전 생성 */
+  const guideEditable = true;
+  const viewingPublished = Boolean(selectedGuide && selectedGuide.status !== "draft");
 
   const loadDeliverables = useCallback(async () => {
     setListLoading(true);
@@ -598,10 +599,10 @@ export function AdminDeliverables() {
                 </div>
               )}
 
-              {!guideEditable && selectedGuide ? (
+              {viewingPublished ? (
                 <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
-                  이 버전은 {selectedGuide.status} 상태라 직접 수정할 수 없습니다. 내용을 바꾼 뒤 「초안으로 저장」하거나
-                  「되돌리기」로 새 draft를 만드세요.
+                  지금 보는 버전은 <strong>{selectedGuide?.status}</strong>입니다. statement·규칙 등을 바로 고친 뒤
+                  「초안으로 저장」→「게시」하면 새 버전으로 검수에 반영됩니다. (게시된 원본은 덮어쓰지 않습니다.)
                 </p>
               ) : null}
 

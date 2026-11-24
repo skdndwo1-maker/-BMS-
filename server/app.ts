@@ -90,6 +90,12 @@ import { requireAuth } from "./middleware/requireAuth.js";
 import { handleLibraryUpload } from "./libraryUpload.js";
 import { handleLibraryList } from "./libraryAssets.js";
 import { handleTemplateCatalogGet, handleTemplateCatalogPut } from "./templateCatalog.js";
+import {
+  composeImageDirection,
+  handleAiGenerationSettingsGet,
+  handleAiGenerationSettingsPut,
+  loadAiGenerationSettings,
+} from "./aiGenerationSettings.js";
 import { getSupabaseAnonClient, getSupabaseServiceClient, isSupabaseInvalidApiKeyError } from "./supabase.js";
 
 const app = express();
@@ -1795,7 +1801,7 @@ app.post("/api/design-editor/propose-draft", async (req, res) => {
 
 app.post("/api/design-editor/generate-asset", async (req, res) => {
   try {
-    const direction = typeof req.body?.direction === "string" ? req.body.direction.trim() : "";
+    const userDirection = typeof req.body?.direction === "string" ? req.body.direction.trim() : "";
     const assetKindRaw = req.body?.assetKind;
     const assetKind =
       assetKindRaw === "pictogram" ? "pictogram" : assetKindRaw === "image" ? "image" : "illustration";
@@ -1808,13 +1814,25 @@ app.post("/api/design-editor/generate-asset", async (req, res) => {
         ? normalizeImageAspectRatioId(req.body?.imageAspectRatio) ?? "16:9"
         : undefined;
 
-    if (!direction) {
+    if (!userDirection) {
       res.status(400).json({ error: "direction_required" });
       return;
     }
     if (!process.env.GEMINI_API_KEY?.trim()) {
       res.status(503).json({ error: "GEMINI_API_KEY가 설정되어 있지 않습니다." });
       return;
+    }
+
+    let direction = userDirection;
+    let imageBasePrompt: string | null = null;
+    if (assetKind === "image") {
+      try {
+        const settings = await loadAiGenerationSettings();
+        imageBasePrompt = settings.imageBasePrompt?.trim() || null;
+        if (imageBasePrompt) direction = composeImageDirection(imageBasePrompt, userDirection);
+      } catch (e) {
+        console.warn("[generate-asset] ai generation settings load failed:", e);
+      }
     }
 
     const out =
@@ -1850,7 +1868,9 @@ app.post("/api/design-editor/generate-asset", async (req, res) => {
       inputJson: {
         assetKind,
         illustrationStyle: assetKind === "illustration" ? illustrationStyle : null,
-        direction,
+        direction: userDirection,
+        composedDirection: assetKind === "image" ? direction : null,
+        imageBasePrompt,
         templateLabel,
         creativeTopic: creativeTopic || null,
         imageAspectRatio: imageAspectRatio ?? null,
@@ -1895,10 +1915,19 @@ app.post("/api/design-editor/develop-image", async (req, res) => {
       return;
     }
 
+    let finalDevelopPrompt = developPrompt;
+    try {
+      const settings = await loadAiGenerationSettings();
+      const base = settings.imageBasePrompt?.trim();
+      if (base) finalDevelopPrompt = composeImageDirection(base, developPrompt);
+    } catch (e) {
+      console.warn("[develop-image] ai generation settings load failed:", e);
+    }
+
     const out = await runDesignEditorImageDevelop({
       imageBase64: rawB64,
       imageMime,
-      developPrompt,
+      developPrompt: finalDevelopPrompt,
       templateLabel,
       creativeTopic: creativeTopic || undefined,
     });
@@ -2589,6 +2618,14 @@ app.post("/api/admin/guides/:guideId/rollback", async (req, res) => {
   } catch (e) {
     sendAdminDeliverableError(res, e);
   }
+});
+
+/* ── AI 생성 설정 ─────────────────────────────────────────────────────────── */
+app.get("/api/admin/ai-generation-settings", (req, res) => {
+  void handleAiGenerationSettingsGet(req, res);
+});
+app.put("/api/admin/ai-generation-settings", (req, res) => {
+  void handleAiGenerationSettingsPut(req, res);
 });
 
 export { app };

@@ -124,6 +124,113 @@ export function applyColorOnSelection(
   return merged;
 }
 
+/** 부분 글꼴 */
+export type FontFamilyRange = { start: number; end: number; fontFamily: string };
+
+/** 부분 크기 배율 % (요소 기본 크기 대비) */
+export type FontScaleRange = { start: number; end: number; scale: number };
+
+function applyTaggedOnSelection<T extends { start: number; end: number }>(
+  plain: string,
+  ranges: T[] | undefined,
+  selStart: number,
+  selEnd: number,
+  create: (a: number, b: number) => T,
+  same: (a: T, b: T) => boolean,
+  sanitize: (len: number, rs: T[] | undefined) => T[]
+): T[] {
+  const len = plain.length;
+  const a = Math.max(0, Math.min(len, Math.min(selStart, selEnd)));
+  const b = Math.max(0, Math.min(len, Math.max(selStart, selEnd)));
+  if (a === b) return sanitize(len, ranges);
+  const cur = sanitize(len, ranges);
+  const out: T[] = [];
+  for (const r of cur) {
+    if (r.end <= a || r.start >= b) {
+      out.push(r);
+      continue;
+    }
+    if (r.start < a) out.push({ ...r, start: r.start, end: a });
+    if (r.end > b) out.push({ ...r, start: b, end: r.end });
+  }
+  out.push(create(a, b));
+  out.sort((x, y) => x.start - y.start);
+  const merged: T[] = [];
+  for (const r of out) {
+    const last = merged[merged.length - 1];
+    if (last && last.end === r.start && same(last, r)) last.end = r.end;
+    else merged.push({ ...r });
+  }
+  return merged;
+}
+
+export function sanitizeFontFamilyRanges(
+  len: number,
+  ranges: FontFamilyRange[] | undefined
+): FontFamilyRange[] {
+  if (!ranges?.length) return [];
+  return ranges
+    .map((r) => ({
+      start: Math.max(0, Math.min(len, Math.min(r.start, r.end))),
+      end: Math.max(0, Math.min(len, Math.max(r.start, r.end))),
+      fontFamily: typeof r.fontFamily === "string" ? r.fontFamily.trim() : "",
+    }))
+    .filter((r) => r.end > r.start && r.fontFamily.length > 0);
+}
+
+export function applyFontFamilyOnSelection(
+  plain: string,
+  ranges: FontFamilyRange[] | undefined,
+  selStart: number,
+  selEnd: number,
+  fontFamily: string
+): FontFamilyRange[] {
+  const fam = fontFamily.trim();
+  if (!fam) return sanitizeFontFamilyRanges(plain.length, ranges);
+  return applyTaggedOnSelection(
+    plain,
+    ranges,
+    selStart,
+    selEnd,
+    (a, b) => ({ start: a, end: b, fontFamily: fam }),
+    (x, y) => x.fontFamily === y.fontFamily,
+    sanitizeFontFamilyRanges
+  );
+}
+
+export function sanitizeFontScaleRanges(
+  len: number,
+  ranges: FontScaleRange[] | undefined
+): FontScaleRange[] {
+  if (!ranges?.length) return [];
+  return ranges
+    .map((r) => ({
+      start: Math.max(0, Math.min(len, Math.min(r.start, r.end))),
+      end: Math.max(0, Math.min(len, Math.max(r.start, r.end))),
+      scale: Math.min(300, Math.max(25, Math.round(Number(r.scale) || 100))),
+    }))
+    .filter((r) => r.end > r.start);
+}
+
+export function applyFontScaleOnSelection(
+  plain: string,
+  ranges: FontScaleRange[] | undefined,
+  selStart: number,
+  selEnd: number,
+  scale: number
+): FontScaleRange[] {
+  const s = Math.min(300, Math.max(25, Math.round(scale)));
+  return applyTaggedOnSelection(
+    plain,
+    ranges,
+    selStart,
+    selEnd,
+    (a, b) => ({ start: a, end: b, scale: s }),
+    (x, y) => x.scale === y.scale,
+    sanitizeFontScaleRanges
+  );
+}
+
 export function sanitizeWeightRanges(len: number, ranges: WeightRange[] | undefined): WeightRange[] {
   if (!ranges?.length) return [];
   return ranges

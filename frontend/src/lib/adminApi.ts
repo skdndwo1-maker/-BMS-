@@ -365,3 +365,37 @@ export async function rollbackAdminDeliverableGuide(guideId: string, note?: stri
   return payload.result;
 }
 
+export type AiGenerationSettings = {
+  version: 1;
+  imageBasePrompt: string;
+  updatedAt?: string;
+};
+
+export const DEFAULT_AI_IMAGE_BASE_PROMPT = [
+  "cinematic, realistic, hyper real, nano lens,",
+  "텍스트 절대 제외, 장식적요소제외(인물과 배경만 사실적으로 표현)",
+].join("\n");
+
+export async function getAdminAiGenerationSettings(): Promise<AiGenerationSettings> {
+  const payload = await adminFetch("", "/api/admin/ai-generation-settings", { method: "GET" });
+  const settings = payload.settings as AiGenerationSettings | undefined;
+  return {
+    version: 1,
+    imageBasePrompt: settings?.imageBasePrompt?.trim() || DEFAULT_AI_IMAGE_BASE_PROMPT,
+    updatedAt: settings?.updatedAt,
+  };
+}
+
+export async function saveAdminAiGenerationSettings(
+  imageBasePrompt: string
+): Promise<AiGenerationSettings> {
+  const payload = await adminFetch("", "/api/admin/ai-generation-settings", {
+    method: "PUT",
+    body: JSON.stringify({ imageBasePrompt }),
+  });
+  return (payload.settings ?? {
+    version: 1,
+    imageBasePrompt,
+  }) as AiGenerationSettings;
+}
+

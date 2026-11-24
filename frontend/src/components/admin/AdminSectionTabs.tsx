@@ -4,6 +4,7 @@ const TABS = [
   { to: "/admin/review", label: "승인 / 거절" },
   { to: "/admin/guidelines", label: "가이드 관리" },
   { to: "/admin/deliverables", label: "제작물 가이드" },
+  { to: "/admin/ai-generation", label: "AI 생성 설정" },
 ] as const;
 
 /** 관리자 페이지 상단 시트 전환 */

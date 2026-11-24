@@ -70,9 +70,13 @@ import {
 } from "./bodyRichText";
 import {
   applyColorOnSelection,
+  applyFontFamilyOnSelection,
+  applyFontScaleOnSelection,
   applyWeightOnSelection,
   sanitizeCharRanges,
   sanitizeColorRanges,
+  sanitizeFontFamilyRanges,
+  sanitizeFontScaleRanges,
   sanitizeWeightRanges,
   toggleCharRangesOnSelection,
   type CharRange,
@@ -226,8 +230,8 @@ interface DesignCanvasProps {
   onContentDraftChange?: (content: DesignContent | ((prev: DesignContent) => DesignContent)) => void;
   /** 캔버스 텍스트 인라인 편집 시작 직전(현재 상태를 undo 스택에 넣기 위해) */
   onBeginCanvasTextEdit?: () => void;
-  /** 좌측 문자 옵션 패널 동기화 */
-  onTextFormatTargetChange?: (t: CanvasTextEditTarget | null) => void;
+  /** 좌측 문자 옵션 패널 동기화 (복수 텍스트 선택 지원) */
+  onTextFormatTargetsChange?: (targets: CanvasTextEditTarget[]) => void;
   /** 인라인 편집(더블클릭) 활성 여부 — 좌측 패널 B/I/U 연동 */
   onInlineEditChange?: (active: boolean) => void;
   /** 캔버스에서 텍스트 구간 선택이 바뀔 때(고스트 textarea) — 패널 B/I/U 활성 표시 갱신 */
@@ -241,6 +245,8 @@ export type DesignCanvasHandle = {
   handleApplyPartialColor: (hex: string) => void;
   /** 인라인 편집 중 선택된 글자 구간에만 굵기를 적용 (부제·본문) */
   handleApplyPartialWeight: (weight: number) => void;
+  handleApplyPartialFontFamily: (fontFamily: string) => void;
+  handleApplyPartialFontScale: (scale: number) => void;
   getInlineEditActive: () => boolean;
 };
 
@@ -257,7 +263,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     layoutSnapEnabled = true,
     onContentDraftChange,
     onBeginCanvasTextEdit,
-    onTextFormatTargetChange,
+    onTextFormatTargetsChange,
     onInlineEditChange,
     onCanvasTextSelectionChanged,
   },
@@ -309,11 +315,20 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     if (typeof document === "undefined" || !document.fonts?.ready) return;
     void document.fonts.ready.then(() => setFontReadyTick((n) => n + 1));
   }, []);
-  const formatTarget = useMemo((): CanvasTextEditTarget | null => {
-    if (selectedKeys.length !== 1) return null;
-    return selectedKeyToFormatTarget(selectedKeys[0], content);
-  }, [selectedKeys, content.posterBodies, content.bodyText]);
-  const activeTextTarget = inlineEditTarget ?? formatTarget;
+  const formatTargets = useMemo((): CanvasTextEditTarget[] => {
+    const out: CanvasTextEditTarget[] = [];
+    const seen = new Set<string>();
+    for (const key of selectedKeys) {
+      const t = selectedKeyToFormatTarget(key, content);
+      if (!t || t.kind === "badge") continue;
+      const sig =
+        t.kind === "title" || t.kind === "footer" ? t.kind : `${t.kind}:${t.id}`;
+      if (seen.has(sig)) continue;
+      seen.add(sig);
+      out.push(t);
+    }
+    return out;
+  }, [selectedKeys, content.posterBodies, content.bodyText, content.posterSubtitles]);
   const titleEditRef = useRef<HTMLTextAreaElement>(null);
   const footerEditRef = useRef<HTMLTextAreaElement>(null);
   const bodyEditRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
@@ -1165,6 +1180,116 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     [inlineEditTarget, onContentDraftChange, getInlineTextSelection]
   );
 
+  const handleApplyPartialFontFamily = useCallback(
+    (fontFamily: string) => {
+      if (!onContentDraftChange || !inlineEditTarget) return;
+      const sel = getInlineTextSelection();
+      if (!sel) return;
+      const [a, b] = sel;
+      const c = contentRef.current;
+      const t = inlineEditTarget;
+      if (t.kind === "title") {
+        const plain = c.title ?? "";
+        onContentDraftChange({
+          ...c,
+          posterTitleFontFamilyRanges: applyFontFamilyOnSelection(
+            plain,
+            c.posterTitleFontFamilyRanges,
+            a,
+            b,
+            fontFamily
+          ),
+        });
+        return;
+      }
+      if (t.kind === "footer") {
+        const plain = c.emphasizedTitle ?? "";
+        onContentDraftChange({
+          ...c,
+          posterFooterFontFamilyRanges: applyFontFamilyOnSelection(
+            plain,
+            c.posterFooterFontFamilyRanges,
+            a,
+            b,
+            fontFamily
+          ),
+        });
+        return;
+      }
+      if (t.kind === "body") {
+        const id = t.id;
+        const plain = c.posterBodies?.find((x) => x.id === id)?.text ?? "";
+        const map = { ...(c.posterBodyFontFamilyRanges ?? {}) };
+        map[id] = applyFontFamilyOnSelection(plain, map[id], a, b, fontFamily);
+        onContentDraftChange({ ...c, posterBodyFontFamilyRanges: map });
+        return;
+      }
+      if (t.kind === "subtitle") {
+        const id = t.id;
+        const plain = c.posterSubtitles?.find((x) => x.id === id)?.text ?? "";
+        const map = { ...(c.posterSubtitleFontFamilyRanges ?? {}) };
+        map[id] = applyFontFamilyOnSelection(plain, map[id], a, b, fontFamily);
+        onContentDraftChange({ ...c, posterSubtitleFontFamilyRanges: map });
+      }
+    },
+    [inlineEditTarget, onContentDraftChange, getInlineTextSelection]
+  );
+
+  const handleApplyPartialFontScale = useCallback(
+    (scale: number) => {
+      if (!onContentDraftChange || !inlineEditTarget) return;
+      const sel = getInlineTextSelection();
+      if (!sel) return;
+      const [a, b] = sel;
+      const c = contentRef.current;
+      const t = inlineEditTarget;
+      if (t.kind === "title") {
+        const plain = c.title ?? "";
+        onContentDraftChange({
+          ...c,
+          posterTitleFontScaleRanges: applyFontScaleOnSelection(
+            plain,
+            c.posterTitleFontScaleRanges,
+            a,
+            b,
+            scale
+          ),
+        });
+        return;
+      }
+      if (t.kind === "footer") {
+        const plain = c.emphasizedTitle ?? "";
+        onContentDraftChange({
+          ...c,
+          posterFooterFontScaleRanges: applyFontScaleOnSelection(
+            plain,
+            c.posterFooterFontScaleRanges,
+            a,
+            b,
+            scale
+          ),
+        });
+        return;
+      }
+      if (t.kind === "body") {
+        const id = t.id;
+        const plain = c.posterBodies?.find((x) => x.id === id)?.text ?? "";
+        const map = { ...(c.posterBodyFontScaleRanges ?? {}) };
+        map[id] = applyFontScaleOnSelection(plain, map[id], a, b, scale);
+        onContentDraftChange({ ...c, posterBodyFontScaleRanges: map });
+        return;
+      }
+      if (t.kind === "subtitle") {
+        const id = t.id;
+        const plain = c.posterSubtitles?.find((x) => x.id === id)?.text ?? "";
+        const map = { ...(c.posterSubtitleFontScaleRanges ?? {}) };
+        map[id] = applyFontScaleOnSelection(plain, map[id], a, b, scale);
+        onContentDraftChange({ ...c, posterSubtitleFontScaleRanges: map });
+      }
+    },
+    [inlineEditTarget, onContentDraftChange, getInlineTextSelection]
+  );
+
   useImperativeHandle(
     ref,
     () => ({
@@ -1172,26 +1297,32 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       handleTogglePartialStyle,
       handleApplyPartialColor,
       handleApplyPartialWeight,
+      handleApplyPartialFontFamily,
+      handleApplyPartialFontScale,
       getInlineEditActive: () => inlineEditTarget !== null,
     }),
-    [getInlineTextSelection, handleTogglePartialStyle, handleApplyPartialColor, handleApplyPartialWeight, inlineEditTarget]
+    [
+      getInlineTextSelection,
+      handleTogglePartialStyle,
+      handleApplyPartialColor,
+      handleApplyPartialWeight,
+      handleApplyPartialFontFamily,
+      handleApplyPartialFontScale,
+      inlineEditTarget,
+    ]
   );
 
   useEffect(() => {
-    const t = activeTextTarget;
-    const sig = !t
-      ? ""
-      : t.kind === "title"
-        ? "title"
-        : t.kind === "footer"
-          ? "footer"
-          : t.kind === "body"
-            ? `body:${t.id}`
-            : `subtitle:${t.id}`;
+    const targets = inlineEditTarget ? [inlineEditTarget] : formatTargets;
+    const sig = targets
+      .map((t) =>
+        t.kind === "title" || t.kind === "footer" ? t.kind : `${t.kind}:${t.id}`
+      )
+      .join("|");
     if (lastFormatTargetSigRef.current === sig) return;
     lastFormatTargetSigRef.current = sig;
-    onTextFormatTargetChange?.(t);
-  }, [activeTextTarget, onTextFormatTargetChange]);
+    onTextFormatTargetsChange?.(targets);
+  }, [inlineEditTarget, formatTargets, onTextFormatTargetsChange]);
 
   useEffect(() => {
     onInlineEditChange?.(inlineEditTarget !== null);
@@ -2325,8 +2456,19 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                       (content.title ?? "").length,
                       content.posterTitleColorRanges
                     );
+                    const titleFonts = sanitizeFontFamilyRanges(
+                      (content.title ?? "").length,
+                      content.posterTitleFontFamilyRanges
+                    );
+                    const titleScales = sanitizeFontScaleRanges(
+                      (content.title ?? "").length,
+                      content.posterTitleFontScaleRanges
+                    );
                     const hasTri =
-                      Boolean(br?.length || ir?.length || ur?.length) || cr.length > 0;
+                      Boolean(br?.length || ir?.length || ur?.length) ||
+                      cr.length > 0 ||
+                      titleFonts.length > 0 ||
+                      titleScales.length > 0;
                     if (!content.title?.trim() && !hasTri) {
                       return (
                         <span style={{ ...tw, color: "#C4C4C4", textShadow: "none" }}>
@@ -2352,6 +2494,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                             defaultWeight: TITLE_DEFAULT_FONT_WEIGHT,
                             strongWeight: 800,
                             colors: adjColors,
+                            fontFamilies: titleFonts,
+                            fontScales: titleScales,
                           })}
                           {endsDot ? (
                             <span
@@ -2459,12 +2603,22 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                       s.text.length,
                       content.posterSubtitleWeightRanges?.[s.id]
                     );
+                    const subFonts = sanitizeFontFamilyRanges(
+                      s.text.length,
+                      content.posterSubtitleFontFamilyRanges?.[s.id]
+                    );
+                    const subScales = sanitizeFontScaleRanges(
+                      s.text.length,
+                      content.posterSubtitleFontScaleRanges?.[s.id]
+                    );
                     const hasSubTri =
                       Boolean(content.posterSubtitleBoldRanges?.[s.id]?.length) ||
                       Boolean(content.posterSubtitleItalicRanges?.[s.id]?.length) ||
                       Boolean(content.posterSubtitleUnderlineRanges?.[s.id]?.length) ||
                       subColors.length > 0 ||
-                      subWeights.length > 0;
+                      subWeights.length > 0 ||
+                      subFonts.length > 0 ||
+                      subScales.length > 0;
                     if (!hasSubTri) return s.text;
                     const subBaseStyle = subtitleTextStyle(
                       content,
@@ -2486,6 +2640,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                         strongWeight: 700,
                         colors: subColors,
                         weights: subWeights,
+                        fontFamilies: subFonts,
+                        fontScales: subScales,
                       }
                     );
                   })()}
@@ -2515,12 +2671,22 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             b.text.length,
             content.posterBodyWeightRanges?.[b.id]
           );
+          const bFontRanges = sanitizeFontFamilyRanges(
+            b.text.length,
+            content.posterBodyFontFamilyRanges?.[b.id]
+          );
+          const bScaleRanges = sanitizeFontScaleRanges(
+            b.text.length,
+            content.posterBodyFontScaleRanges?.[b.id]
+          );
           const hasTri =
             Boolean(content.posterBodyBoldRanges?.[b.id]?.length) ||
             Boolean(content.posterBodyItalicRanges?.[b.id]?.length) ||
             Boolean(content.posterBodyUnderlineRanges?.[b.id]?.length) ||
             bColorRanges.length > 0 ||
-            bWeightRanges.length > 0;
+            bWeightRanges.length > 0 ||
+            bFontRanges.length > 0 ||
+            bScaleRanges.length > 0;
           return (
             <DraggableCanvasOverlay
               key={b.id}
@@ -2586,6 +2752,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                         strongWeight: 700,
                         colors: bColorRanges,
                         weights: bWeightRanges,
+                        fontFamilies: bFontRanges,
+                        fontScales: bScaleRanges,
                       }
                     )
                   ) : content.posterBodyBoldRanges?.[b.id]?.length ? (
@@ -2639,11 +2807,21 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                   (content.emphasizedTitle ?? "").length,
                   content.posterFooterColorRanges
                 );
+                const fFonts = sanitizeFontFamilyRanges(
+                  (content.emphasizedTitle ?? "").length,
+                  content.posterFooterFontFamilyRanges
+                );
+                const fScales = sanitizeFontScaleRanges(
+                  (content.emphasizedTitle ?? "").length,
+                  content.posterFooterFontScaleRanges
+                );
                 const hasTriF =
                   Boolean(content.posterFooterBoldRanges?.length) ||
                   Boolean(content.posterFooterItalicRanges?.length) ||
                   Boolean(content.posterFooterUnderlineRanges?.length) ||
-                  fColorRanges.length > 0;
+                  fColorRanges.length > 0 ||
+                  fFonts.length > 0 ||
+                  fScales.length > 0;
                 if (!content.emphasizedTitle?.trim() && !hasTriF) {
                   return (
                     <span style={{ ...ft, color: "#C4C4C4" }}>{FOOTER_PLACEHOLDER_TEXT}</span>
@@ -2656,7 +2834,13 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                     content.posterFooterItalicRanges,
                     content.posterFooterUnderlineRanges,
                     footerTextStyle(content, disclaimerSize),
-                    { defaultWeight: 400, strongWeight: 700, colors: fColorRanges }
+                    {
+                      defaultWeight: 400,
+                      strongWeight: 700,
+                      colors: fColorRanges,
+                      fontFamilies: fFonts,
+                      fontScales: fScales,
+                    }
                   )
                 ) : (
                   content.emphasizedTitle
