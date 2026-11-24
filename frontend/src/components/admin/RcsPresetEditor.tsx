@@ -156,10 +156,7 @@ export function RcsPresetEditor() {
           <ArrowLeft className="mr-1 h-4 w-4" /> 갤러리
         </Button>
         <div className="min-w-0 flex-1">
-          <AxisBrandTitle className="text-sm" />
-          <p className="truncate text-xs text-gray-500">
-            RCS 문구·폰트 편집 · {existing?.name ?? templateId}
-          </p>
+          <AxisBrandTitle className="text-sm" subtitle={`RCS 문구·폰트 · ${existing?.name ?? templateId}`} />
         </div>
         <Button
           type="button"

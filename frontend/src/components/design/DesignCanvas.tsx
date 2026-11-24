@@ -329,8 +329,6 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     }
     return out;
   }, [selectedKeys, content.posterBodies, content.bodyText, content.posterSubtitles]);
-  const formatTarget = formatTargets[0] ?? null;
-  const activeTextTarget = inlineEditTarget ?? formatTarget;
   const titleEditRef = useRef<HTMLTextAreaElement>(null);
   const footerEditRef = useRef<HTMLTextAreaElement>(null);
   const bodyEditRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
