@@ -43,6 +43,12 @@ import {
   isPlacardTemplateId,
   PLACARD_BODY_TEXT_ALIGN,
 } from "@/design/placardCanvasLayout";
+import {
+  applyAlignToTargets,
+  applyColorToTargets,
+  applyScaleToTargets,
+  applyTypoToTargets,
+} from "@/design/applyTextFormatToTargets";
 
 export const SCALE_MIN = 25;
 export const SCALE_MAX = 300;
@@ -84,7 +90,8 @@ export function patchTypo(
 }
 
 type SharedProps = {
-  target: CanvasTextEditTarget;
+  /** 선택된 텍스트 요소들 (1개 이상). 표시·값은 첫 항목 기준 */
+  targets: CanvasTextEditTarget[];
   content: DesignContent;
   onDraft: (next: DesignContent | ((prev: DesignContent) => DesignContent)) => void;
   templateId?: string;
@@ -95,10 +102,14 @@ type SharedProps = {
   onApplyPartialColor?: (hex: string) => void;
   /** 캔버스 인라인 편집 중 텍스트 일부만 굵기 적용 (부제·본문) */
   onApplyPartialWeight?: (weight: number) => void;
+  /** 인라인 편집 중 텍스트 일부만 글꼴 적용 */
+  onApplyPartialFontFamily?: (fontFamily: string) => void;
+  /** 인라인 편집 중 텍스트 일부만 크기(%) 적용 */
+  onApplyPartialFontScale?: (scale: number) => void;
 };
 
 export function CanvasTextFormatControls({
-  target,
+  targets,
   content,
   onDraft,
   templateId,
@@ -107,9 +118,14 @@ export function CanvasTextFormatControls({
   onTogglePartialStyle,
   onApplyPartialColor,
   onApplyPartialWeight,
+  onApplyPartialFontFamily,
+  onApplyPartialFontScale,
 }: SharedProps) {
   void selectionRenderTick;
+  const target = targets[0];
+  if (!target) return null;
   const kind = target.kind;
+  const multi = targets.length > 1;
   const isSafetyFixedScale =
     isSafetyCautionTemplate(templateId) && (kind === "title" || kind === "body");
   const isPlacardFixedBodyAlign = isPlacardTemplateId(templateId) && kind === "body";
@@ -230,112 +246,35 @@ export function CanvasTextFormatControls({
   const setScale = (n: number) => {
     if (isSafetyFixedScale) return;
     const v = Math.round(Math.min(SCALE_MAX, Math.max(SCALE_MIN, n)));
-    if (kind === "title") onDraft((prev) => ({ ...prev, posterTitleFontScale: v }));
-    else if (kind === "footer") onDraft((prev) => ({ ...prev, posterFooterFontScale: v }));
-    else if (kind === "body") {
-      const id = resolvePosterBodyTypographyBlockId(content, target.id);
-      onDraft((prev) => {
-        const resolvedId = resolvePosterBodyTypographyBlockId(prev, id);
-        return {
-          ...prev,
-          posterBodyFontScales: { ...(prev.posterBodyFontScales ?? {}), [resolvedId]: v },
-        };
-      });
-    } else if (kind === "subtitle") {
-      onDraft((prev) => ({
-        ...prev,
-        posterSubtitleFontScales: { ...(prev.posterSubtitleFontScales ?? {}), [target.id]: v },
-      }));
+    const sel = getSelection?.();
+    if (!multi && sel && sel[0] !== sel[1] && onApplyPartialFontScale) {
+      onApplyPartialFontScale(v);
+      return;
     }
+    onDraft((prev) => applyScaleToTargets(prev, targets, v));
   };
 
   const setAlign = (a: CanvasTextAlign) => {
     if (isPlacardFixedBodyAlign) return;
-    if (kind === "title") onDraft((prev) => ({ ...prev, posterTitleAlign: a }));
-    else if (kind === "footer") onDraft((prev) => ({ ...prev, posterFooterAlign: a }));
-    else if (kind === "body") {
-      const id = resolvePosterBodyTypographyBlockId(content, target.id);
-      onDraft((prev) => {
-        const resolvedId = resolvePosterBodyTypographyBlockId(prev, id);
-        return {
-          ...prev,
-          posterBodyAligns: { ...(prev.posterBodyAligns ?? {}), [resolvedId]: a },
-        };
-      });
-    } else
-      onDraft((prev) => ({
-        ...prev,
-        posterSubtitleAlign: { ...(prev.posterSubtitleAlign ?? {}), [target.id]: a },
-      }));
+    onDraft((prev) => applyAlignToTargets(prev, targets, a));
   };
 
   /**
    * 글자색 적용
-   * - 캔버스 인라인 편집 중 텍스트 일부를 선택했다면 → 해당 구간에만 색상 적용(부분)
-   * - 그 외(요소만 선택된 상태) → 전체 색상 적용
+   * - 인라인 편집 중 일부 선택 → 구간 색상
+   * - 복수 요소 선택 → 각 요소 전체 색상
    */
   const setColor = (hex: string) => {
     const sel = getSelection?.();
-    if (sel && sel[0] !== sel[1] && onApplyPartialColor) {
+    if (!multi && sel && sel[0] !== sel[1] && onApplyPartialColor) {
       onApplyPartialColor(hex);
       return;
     }
-    if (kind === "title") onDraft({ ...content, titleColor: hex });
-    else if (kind === "footer") onDraft({ ...content, posterFooterColor: hex });
-    else if (kind === "body") {
-      const id = resolvePosterBodyTypographyBlockId(content, target.id);
-      onDraft((prev) => {
-        const resolvedId = resolvePosterBodyTypographyBlockId(prev, id);
-        const colors = { ...(prev.posterBodyColors ?? {}), [resolvedId]: hex };
-        const first = resolvePosterBodyTypographyBlockId(prev, "body-1");
-        return {
-          ...prev,
-          posterBodyColors: colors,
-          ...(resolvedId === first || first === resolvedId ? { bodyColor: hex } : {}),
-        };
-      });
-    } else if (kind === "subtitle") {
-      onDraft((prev) => ({
-        ...prev,
-        posterSubtitleColors: { ...(prev.posterSubtitleColors ?? {}), [target.id]: hex },
-        ...(target.id === (prev.posterSubtitles?.[0]?.id ?? "subtitle-1")
-          ? { subtitleColor: hex }
-          : {}),
-      }));
-    }
+    onDraft((prev) => applyColorToTargets(prev, targets, hex));
   };
 
   const applyTypo = (patch: Partial<PosterElementTypography>) => {
-    if (kind === "title")
-      onDraft((prev) => ({
-        ...prev,
-        posterTitleTypography: patchTypo(prev.posterTitleTypography, patch),
-      }));
-    else if (kind === "footer")
-      onDraft((prev) => ({
-        ...prev,
-        posterFooterTypography: patchTypo(prev.posterFooterTypography, patch),
-      }));
-    else if (kind === "body") {
-      const bodyId = resolvePosterBodyTypographyBlockId(content, target.id);
-      onDraft((prev) => {
-        const resolvedId = resolvePosterBodyTypographyBlockId(prev, bodyId);
-        return {
-          ...prev,
-          posterBodyTypography: {
-            ...(prev.posterBodyTypography ?? {}),
-            [resolvedId]: patchTypo(getPosterBodyBlockTypography(prev, resolvedId), patch),
-          },
-        };
-      });
-    } else
-      onDraft((prev) => ({
-        ...prev,
-        posterSubtitleTypography: {
-          ...(prev.posterSubtitleTypography ?? {}),
-          [target.id]: patchTypo(prev.posterSubtitleTypography?.[target.id], patch),
-        },
-      }));
+    onDraft((prev) => applyTypoToTargets(prev, targets, patch));
   };
 
   const partialRange = getSelection?.();
@@ -356,7 +295,7 @@ export function CanvasTextFormatControls({
 
   const tryPartial = (which: "bold" | "italic" | "underline") => {
     const sel = getSelection?.();
-    if (sel && sel[0] !== sel[1] && onTogglePartialStyle) {
+    if (!multi && sel && sel[0] !== sel[1] && onTogglePartialStyle) {
       onTogglePartialStyle(which);
       return;
     }
@@ -372,7 +311,7 @@ export function CanvasTextFormatControls({
 
   const applyWeight = (weight: number) => {
     const sel = getSelection?.();
-    if (sel && sel[0] !== sel[1] && onApplyPartialWeight) {
+    if (!multi && sel && sel[0] !== sel[1] && onApplyPartialWeight) {
       onApplyPartialWeight(weight);
       return;
     }
@@ -380,7 +319,13 @@ export function CanvasTextFormatControls({
   };
 
   const setFont = (fam: string) => {
-    applyTypo({ fontFamily: fam.trim() ? fam : undefined });
+    const next = fam.trim();
+    const sel = getSelection?.();
+    if (!multi && sel && sel[0] !== sel[1] && onApplyPartialFontFamily && next) {
+      onApplyPartialFontFamily(next);
+      return;
+    }
+    applyTypo({ fontFamily: next ? next : undefined });
   };
 
   const fontSelectValue =

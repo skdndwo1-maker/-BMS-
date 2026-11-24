@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { DESIGN_CANVAS_BASE_VIEW_SCALE } from "@/design/canvasViewConstants";
 import type { AssetLayer, CanvasSize, DesignContent } from "@/design/types";
+import { resolveFontFamily } from "@/design/canvasTextTypography";
 import { VI_COLORS, TITLE_DEFAULT_FONT_WEIGHT } from "@/design/viCanvasConstants";
 
 const DARK = "#1A1A1A";
@@ -144,13 +145,27 @@ export function RCSCanvas({
   const bodyFontSize = baseBodyFontSize * ((content.bodySize || 100) / 100);
   const bodyIndent = Math.max(W * 0.008, titleFontSize * 0.05);
 
-  const titleWeight = getFontWeight((content as any).titleWeight);
-  const bodyWeight = getFontWeight((content as any).bodyWeight);
+  const titleWeight = getFontWeight((content as { titleWeight?: string }).titleWeight);
+  const bodyWeight = getFontWeight((content as { bodyWeight?: string }).bodyWeight);
+  const titleFontFamily = resolveFontFamily(
+    content.posterTitleTypography?.fontFamily ?? content.titleFont
+  );
+  const titleLineHeight = content.posterTitleTypography?.lineHeight ?? 1.15;
 
   const emphasizedText = (content.emphasizedTitle || "").trim();
   const title = content.title || "";
   const body = content.bodyText || "";
   const titleToBodyGap = W * 0.01 * 2.5;
+
+  const titleSpanStyle = (color: string): CSSProperties => ({
+    fontSize: `${titleFontSize}px`,
+    fontWeight: titleWeight,
+    fontFamily: titleFontFamily,
+    color,
+    lineHeight: titleLineHeight,
+    display: "inline",
+    whiteSpace: "pre-wrap",
+  });
 
   const renderTitle = () => {
     if (!emphasizedText || !title.includes(emphasizedText)) {
@@ -158,17 +173,7 @@ export function RCSCanvas({
         <div style={{ marginBottom: `${titleToBodyGap}px` }}>
           {title.split("\n").map((line, idx) => (
             <div key={idx}>
-              <span
-                style={{
-                  fontSize: `${titleFontSize}px`,
-                  fontWeight: titleWeight,
-                  color: DARK,
-                  lineHeight: 1.15,
-                  display: "inline",
-                }}
-              >
-                {line}
-              </span>
+              <span style={titleSpanStyle(DARK)}>{line}</span>
             </div>
           ))}
         </div>
@@ -183,31 +188,11 @@ export function RCSCanvas({
             {part.split("\n").map((line, lineIdx) => (
               <span key={lineIdx}>
                 {lineIdx > 0 && <br />}
-                <span
-                  style={{
-                    fontSize: `${titleFontSize}px`,
-                    fontWeight: titleWeight,
-                    color: DARK,
-                    lineHeight: 1.15,
-                    display: "inline",
-                  }}
-                >
-                  {line}
-                </span>
+                <span style={titleSpanStyle(DARK)}>{line}</span>
               </span>
             ))}
             {idx < parts.length - 1 ? (
-              <span
-                style={{
-                  fontSize: `${titleFontSize}px`,
-                  fontWeight: titleWeight,
-                  color: MAGENTA,
-                  lineHeight: 1.15,
-                  display: "inline",
-                }}
-              >
-                {emphasizedText}
-              </span>
+              <span style={titleSpanStyle(MAGENTA)}>{emphasizedText}</span>
             ) : null}
           </span>
         ))}

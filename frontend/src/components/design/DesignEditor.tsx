@@ -362,12 +362,12 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   const [layoutSnapEnabled, setLayoutSnapEnabled] = useState(true);
 
   const designCanvasRef = useRef<DesignCanvasHandle>(null);
-  const [textFormatTarget, setTextFormatTarget] = useState<CanvasTextEditTarget | null>(null);
+  const [textFormatTargets, setTextFormatTargets] = useState<CanvasTextEditTarget[]>([]);
   const [textOptionsPanelOpen, setTextOptionsPanelOpen] = useState(false);
   const [textFormatSelectionTick, setTextFormatSelectionTick] = useState(0);
   useEffect(() => {
-    if (textFormatTarget) setTextOptionsPanelOpen(true);
-  }, [textFormatTarget]);
+    if (textFormatTargets.length > 0) setTextOptionsPanelOpen(true);
+  }, [textFormatTargets]);
 
   const hasCanvasImage = Boolean(content.image);
   const showImageAdjustPanel =
@@ -839,7 +839,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
           onFocusChange={handleFocusChange}
           showViGrid={showViGrid}
           layoutSnapEnabled={layoutSnapEnabled}
-          onTextFormatTargetChange={setTextFormatTarget}
+          onTextFormatTargetsChange={setTextFormatTargets}
           onCanvasTextSelectionChanged={() => setTextFormatSelectionTick((n) => n + 1)}
         />
       );
@@ -1221,7 +1221,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                     </div>
                   ) : (
                     <CanvasTextFormatPanel
-                      target={textFormatTarget}
+                      targets={textFormatTargets}
                       content={content}
                       onDraft={setContentWithHistory}
                       templateId={actualTemplateId}
@@ -1230,12 +1230,19 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                       onTogglePartialStyle={(w) => designCanvasRef.current?.handleTogglePartialStyle(w)}
                       onApplyPartialColor={(hex) => designCanvasRef.current?.handleApplyPartialColor(hex)}
                       onApplyPartialWeight={(w) => designCanvasRef.current?.handleApplyPartialWeight(w)}
+                      onApplyPartialFontFamily={(f) =>
+                        designCanvasRef.current?.handleApplyPartialFontFamily(f)
+                      }
+                      onApplyPartialFontScale={(s) =>
+                        designCanvasRef.current?.handleApplyPartialFontScale(s)
+                      }
                       onClose={() => setTextOptionsPanelOpen(false)}
                     />
                   )
                 ) : null}
                 <p className="text-[9px] text-gray-500 leading-snug px-0.5">
-                  Shift+클릭으로 여러 요소를 추가·해제해 함께 이동·정렬할 수 있습니다. 빈 배경을 클릭하면 선택이 해제됩니다.
+                  Shift+클릭으로 여러 텍스트를 잡아 함께 서식·이동·정렬할 수 있습니다. 더블클릭 후 글자를
+                  드래그하면 일부만 색·글꼴·크기를 바꿀 수 있습니다.
                 </p>
 
                 {null}

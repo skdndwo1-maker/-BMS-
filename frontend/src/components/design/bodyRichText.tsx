@@ -1,6 +1,13 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { BoldRange } from "@/design/bodyBoldRanges";
-import type { CharRange, ColorRange, WeightRange } from "@/design/charStyleRanges";
+import type {
+  CharRange,
+  ColorRange,
+  FontFamilyRange,
+  FontScaleRange,
+  WeightRange,
+} from "@/design/charStyleRanges";
+import { resolveFontFamily } from "@/design/canvasTextTypography";
 
 /**
  * plain 텍스트 + 굵게 구간(문자 오프셋)으로 렌더 (입력란에 ** 없음)
@@ -52,6 +59,8 @@ export function renderPlainWithTriStyleRanges(
     strongWeight?: number;
     colors?: ColorRange[];
     weights?: WeightRange[];
+    fontFamilies?: FontFamilyRange[];
+    fontScales?: FontScaleRange[];
   }
 ): ReactNode {
   const dw =
@@ -62,6 +71,17 @@ export function renderPlainWithTriStyleRanges(
   const sw = opts?.strongWeight ?? 700;
   const colors = opts?.colors;
   const weights = opts?.weights;
+  const fontFamilies = opts?.fontFamilies;
+  const fontScales = opts?.fontScales;
+  const baseFontPx = (() => {
+    const fs = baseStyle.fontSize;
+    if (typeof fs === "number") return fs;
+    if (typeof fs === "string") {
+      const n = parseFloat(fs);
+      return Number.isFinite(n) ? n : undefined;
+    }
+    return undefined;
+  })();
   const pts = new Set<number>([0, plain.length]);
   const pushPts = (rs: { start: number; end: number }[] | undefined) => {
     for (const r of rs ?? []) {
@@ -74,6 +94,8 @@ export function renderPlainWithTriStyleRanges(
   pushPts(underline);
   pushPts(colors);
   pushPts(weights);
+  pushPts(fontFamilies);
+  pushPts(fontScales);
   const arr = [...pts].sort((a, b) => a - b);
   const nodes: ReactNode[] = [];
   let k = 0;
@@ -87,11 +109,15 @@ export function renderPlainWithTriStyleRanges(
     const isU = underline?.some((r) => mid >= r.start && mid < r.end) ?? false;
     const cr = colors?.find((r) => mid >= r.start && mid < r.end);
     const wr = weights?.find((r) => mid >= r.start && mid < r.end);
+    const fr = fontFamilies?.find((r) => mid >= r.start && mid < r.end);
+    const sr = fontScales?.find((r) => mid >= r.start && mid < r.end);
     const style: CSSProperties = { ...baseStyle };
     style.fontWeight = wr ? wr.weight : isB ? Math.max(dw, sw) : dw;
     style.fontStyle = isI ? "italic" : baseStyle.fontStyle ?? "normal";
     style.textDecoration = isU ? "underline" : baseStyle.textDecoration ?? "none";
     if (cr) style.color = cr.color;
+    if (fr) style.fontFamily = resolveFontFamily(fr.fontFamily);
+    if (sr && baseFontPx != null) style.fontSize = `${baseFontPx * (sr.scale / 100)}px`;
     nodes.push(
       <span key={k++} style={style}>
         {plain.slice(s, e)}

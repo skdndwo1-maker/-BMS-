@@ -463,7 +463,7 @@ export function TemplateGallery() {
           ) : null}
           {filteredTemplates.map((template) => {
             const isPlacard = template.category === "placard";
-            const layoutEditable = template.category !== "rcs";
+            const isRcs = template.category === "rcs";
             return (
               <div
                 key={template.id}
@@ -587,29 +587,25 @@ export function TemplateGallery() {
                     </span>
                     {editMode ? (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "flex-end" }}>
-                        {layoutEditable ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/admin/templates/${template.id}/builder`);
-                            }}
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 600,
-                              color: "#fff",
-                              background: PAL.coral,
-                              border: "none",
-                              borderRadius: 999,
-                              padding: "4px 8px",
-                              cursor: "pointer",
-                            }}
-                          >
-                            레이아웃 편집
-                          </button>
-                        ) : (
-                          <span style={{ fontSize: 10, color: PAL.mutedSoft }}>RCS는 레이아웃 편집 불가</span>
-                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/admin/templates/${template.id}/builder`);
+                          }}
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: "#fff",
+                            background: PAL.coral,
+                            border: "none",
+                            borderRadius: 999,
+                            padding: "4px 8px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {isRcs ? "문구·폰트 편집" : "레이아웃 편집"}
+                        </button>
                         <button
                           type="button"
                           title="정보 수정"

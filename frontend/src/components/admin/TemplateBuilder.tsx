@@ -50,6 +50,7 @@ import { useAuthSession } from "@/contexts/AuthSessionContext";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { readFileAsDataUrl } from "@/lib/designContentPersistence";
 import { AxisBrandTitle } from "@/components/AxisBrandTitle";
+import { RcsPresetEditor } from "@/components/admin/RcsPresetEditor";
 
 const ADDABLE: TemplateLayoutElementKind[] = [
   "title",
@@ -333,14 +334,7 @@ export function TemplateBuilder() {
   }
 
   if (existing?.category === "rcs") {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
-        <p className="text-sm text-gray-600">RCS 템플릿은 레이아웃 편집을 지원하지 않습니다.</p>
-        <Button type="button" onClick={() => navigate("/brand-graphics")}>
-          갤러리로
-        </Button>
-      </div>
-    );
+    return <RcsPresetEditor />;
   }
 
   const logoUrl = logoSrc(layout.logo.option);

@@ -176,7 +176,7 @@ export function MyDesignsDashboard() {
                         onFocusChange={() => {}}
                         showViGrid={false}
                         layoutSnapEnabled={false}
-                        onTextFormatTargetChange={() => {}}
+                        onTextFormatTargetsChange={() => {}}
                         onCanvasTextSelectionChanged={() => {}}
                       />
                     </div>

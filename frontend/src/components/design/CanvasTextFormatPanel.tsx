@@ -6,7 +6,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type Props = {
-  target: CanvasTextEditTarget | null;
+  targets: CanvasTextEditTarget[];
   content: DesignContent;
   onDraft: (next: DesignContent | ((prev: DesignContent) => DesignContent)) => void;
   templateId?: string;
@@ -16,6 +16,8 @@ type Props = {
   onTogglePartialStyle?: (which: "bold" | "italic" | "underline") => void;
   onApplyPartialColor?: (hex: string) => void;
   onApplyPartialWeight?: (weight: number) => void;
+  onApplyPartialFontFamily?: (fontFamily: string) => void;
+  onApplyPartialFontScale?: (scale: number) => void;
   onClose: () => void;
 };
 
@@ -36,7 +38,7 @@ function targetLabel(t: CanvasTextEditTarget, content: DesignContent): string {
 }
 
 export function CanvasTextFormatPanel({
-  target,
+  targets,
   content,
   onDraft,
   templateId,
@@ -45,8 +47,17 @@ export function CanvasTextFormatPanel({
   onTogglePartialStyle,
   onApplyPartialColor,
   onApplyPartialWeight,
+  onApplyPartialFontFamily,
+  onApplyPartialFontScale,
   onClose,
 }: Props) {
+  const label =
+    targets.length === 0
+      ? null
+      : targets.length === 1
+        ? targetLabel(targets[0], content)
+        : `${targets.length}개 텍스트`;
+
   return (
     <div
       className="border border-gray-200 bg-white shadow-md rounded-lg overflow-hidden flex flex-col max-h-[min(70vh,520px)]"
@@ -54,8 +65,8 @@ export function CanvasTextFormatPanel({
     >
       <div className="flex items-center justify-between gap-2 px-2 py-1.5 border-b border-gray-100 bg-gray-50 shrink-0">
         <span className="text-[11px] font-semibold text-gray-800">문자 옵션</span>
-        {target ? (
-          <span className="text-[10px] text-[#F43182] font-medium truncate">{targetLabel(target, content)}</span>
+        {label ? (
+          <span className="text-[10px] text-[#F43182] font-medium truncate">{label}</span>
         ) : null}
         <Button
           type="button"
@@ -69,22 +80,32 @@ export function CanvasTextFormatPanel({
         </Button>
       </div>
       <div className="p-2 overflow-y-auto flex flex-col gap-2 text-left">
-        {!target ? (
+        {targets.length === 0 ? (
           <p className="text-[11px] text-gray-500 leading-snug">
-            캔버스에서 텍스트 상자를 한 번 클릭해 선택한 뒤, 여기서 서식을 조절할 수 있습니다. (내용 편집은 더블클릭)
+            캔버스에서 텍스트를 클릭해 선택하세요. Shift+클릭으로 여러 개를 잡은 뒤 함께 서식을 바꿀 수 있습니다.
+            더블클릭 후 글자를 드래그하면 일부만 색·글꼴·크기를 바꿀 수 있습니다.
           </p>
         ) : (
-          <CanvasTextFormatControls
-            target={target}
-            content={content}
-            onDraft={onDraft}
-            templateId={templateId}
-            selectionRenderTick={selectionRenderTick}
-            getSelection={getSelection}
-            onTogglePartialStyle={onTogglePartialStyle}
-            onApplyPartialColor={onApplyPartialColor}
-            onApplyPartialWeight={onApplyPartialWeight}
-          />
+          <>
+            {targets.length > 1 ? (
+              <p className="text-[10px] text-gray-500 leading-snug">
+                선택한 {targets.length}개 텍스트에 동일 옵션이 적용됩니다.
+              </p>
+            ) : null}
+            <CanvasTextFormatControls
+              targets={targets}
+              content={content}
+              onDraft={onDraft}
+              templateId={templateId}
+              selectionRenderTick={selectionRenderTick}
+              getSelection={getSelection}
+              onTogglePartialStyle={onTogglePartialStyle}
+              onApplyPartialColor={onApplyPartialColor}
+              onApplyPartialWeight={onApplyPartialWeight}
+              onApplyPartialFontFamily={onApplyPartialFontFamily}
+              onApplyPartialFontScale={onApplyPartialFontScale}
+            />
+          </>
         )}
       </div>
     </div>
