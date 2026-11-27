@@ -1729,6 +1729,8 @@ ${modeIntro}${
   }
 
 [U+ 브랜드 가이드라인 및 참고 문맥]
+- **2026 U+ 전사 브랜드 가이드라인**의 **[AI 요약 — 네이밍 생성·검수 필수 준수]** 블록이 있으면 계층·접두·독립 작명·금지 규정의 **최우선 근거**로 적용하세요. PDF 원문 발췌·RAG는 보강입니다.
+- Simply. U+ Guidebook은 언어·감성 톤 근거로 함께 적용하세요.
 ${guide}
 
 ${auditCategoryPromptSection ? `${auditCategoryPromptSection}\n\n` : ""}[사용자가 추가로 입력한 참고 정보·업로드 요약 등]

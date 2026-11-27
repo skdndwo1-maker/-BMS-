@@ -3,8 +3,9 @@ import { existsSync } from "node:fs";
 
 import {
   extractGuidelineSummarySource,
-  GUIDELINE_SUMMARY_PROMPT_VERSION,
+  guidelineSummaryPromptVersion,
   summarizeGuidelineFile,
+  type GuidelineSummaryPurpose,
 } from "./gemini/guideline.js";
 import { getSupabaseServiceClient } from "./supabase.js";
 import type { GuidelineRecord } from "./store.js";
@@ -24,12 +25,13 @@ function sha256Hex(input: string): string {
 export function checksumForGuidelineSummarySource(
   source:
     | { kind: "text"; sourceText: string }
-    | { kind: "image"; base64: string }
+    | { kind: "image"; base64: string },
+  promptVersion: string = guidelineSummaryPromptVersion("design")
 ): string {
   const payload =
     source.kind === "text"
-      ? `${source.sourceText}${GUIDELINE_SUMMARY_PROMPT_VERSION}`
-      : `image:${source.base64}${GUIDELINE_SUMMARY_PROMPT_VERSION}`;
+      ? `${source.sourceText}${promptVersion}`
+      : `image:${source.base64}${promptVersion}`;
   return sha256Hex(payload);
 }
 
@@ -101,17 +103,21 @@ export async function getOrCreateGuidelineSummary(opts: {
   sourceKey: string;
   filePath: string;
   mimeType: string;
+  purpose?: GuidelineSummaryPurpose;
 }): Promise<GuidelineSummaryCacheResult> {
+  const purpose = opts.purpose ?? "design";
+  const promptVersion = guidelineSummaryPromptVersion(purpose);
   const source = await extractGuidelineSummarySource(opts.filePath, opts.mimeType);
   if (source.kind === "empty") {
-    const generated = await summarizeGuidelineFile(opts.filePath, opts.mimeType);
+    const generated = await summarizeGuidelineFile(opts.filePath, opts.mimeType, { purpose });
     return { summary: generated.summary, cache: "skip", model: generated.model };
   }
 
   const checksum = checksumForGuidelineSummarySource(
     source.kind === "text"
       ? { kind: "text", sourceText: source.sourceText }
-      : { kind: "image", base64: source.base64 }
+      : { kind: "image", base64: source.base64 },
+    promptVersion
   );
 
   const hit = await lookupCachedSummary(opts.sourceKey, checksum);
@@ -119,14 +125,14 @@ export async function getOrCreateGuidelineSummary(opts: {
     return { summary: hit.summary, cache: "hit", model: hit.model };
   }
 
-  const generated = await summarizeGuidelineFile(opts.filePath, opts.mimeType);
+  const generated = await summarizeGuidelineFile(opts.filePath, opts.mimeType, { purpose });
   if (generated.summary.trim() && !generated.summary.startsWith("[GEMINI_API_KEY 없음]")) {
     await upsertCachedSummary({
       source_key: opts.sourceKey,
       checksum,
       summary: generated.summary,
       model: generated.model,
-      prompt_version: GUIDELINE_SUMMARY_PROMPT_VERSION,
+      prompt_version: promptVersion,
     });
   }
   return { summary: generated.summary, cache: "miss", model: generated.model };
@@ -134,9 +140,10 @@ export async function getOrCreateGuidelineSummary(opts: {
 
 /** 슬롯에 aiSummary가 없으면 캐시/생성 후 로컬 meta에 반영. */
 export async function ensureGuidelineAiSummary(
-  g: GuidelineRecord
+  g: GuidelineRecord,
+  opts?: { purpose?: GuidelineSummaryPurpose; force?: boolean }
 ): Promise<{ record: GuidelineRecord; cache: "hit" | "miss" | "skip" | "local" }> {
-  if (g.aiSummary?.trim()) {
+  if (g.aiSummary?.trim() && !opts?.force) {
     return { record: g, cache: "local" };
   }
   if (!process.env.GEMINI_API_KEY?.trim()) {
@@ -151,6 +158,7 @@ export async function ensureGuidelineAiSummary(
     sourceKey: g.id,
     filePath: abs,
     mimeType: g.mimeType,
+    purpose: opts?.purpose ?? "design",
   });
 
   const next: GuidelineRecord = {

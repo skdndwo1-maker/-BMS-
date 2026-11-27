@@ -368,6 +368,7 @@ export async function rollbackAdminDeliverableGuide(guideId: string, note?: stri
 export type AiGenerationSettings = {
   version: 1;
   imageBasePrompt: string;
+  namingBasePrompt: string;
   updatedAt?: string;
 };
 
@@ -376,26 +377,45 @@ export const DEFAULT_AI_IMAGE_BASE_PROMPT = [
   "텍스트 절대 제외, 장식적요소제외(인물과 배경만 사실적으로 표현)",
 ].join("\n");
 
+export const DEFAULT_AI_NAMING_BASE_PROMPT = [
+  "LG U+ B2C 브랜드 네이밍 기준으로 제안·검수한다.",
+  "2026 U+ 전사 브랜드 가이드라인(AI 요약·원문·RAG)의 계층·접두·독립 작명·금지 규정을 철저히 준수한다.",
+  "Simply. U+ Guidebook의 언어·감성 톤을 함께 반영한다.",
+  "발음·의미·차별성·법무/상표 리스크를 균형 있게 본다.",
+  "과장·오해 소지가 큰 표현, 타사 혼동·차별·비하 표현은 피한다.",
+  "사용자 입력(카테고리·개요·참고)을 우선 반영하고, 아래 기본 지침은 상시 보조 원칙으로 적용한다.",
+].join("\n");
+
+/** 네이밍 고정 참조 — 서버 NAMING_FIXED_GUIDELINE_IDS와 동일 */
+export const NAMING_COMPANY_BRAND_GUIDELINE_ID = "uplus-company-brand-2026" as const;
+export const NAMING_COMPANY_BRAND_GUIDELINE_LABEL = "2026 U+ 전사 브랜드 가이드라인";
+
 export async function getAdminAiGenerationSettings(): Promise<AiGenerationSettings> {
   const payload = await adminFetch("", "/api/admin/ai-generation-settings", { method: "GET" });
   const settings = payload.settings as AiGenerationSettings | undefined;
   return {
     version: 1,
     imageBasePrompt: settings?.imageBasePrompt?.trim() || DEFAULT_AI_IMAGE_BASE_PROMPT,
+    namingBasePrompt: settings?.namingBasePrompt?.trim() || DEFAULT_AI_NAMING_BASE_PROMPT,
     updatedAt: settings?.updatedAt,
   };
 }
 
-export async function saveAdminAiGenerationSettings(
-  imageBasePrompt: string
-): Promise<AiGenerationSettings> {
+export async function saveAdminAiGenerationSettings(input: {
+  imageBasePrompt: string;
+  namingBasePrompt: string;
+}): Promise<AiGenerationSettings> {
   const payload = await adminFetch("", "/api/admin/ai-generation-settings", {
     method: "PUT",
-    body: JSON.stringify({ imageBasePrompt }),
+    body: JSON.stringify({
+      imageBasePrompt: input.imageBasePrompt,
+      namingBasePrompt: input.namingBasePrompt,
+    }),
   });
   return (payload.settings ?? {
     version: 1,
-    imageBasePrompt,
+    imageBasePrompt: input.imageBasePrompt,
+    namingBasePrompt: input.namingBasePrompt,
   }) as AiGenerationSettings;
 }
 

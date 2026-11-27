@@ -36,6 +36,7 @@ import {
   ensureFixedGuidelineSlotAsync,
   FIXED_GUIDELINE_SOURCES,
   LEGACY_LIBRARY_ONLY_GUIDELINE_ID,
+  COMPANY_BRAND_GUIDELINE_2026_ID,
   NAMING_FIXED_GUIDELINE_DISPLAY,
   NAMING_FIXED_GUIDELINE_IDS
 } from "./fixedGuidelines.js";
@@ -88,6 +89,7 @@ import { handleLibraryList } from "./libraryAssets.js";
 import { handleTemplateCatalogGet, handleTemplateCatalogPut } from "./templateCatalog.js";
 import {
   composeImageDirection,
+  composeNamingRequest,
   handleAiGenerationSettingsGet,
   handleAiGenerationSettingsPut,
   loadAiGenerationSettings,
@@ -227,21 +229,81 @@ async function buildGuidelineRagSection(
 }
 
 const NAMING_EXTRACT_CHARS = 20_000;
+/** 전사 브랜드에 AI 요약이 있을 때 원문 발췌를 조금 줄여 요약+원문+RAG가 프롬프트 한도에 들어가게 함 */
+const NAMING_COMPANY_EXTRACT_WITH_SUMMARY_CHARS = 14_000;
 
-/** 브랜드 네이밍: Simply(언어·감성) + 2026 전사 브랜드 가이드. 슬롯당 상한 후 합쳐 4만 자 안에 넣습니다. */
+/**
+ * 브랜드 네이밍: Simply(언어·감성) + 2026 전사 브랜드 가이드.
+ * 전사 가이드는 AI 요약을 필수 준수 블록으로 앞에 두고, 원문 발췌·RAG로 보강합니다.
+ */
 async function buildNamingGuidelineBlock(queryText?: string): Promise<string> {
   const blocks: string[] = [];
   for (const id of NAMING_FIXED_GUIDELINE_IDS) {
+    const display = NAMING_FIXED_GUIDELINE_DISPLAY[id];
+    const parts: string[] = [];
+    let summaryChars = 0;
+
+    if (id === COMPANY_BRAND_GUIDELINE_2026_ID) {
+      let g = getGuideline(id);
+      if (!g) {
+        try {
+          await ensureFixedGuidelineSlotAsync(id);
+          g = getGuideline(id);
+        } catch (e) {
+          console.warn(
+            "[naming] company brand slot ensure failed:",
+            e instanceof Error ? e.message : String(e)
+          );
+        }
+      }
+      if (g && !g.aiSummary?.trim() && process.env.GEMINI_API_KEY?.trim()) {
+        try {
+          const ensured = await ensureGuidelineAiSummary(g, { purpose: "naming" });
+          g = ensured.record;
+          console.log(
+            `[guideline_summary] naming company-brand cache=${ensured.cache} chars=${(g.aiSummary ?? "").length}`
+          );
+        } catch (e) {
+          console.warn(
+            "[naming] company brand AI summary failed:",
+            e instanceof Error ? e.message : String(e)
+          );
+        }
+      }
+      const summary = g?.aiSummary?.trim() ?? "";
+      if (summary) {
+        summaryChars = summary.length;
+        parts.push(
+          `[AI 요약 — 네이밍 생성·검수 필수 준수]\n계층·접두·독립 작명·금지 표현 등 아래 요약을 최우선으로 따르세요.\n\n${summary}`
+        );
+      } else {
+        parts.push(
+          `[AI 요약 — 네이밍 생성·검수 필수 준수]\n(요약 없음 — PDF 원문 발췌·RAG로 보강. 관리자 가이드에서 AI 요약을 생성하세요.)`
+        );
+      }
+    }
+
+    const extractLimit =
+      id === COMPANY_BRAND_GUIDELINE_2026_ID && summaryChars > 0
+        ? NAMING_COMPANY_EXTRACT_WITH_SUMMARY_CHARS
+        : NAMING_EXTRACT_CHARS;
     const loaded = await loadGuidelineExtract(id);
-    const body = loaded.text.trim().slice(0, NAMING_EXTRACT_CHARS);
+    const body = loaded.text.trim().slice(0, extractLimit);
     console.log(
-      `[guideline_extract] naming source=${id} cache=${loaded.cache} chars=${body.length}`
+      `[guideline_extract] naming source=${id} cache=${loaded.cache} chars=${body.length} summaryChars=${summaryChars}`
     );
-    blocks.push(
-      body
-        ? `[${NAMING_FIXED_GUIDELINE_DISPLAY[id]}]\n${body}`
-        : `[${NAMING_FIXED_GUIDELINE_DISPLAY[id]}]\n가이드라인 추출문을 찾지 못했습니다.`
-    );
+
+    if (body) {
+      parts.push(
+        id === COMPANY_BRAND_GUIDELINE_2026_ID
+          ? `[PDF 원문 발췌 — 요약 보강·세부 규정]\n${body}`
+          : body
+      );
+    } else if (parts.length === 0) {
+      parts.push("가이드라인 추출문을 찾지 못했습니다.");
+    }
+
+    blocks.push(`[${display}]\n${parts.join("\n\n")}`);
   }
   const rag = await buildGuidelineRagSection(queryText, NAMING_FIXED_GUIDELINE_IDS, "naming");
   return blocks.join("\n\n---\n\n") + rag;
@@ -796,11 +858,12 @@ app.post("/api/guidelines/:id/sync-fixed", async (req, res) => {
     return;
   }
   const id = req.params.id;
+  const summaryPurpose = id === COMPANY_BRAND_GUIDELINE_2026_ID ? "naming" : "design";
   try {
     let record = copyFixedGuidelineToSlot(id);
     try {
       const abs = resolveStoredPath(record.storedRelativePath);
-      const { summary } = await summarizeGuidelineFile(abs, record.mimeType);
+      const { summary } = await summarizeGuidelineFile(abs, record.mimeType, { purpose: summaryPurpose });
       record = { ...record, aiSummary: summary, aiAnalyzedAt: new Date().toISOString() };
       setGuideline(record);
     } catch (e) {
@@ -839,6 +902,7 @@ app.post("/api/guidelines/:id/sync-supabase", async (req, res) => {
     return;
   }
   const id = req.params.id;
+  const summaryPurpose = id === COMPANY_BRAND_GUIDELINE_2026_ID ? "naming" : "design";
   try {
     if (!canSyncGuidelineFromSupabase()) {
       res.status(503).json({ error: "SUPABASE_URL 또는 SUPABASE_SERVICE_ROLE_KEY가 설정되어 있지 않습니다." });
@@ -847,7 +911,7 @@ app.post("/api/guidelines/:id/sync-supabase", async (req, res) => {
     let record = await syncGuidelineFromSupabaseLibrary(id);
     try {
       const abs = resolveStoredPath(record.storedRelativePath);
-      const { summary } = await summarizeGuidelineFile(abs, record.mimeType);
+      const { summary } = await summarizeGuidelineFile(abs, record.mimeType, { purpose: summaryPurpose });
       record = { ...record, aiSummary: summary, aiAnalyzedAt: new Date().toISOString() };
       setGuideline(record);
     } catch (e) {
@@ -958,13 +1022,14 @@ app.post("/api/guidelines/:id/analyze", async (req, res) => {
 
   const abs = rec?.storedRelativePath ? resolveStoredPath(rec.storedRelativePath) : "";
   const hasFile = Boolean(abs && existsSync(abs));
+  const summaryPurpose = id === COMPANY_BRAND_GUIDELINE_2026_ID ? "naming" : "design";
 
   try {
     let summary = rec?.aiSummary?.trim() ?? "";
     let aiAnalyzedAt = rec?.aiAnalyzedAt ?? null;
 
     if (hasFile && rec) {
-      const generated = await summarizeGuidelineFile(abs, rec.mimeType);
+      const generated = await summarizeGuidelineFile(abs, rec.mimeType, { purpose: summaryPurpose });
       summary = generated.summary;
       aiAnalyzedAt = new Date().toISOString();
       rec = {
@@ -1306,6 +1371,21 @@ app.post(
         return;
       }
 
+      const rawUserRequestText = requestText;
+      let namingBasePrompt: string | null = null;
+      try {
+        const aiSettings = await loadAiGenerationSettings();
+        namingBasePrompt = aiSettings.namingBasePrompt?.trim() || null;
+        if (namingBasePrompt) {
+          requestText = composeNamingRequest(namingBasePrompt, rawUserRequestText);
+        }
+      } catch (e) {
+        console.warn(
+          "[naming] ai-generation-settings load failed; continuing without naming base prompt:",
+          e instanceof Error ? e.message : String(e)
+        );
+      }
+
       const ragQuery = [auditCategory, auditName, namingIntent, requestText, referenceText].filter(Boolean).join("\n\n");
       let guidelineBlock = "";
       try {
@@ -1330,7 +1410,7 @@ app.post(
         mode,
         auditName,
         namingIntent,
-        requestText
+        requestText: rawUserRequestText
       });
 
       const referenceNotes = [
@@ -1369,7 +1449,9 @@ app.post(
           auditName,
           namingIntent,
           auditCategory,
-          requestText,
+          requestText: rawUserRequestText,
+          composedRequestText: requestText,
+          namingBasePrompt,
           referenceText: referenceText || null,
           supplementIncluded: Boolean(supplement),
           namingFixedGuidelineIds: [...NAMING_FIXED_GUIDELINE_IDS],

@@ -13,10 +13,26 @@ import { logLlmCall, modelCandidates } from "../llm/router.js";
 
 /** 요약 프롬프트 문구를 바꾸면 버전을 올려 캐시가 자동 무효화됨. */
 export const GUIDELINE_SUMMARY_PROMPT_VERSION = "v1";
+export const GUIDELINE_SUMMARY_PROMPT_VERSION_NAMING = "naming-v1";
+
+export type GuidelineSummaryPurpose = "design" | "naming";
 
 const GUIDELINE_SUMMARY_INSTRUCTION = `다음은 브랜드/ VI 가이드라인 문서에서 추출한 텍스트입니다.
 디자인 검수에 쓸 수 있도록 핵심 규칙(로고, 색상, 타이포, 여백, 금지 사항 등)을 한국어로 구조화해 요약하세요.
 불릿과 짧은 문장으로, 800자 이내로 작성하세요.
+
+--- 문서 본문 ---
+`;
+
+const GUIDELINE_SUMMARY_INSTRUCTION_NAMING = `다음은 U+ 전사 브랜드 가이드라인 문서에서 추출한 텍스트입니다.
+**브랜드 네이밍 생성·검수**에 바로 쓸 수 있도록 핵심 규칙을 한국어로 구조화해 요약하세요.
+반드시 포함할 것:
+- 브랜드 계층(Personal/Enterprise/AI 등)과 마스터·서브 브랜드 관계
+- U+ / LG U+ / ixi 등 접두·표기·결합·독립 작명 허용·금지 룰
+- 서비스·상품·캠페인 네이밍 시 지켜야 할 규정과 NO-GO
+- 협업·제휴 표기 규칙(있을 경우)
+색상·타이포·여백 등 조형 규칙은 네이밍과 직접 관련된 것만 간단히 언급하세요.
+불릿과 짧은 문장으로, 1500자 이내로 작성하세요.
 
 --- 문서 본문 ---
 `;
@@ -54,8 +70,17 @@ export async function extractGuidelineSummarySource(
   return { kind: "empty" };
 }
 
-export function buildGuidelineSummaryPrompt(sourceText: string): string {
-  return `${GUIDELINE_SUMMARY_INSTRUCTION}${sourceText}`;
+export function buildGuidelineSummaryPrompt(
+  sourceText: string,
+  purpose: GuidelineSummaryPurpose = "design"
+): string {
+  const instruction =
+    purpose === "naming" ? GUIDELINE_SUMMARY_INSTRUCTION_NAMING : GUIDELINE_SUMMARY_INSTRUCTION;
+  return `${instruction}${sourceText}`;
+}
+
+export function guidelineSummaryPromptVersion(purpose: GuidelineSummaryPurpose = "design"): string {
+  return purpose === "naming" ? GUIDELINE_SUMMARY_PROMPT_VERSION_NAMING : GUIDELINE_SUMMARY_PROMPT_VERSION;
 }
 
 /** 검수 API 키 없을 때도 PDF에서 규칙 맥락을 주기 위한 발췌 */
@@ -82,13 +107,15 @@ export async function excerptGuidelineForInspection(g: GuidelineRecord): Promise
 /** PDF·텍스트 가이드를 AI로 요약, 이미지 가이드는 이미지 멀티모달로 요약 */
 export async function summarizeGuidelineFile(
   filePath: string,
-  mimeType: string
+  mimeType: string,
+  opts?: { purpose?: GuidelineSummaryPurpose }
 ): Promise<{ summary: string; excerpt: string; model: string | null }> {
+  const purpose = opts?.purpose ?? "design";
   const key = getKey();
   const source = await extractGuidelineSummarySource(filePath, mimeType);
 
   if (source.kind === "image") {
-    return summarizeImageWithGemini(source.base64, source.mimeType);
+    return summarizeImageWithGemini(source.base64, source.mimeType, purpose);
   }
 
   if (source.kind === "empty") {
@@ -112,7 +139,7 @@ export async function summarizeGuidelineFile(
   }
 
   const genAI = new GoogleGenerativeAI(key);
-  const prompt = buildGuidelineSummaryPrompt(source.sourceText);
+  const prompt = buildGuidelineSummaryPrompt(source.sourceText, purpose);
 
   let lastErr: unknown;
   for (const mid of modelCandidates("guideline_summarize")) {
@@ -144,7 +171,8 @@ export async function summarizeGuidelineFile(
 
 async function summarizeImageWithGemini(
   base64: string,
-  mimeType: string
+  mimeType: string,
+  purpose: GuidelineSummaryPurpose = "design"
 ): Promise<{ summary: string; excerpt: string; model: string | null }> {
   const key = getKey();
   if (!key) {
@@ -157,7 +185,9 @@ async function summarizeImageWithGemini(
   }
   const genAI = new GoogleGenerativeAI(key);
   const prompt =
-    "이 이미지는 브랜드 가이드라인 문서의 일부입니다. 디자인 검수에 필요한 핵심 규칙을 한국어로 요약하세요 (800자 이내).";
+    purpose === "naming"
+      ? "이 이미지는 U+ 전사 브랜드 가이드라인입니다. 네이밍 생성·검수용으로 계층·접두·독립 작명·금지 규정을 한국어로 요약하세요 (1500자 이내)."
+      : "이 이미지는 브랜드 가이드라인 문서의 일부입니다. 디자인 검수에 필요한 핵심 규칙을 한국어로 요약하세요 (800자 이내).";
   let lastErr: unknown;
   for (const mid of modelCandidates("guideline_summarize")) {
     const tLlm = Date.now();

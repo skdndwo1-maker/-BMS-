@@ -27,7 +27,7 @@ const SLOT_USAGE: Record<string, string> = {
   "design-editor-brand-guideline": "디자인 에디터 검수(조형)·이미지 생성 — 원문 + RAG",
   "uplus-vi-guideline": "브랜드 디자인 검수(선택 시) — 요약 + RAG",
   "simply-uplus-guideline": "문안 제안·초안, 디자인 검수 문안, 네이밍 — 원문 + RAG",
-  "uplus-company-brand-2026": "네이밍 생성·검수 — 원문 + RAG",
+  "uplus-company-brand-2026": "네이밍 생성·검수 — AI 요약(필수) + 원문 + RAG",
 };
 
 type DetailTab = "supplements" | "summary" | "extract" | "chunks";
@@ -404,8 +404,11 @@ export function AdminGuidelines() {
                 {tab === "summary" ? (
                   <div className="space-y-3">
                     <p className="text-[12px] text-gray-500">
-                      브랜드 디자인 검수에서 이 가이드를 선택했을 때 프롬프트 앞부분에 들어가는 요약입니다. 저장하면 즉시
-                      반영되고 서버 재시작 후에도 유지됩니다.
+                      {selectedSlot === "uplus-company-brand-2026"
+                        ? "네이밍 생성·검수 프롬프트에 최우선으로 들어가는 요약입니다. 저장하면 즉시 반영되고 서버 재시작 후에도 유지됩니다."
+                        : selectedSlot === "uplus-vi-guideline"
+                          ? "브랜드 디자인 검수에서 이 가이드를 선택했을 때 프롬프트 앞부분에 들어가는 요약입니다. 저장하면 즉시 반영되고 서버 재시작 후에도 유지됩니다."
+                          : "이 가이드의 AI 요약입니다. 기능별로 원문·RAG와 함께 쓰일 수 있습니다. 저장하면 즉시 반영되고 서버 재시작 후에도 유지됩니다."}
                     </p>
                     <Textarea
                       value={summaryDraft}
