@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import {
   ArrowLeft,
   Download,
+  History,
   Loader2,
   ZoomIn,
   ZoomOut,
@@ -31,6 +32,13 @@ import {
   Magnet,
   X,
 } from 'lucide-react';
+import { DesignHistoryPanel } from "./DesignHistoryPanel";
+import {
+  cloneDesignContent,
+  createHistoryEntry,
+  createInitialHistory,
+  type DesignHistoryState,
+} from "@/design/designContentHistory";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { captureDesignCanvas } from "@/lib/designCanvasCapture";
@@ -225,60 +233,150 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   }, [isXBannerTemplate]);
 
   /**
-   * Undo (Cmd/Ctrl+Z) — 모든 content 변경을 자동으로 스냅샷.
-   *
-   * 핵심 설계:
-   *  - 어떤 경로(setContentWithHistory, raw setContent, 자식 컴포넌트의 onContentChange 등)로
-   *    content가 바뀌든 단일 useEffect가 변경 직전 값을 undo 스택에 push.
-   *  - 드래그/리사이즈/슬라이더처럼 짧은 시간 안에 수십~수백 회 변경이 일어나는 경우는
-   *    burst의 "시작 직전 상태" 하나만 기록(coalescing)되도록 함 → 1회 Cmd+Z로 직전 상태 복원.
-   *  - undo 적용 자체로 발생하는 setContent는 isApplyingUndoRef 플래그로 스택에 들어가지 않게 함.
+   * 작업 기록 (세션 메모리) — Photoshop History와 유사.
+   * 한 제스처(텍스트 입력 세션 / 드래그 이동) = 히스토리 1단계.
+   * 타이핑 한 글자마다 쌓지 않음. DB 없음 → 새로고침·재로그인 시 소멸.
    */
-  const UNDO_LIMIT = 200;
-  const COALESCE_MS = 250;
-  const undoRef = useRef<{ stack: DesignContent[]; idx: number }>({ stack: [], idx: -1 });
+  const HISTORY_LIMIT = 200;
+  /** 제스처 없이 연속 변경만 있을 때(슬라이더 등) 짧은 병합 창 */
+  const COALESCE_MS = 400;
+  const historyRef = useRef<DesignHistoryState>(createInitialHistory(content));
   const lastSnapshotAtRef = useRef<number>(0);
-  const isApplyingUndoRef = useRef<boolean>(false);
+  const isApplyingHistoryRef = useRef(false);
   const prevContentRef = useRef<DesignContent | null>(null);
-  /** 텍스트 입력처럼 매 글자 push가 부담스러운 경우, 같은 키 안에서는 burst로만 합쳐 1회 push 보장 */
-  const lastBurstKeyRef = useRef<string | null>(null);
+  /** 진행 중 제스처 키(text / move 등). 있으면 같은 키 동안 tip만 갱신 */
+  const gestureKeyRef = useRef<string | null>(null);
+  const gestureLabelRef = useRef<string>("편집");
+  /** 현재 제스처에서 이미 새 히스토리 항목을 만들었는지 */
+  const gestureCommittedRef = useRef(false);
+  const [historyTick, setHistoryTick] = useState(0);
+  const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
+  const bumpHistoryUi = useCallback(() => setHistoryTick((n) => n + 1), []);
 
-  /** 내부 helper: content 변화를 history에 반영 */
-  const pushHistorySnapshot = useCallback((prev: DesignContent) => {
-    const u = undoRef.current;
-    const trimmed = u.stack.slice(0, u.idx + 1);
-    trimmed.push(prev);
-    while (trimmed.length > UNDO_LIMIT) trimmed.shift();
-    undoRef.current = { stack: trimmed, idx: trimmed.length - 1 };
+  const beginHistoryGesture = useCallback((key: string, label: string) => {
+    if (gestureKeyRef.current === key) return;
+    gestureKeyRef.current = key;
+    gestureLabelRef.current = label;
+    gestureCommittedRef.current = false;
   }, []);
 
-  // content 자동 추적: 모든 변경 경로를 일관되게 기록
+  const endHistoryGesture = useCallback(() => {
+    gestureKeyRef.current = null;
+    gestureCommittedRef.current = false;
+    gestureLabelRef.current = "편집";
+  }, []);
+
+  const resetHistory = useCallback(
+    (next: DesignContent, label = "시작") => {
+      historyRef.current = {
+        entries: [createHistoryEntry(next, label)],
+        idx: 0,
+      };
+      lastSnapshotAtRef.current = 0;
+      gestureKeyRef.current = null;
+      gestureCommittedRef.current = false;
+      prevContentRef.current = next;
+      bumpHistoryUi();
+    },
+    [bumpHistoryUi]
+  );
+
+  const jumpHistoryTo = useCallback(
+    (idx: number) => {
+      const h = historyRef.current;
+      if (idx < 0 || idx >= h.entries.length || idx === h.idx) return;
+      const entry = h.entries[idx];
+      historyRef.current = { ...h, idx };
+      isApplyingHistoryRef.current = true;
+      endHistoryGesture();
+      lastSnapshotAtRef.current = 0;
+      setContent(cloneDesignContent(entry.content));
+      bumpHistoryUi();
+    },
+    [bumpHistoryUi, endHistoryGesture]
+  );
+
+  const undoHistory = useCallback(() => {
+    jumpHistoryTo(historyRef.current.idx - 1);
+  }, [jumpHistoryTo]);
+
+  const redoHistory = useCallback(() => {
+    jumpHistoryTo(historyRef.current.idx + 1);
+  }, [jumpHistoryTo]);
+
+  // content 자동 추적 → 타임라인에 스냅샷 (제스처 단위)
   useEffect(() => {
     if (prevContentRef.current === null) {
+      historyRef.current = createInitialHistory(content);
       prevContentRef.current = content;
+      bumpHistoryUi();
       return;
     }
     if (prevContentRef.current === content) return;
 
-    if (isApplyingUndoRef.current) {
+    if (isApplyingHistoryRef.current) {
       prevContentRef.current = content;
-      isApplyingUndoRef.current = false;
+      isApplyingHistoryRef.current = false;
       return;
     }
 
     const now = Date.now();
-    const inBurst =
-      lastBurstKeyRef.current !== null ||
-      now - lastSnapshotAtRef.current < COALESCE_MS;
-    if (!inBurst) {
-      pushHistorySnapshot(prevContentRef.current);
+    const h = historyRef.current;
+    const inGesture = gestureKeyRef.current !== null;
+    const timedBurst =
+      !inGesture && now - lastSnapshotAtRef.current < COALESCE_MS;
+
+    const pushNew = (label: string) => {
+      const base = h.entries.slice(0, h.idx + 1);
+      base.push(createHistoryEntry(content, label, now));
+      while (base.length > HISTORY_LIMIT) base.shift();
+      historyRef.current = { entries: base, idx: base.length - 1 };
+      bumpHistoryUi();
+    };
+
+    const updateTip = () => {
+      const tip = historyRef.current.entries[historyRef.current.idx];
+      if (!tip) return;
+      const nextEntries = historyRef.current.entries.slice();
+      nextEntries[historyRef.current.idx] = {
+        ...tip,
+        at: now,
+        label: inGesture ? gestureLabelRef.current : tip.label,
+        content: cloneDesignContent(content),
+      };
+      historyRef.current = { entries: nextEntries, idx: historyRef.current.idx };
+      bumpHistoryUi();
+    };
+
+    if (inGesture) {
+      if (!gestureCommittedRef.current) {
+        pushNew(gestureLabelRef.current);
+        gestureCommittedRef.current = true;
+      } else {
+        updateTip();
+      }
+    } else if (timedBurst) {
+      updateTip();
+    } else {
+      pushNew("편집");
     }
+
     lastSnapshotAtRef.current = now;
     prevContentRef.current = content;
-  }, [content, pushHistorySnapshot]);
+  }, [content, bumpHistoryUi]);
 
-  /** 기존 호환을 위한 별칭. 이제 일반 setContent와 같다 — 스냅샷은 useEffect가 처리 */
+  /** 기존 호환 별칭 — 스냅샷은 useEffect가 처리 */
   const setContentWithHistory = setContent;
+
+  /** 불러오기·데모 등: 현재 캔버스를 새 히스토리 루트로 교체 */
+  const replaceContentResetHistory = useCallback(
+    (next: DesignContent, label: string) => {
+      isApplyingHistoryRef.current = true;
+      setContent(next);
+      resetHistory(next, label);
+    },
+    [resetHistory]
+  );
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -290,23 +388,19 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
         ae instanceof HTMLInputElement ||
         ae instanceof HTMLTextAreaElement ||
         (ae as HTMLElement | null)?.isContentEditable;
-      if (inEditable) {
-        // 텍스트 입력 자체의 undo는 브라우저에 위임
-        return;
-      }
+      if (inEditable) return;
       e.preventDefault();
-      const u = undoRef.current;
-      if (u.idx < 0) return;
-      const prev = u.stack[u.idx];
-      undoRef.current = { stack: u.stack.slice(0, u.idx), idx: u.idx - 1 };
-      isApplyingUndoRef.current = true;
-      lastBurstKeyRef.current = null;
-      lastSnapshotAtRef.current = 0;
-      setContent(prev);
+      if (e.shiftKey) redoHistory();
+      else undoHistory();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [undoHistory, redoHistory]);
+
+  const historyEntries = historyRef.current.entries;
+  const historyIdx = historyRef.current.idx;
+  void historyTick;
+
   const [showQuickStartDialog, setShowQuickStartDialog] = useState(false);
   const [showExportDialog,     setShowExportDialog]     = useState(false);
   const [showPreview,          setShowPreview]           = useState(false);
@@ -377,20 +471,21 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     if (showImageAdjustPanel) setTextOptionsPanelOpen(true);
   }, [showImageAdjustPanel]);
 
-  // 저장/불러오기 다이얼로그가 열리면 캔버스 VI 그리드를 숨겨 "후면 그리드 패턴"이 비치지 않게 함
+  // 저장/불러오기·보내기 다이얼로그가 열리면 VI 그리드·선택 박스를 숨겨 결과물에 보조선이 안 남게 함
   useEffect(() => {
-    const dialogOpen = activeDialog !== "none";
+    const dialogOpen = activeDialog !== "none" || showExportDialog;
     if (dialogOpen) {
       prevShowViGridRef.current = showViGrid;
       if (showViGrid) setShowViGrid(false);
+      designCanvasRef.current?.clearExportChrome();
       return;
     }
-    // 다이얼로그가 닫히면 이전 상태 복원
+    // 다이얼로그가 닫히면 이전 그리드 상태 복원
     if (prevShowViGridRef.current !== showViGrid) {
       setShowViGrid(prevShowViGridRef.current);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDialog]);
+  }, [activeDialog, showExportDialog]);
 
   // designId로 진입 시 Supabase에서 자동 복원
   useEffect(() => {
@@ -425,7 +520,10 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
         lastLoadedIdRef.current = row.id;
         setDesignId(row.id);
         setDesignName(row.name || "");
-        setContentWithHistory(() => normalizeDesignContentFromStorage(row.canvas_data));
+        replaceContentResetHistory(
+          normalizeDesignContentFromStorage(row.canvas_data),
+          "불러오기"
+        );
         try {
           const rawDraft = sessionStorage.getItem(DESIGN_EDITOR_NAV_DRAFT_KEY);
           if (rawDraft) {
@@ -446,7 +544,10 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
               Date.parse(d.savedAt) > Date.parse(row.updated_at)
             ) {
               if (d.designName != null && d.designName !== "") setDesignName(d.designName);
-              setContentWithHistory(() => normalizeDesignContentFromStorage(d.content));
+              replaceContentResetHistory(
+                normalizeDesignContentFromStorage(d.content),
+                "불러오기 (임시 초안)"
+              );
               if (typeof d.zoom === "number" && Number.isFinite(d.zoom)) setZoom(d.zoom);
             }
           }
@@ -538,7 +639,10 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
       setDesignId(null);
       setDesignName(d.designName ?? "");
       if (typeof d.zoom === "number" && Number.isFinite(d.zoom)) setZoom(d.zoom);
-      setContentWithHistory(() => normalizeDesignContentFromStorage(d.content));
+      replaceContentResetHistory(
+        normalizeDesignContentFromStorage(d.content),
+        "임시 초안"
+      );
     } catch {
       /* ignore */
     } finally {
@@ -634,15 +738,43 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
     window.scrollTo(0, 0);
   }, [template, focusTarget]);
 
-  /**
-   * 자동 history 도입 이후에는 별도 호출이 불필요. (호환을 위해 noop으로 유지)
-   * 텍스트 인라인 편집 시작 시점 등 "burst 시작" 신호로만 사용 가능.
-   */
-  const pushUndoSnapshot = () => {
-    // useEffect가 다음 변경 시 직전 상태를 자동 push 한다.
-    lastBurstKeyRef.current = null;
-    lastSnapshotAtRef.current = 0;
-  };
+  /** 캔버스 인라인 텍스트 편집 시작 → 이후 타이핑은 모두 같은 히스토리 1단계 */
+  const onBeginCanvasTextEdit = useCallback(() => {
+    beginHistoryGesture("text-edit", "텍스트 편집");
+  }, [beginHistoryGesture]);
+
+  const onInlineEditChange = useCallback(
+    (active: boolean) => {
+      if (active) beginHistoryGesture("text-edit", "텍스트 편집");
+      else if (gestureKeyRef.current === "text-edit") endHistoryGesture();
+    },
+    [beginHistoryGesture, endHistoryGesture]
+  );
+
+  /** 패널 input/textarea 포커스 중 타이핑도 한 세션으로 묶음 */
+  useEffect(() => {
+    const isTextField = (el: EventTarget | null) =>
+      el instanceof HTMLInputElement ||
+      el instanceof HTMLTextAreaElement ||
+      (el instanceof HTMLElement && el.isContentEditable);
+
+    const onFocusIn = (e: FocusEvent) => {
+      if (!isTextField(e.target)) return;
+      beginHistoryGesture("text-edit", "텍스트 편집");
+    };
+    const onFocusOut = () => {
+      queueMicrotask(() => {
+        if (isTextField(document.activeElement)) return;
+        if (gestureKeyRef.current === "text-edit") endHistoryGesture();
+      });
+    };
+    document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("focusout", onFocusOut);
+    return () => {
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("focusout", onFocusOut);
+    };
+  }, [beginHistoryGesture, endHistoryGesture]);
 
   if (!template && !catalogLoaded) {
     return (
@@ -675,7 +807,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
   const handleZoomFit = () => setZoom(1.0);
 
   const handleLoadDemo = (demoContent: DesignContent) => {
-    setContentWithHistory(() => demoContent);
+    replaceContentResetHistory(demoContent, "데모 시안");
   };
 
   const captureThumbnailDataUrl = async (): Promise<string | null> => {
@@ -835,7 +967,10 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
           zoom={zoom}
           onContentChange={setContentWithHistory}
           onContentDraftChange={setContent}
-          onBeginCanvasTextEdit={pushUndoSnapshot}
+          onBeginCanvasTextEdit={onBeginCanvasTextEdit}
+          onInlineEditChange={onInlineEditChange}
+          onInteractGestureStart={() => beginHistoryGesture("move", "이동·크기")}
+          onInteractGestureEnd={endHistoryGesture}
           onFocusChange={handleFocusChange}
           showViGrid={showViGrid}
           layoutSnapEnabled={layoutSnapEnabled}
@@ -1017,7 +1152,7 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex max-w-full flex-shrink-0 flex-wrap items-center justify-end gap-2">
               <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1050,6 +1185,20 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                   <TooltipContent>화면 맞춤 (100%)</TooltipContent>
                 </Tooltip>
               </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setHistoryPanelOpen(true)}
+                className="h-8 gap-1.5 border-[#FF7F66]/40 bg-[#FF7F66]/5 font-medium text-gray-800 hover:bg-[#FF7F66]/10"
+              >
+                <History className="h-4 w-4 text-[#FF7F66]" />
+                작업 기록
+                <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] tabular-nums text-gray-500">
+                  {historyIdx + 1}/{historyEntries.length}
+                </span>
+              </Button>
 
               <Button variant="outline" size="sm" onClick={() => setShowPreview(!showPreview)}>
                 <Eye className="w-4 h-4 mr-2" />
@@ -1523,7 +1672,10 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
                               },
                               { replace: true }
                             );
-                            setContentWithHistory(() => normalizeDesignContentFromStorage(row.canvas_data));
+                            replaceContentResetHistory(
+                              normalizeDesignContentFromStorage(row.canvas_data),
+                              "불러오기"
+                            );
                             markContentSaved();
                             toast.success("불러오기 완료");
                             setActiveDialog("none");
@@ -1573,6 +1725,18 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
           </DialogContent>
         </Dialog>
 
+        <DesignHistoryPanel
+          open={historyPanelOpen}
+          onOpenChange={setHistoryPanelOpen}
+          entries={historyEntries}
+          currentIdx={historyIdx}
+          onJump={jumpHistoryTo}
+          canUndo={historyIdx > 0}
+          canRedo={historyIdx < historyEntries.length - 1}
+          onUndo={undoHistory}
+          onRedo={redoHistory}
+        />
+
         {showExportDialog ? (
           <Suspense fallback={null}>
             <ExportDialog
@@ -1580,6 +1744,10 @@ export function DesignEditor({ templateId }: DesignEditorProps) {
               onOpenChange={setShowExportDialog}
               templateName={template.name}
               canvasSize={effectiveCanvasSize}
+              onBeforeCapture={() => {
+                if (showViGrid) setShowViGrid(false);
+                designCanvasRef.current?.clearExportChrome();
+              }}
             />
           </Suspense>
         ) : null}

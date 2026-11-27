@@ -1,3 +1,4 @@
+import type { MouseEvent as ReactMouseEvent } from "react";
 import type { DesignContent } from "@/design/types";
 import type { CanvasTextAlign, PosterElementTypography, PosterTextCase } from "@/design/types";
 import {
@@ -339,13 +340,27 @@ export function CanvasTextFormatControls({
 
   const safeColor = color.length === 7 ? color : "#1A1A1A";
 
+  /** 패널 클릭 시 textarea 선택이 풀리지 않게(부분 스타일 유지) */
+  const keepSel = (e: ReactMouseEvent) => {
+    e.preventDefault();
+  };
+
   return (
     <>
+      {hasPartialRange ? (
+        <p className="text-[10px] text-[#F43182] leading-snug">
+          선택 구간에만 색·글꼴·크기가 적용됩니다. (더블클릭 편집 중)
+        </p>
+      ) : null}
       <select
         className="h-8 w-full max-w-full rounded-md border border-gray-200 bg-white px-1 text-[11px] text-gray-800"
         value={fontSelectValue}
+        onMouseDown={(e) => {
+          // 포커스 이동 전에 선택이 이미 저장돼 있어야 함 — 기본 동작은 유지(옵션 열기)
+          e.stopPropagation();
+        }}
         onChange={(e) => setFont(e.target.value)}
-        title="글꼴 (Pretendard · Geist만 선택)"
+        title={hasPartialRange ? "선택 구간 글꼴" : "글꼴 (Pretendard · Geist만 선택)"}
       >
         {CANVAS_FONT_OPTIONS.map((o) => (
           <option key={o.label + o.value} value={o.value}>
@@ -355,7 +370,15 @@ export function CanvasTextFormatControls({
       </select>
 
       <div className={`flex flex-wrap items-center gap-0.5${isSafetyFixedScale ? " opacity-60 pointer-events-none" : ""}`}>
-        <button type="button" className={iconBtn} title="크기 감소" onClick={() => setScale(scale - 5)}>
+        <button
+          type="button"
+          className={iconBtn}
+          title={hasPartialRange ? "선택 구간 크기 감소" : "크기 감소"}
+          onMouseDown={(e) => {
+            keepSel(e);
+            setScale(scale - 5);
+          }}
+        >
           <Minus className="h-3.5 w-3.5" />
         </button>
         <Input
@@ -364,9 +387,18 @@ export function CanvasTextFormatControls({
           min={SCALE_MIN}
           max={SCALE_MAX}
           value={scale}
+          onMouseDown={(e) => e.stopPropagation()}
           onChange={(e) => setScale(Number(e.target.value) || SCALE_MIN)}
         />
-        <button type="button" className={iconBtn} title="크기 증가" onClick={() => setScale(scale + 5)}>
+        <button
+          type="button"
+          className={iconBtn}
+          title={hasPartialRange ? "선택 구간 크기 증가" : "크기 증가"}
+          onMouseDown={(e) => {
+            keepSel(e);
+            setScale(scale + 5);
+          }}
+        >
           <Plus className="h-3.5 w-3.5" />
         </button>
         <span className="text-[10px] text-gray-400">%</span>
@@ -374,6 +406,7 @@ export function CanvasTextFormatControls({
           className="h-8 max-w-[88px] rounded-md border border-gray-200 bg-white px-1 text-[10px] text-gray-800"
           aria-label="크기 프리셋"
           value={SCALE_PRESETS.includes(scale as (typeof SCALE_PRESETS)[number]) ? scale : ""}
+          onMouseDown={(e) => e.stopPropagation()}
           onChange={(e) => {
             const v = Number(e.target.value);
             if (!Number.isFinite(v)) return;
@@ -397,9 +430,11 @@ export function CanvasTextFormatControls({
           max={SCALE_MAX}
           step={1}
           value={Math.min(SCALE_MAX, Math.max(SCALE_MIN, scale))}
+          onMouseDown={(e) => e.stopPropagation()}
           onChange={(e) => setScale(Number(e.target.value))}
           className="flex-1 min-w-0 h-2 accent-[#F43182] cursor-pointer"
           aria-label="글자 크기 슬라이더"
+          title={hasPartialRange ? "선택 구간 크기" : "전체 크기"}
         />
         <span className="text-[9px] text-gray-500 w-7 shrink-0 text-right">크게</span>
       </div>
@@ -458,16 +493,21 @@ export function CanvasTextFormatControls({
       </div>
 
       <div className="space-y-1">
-        <span className="text-[10px] font-medium text-gray-600">글자 색</span>
+        <span className="text-[10px] font-medium text-gray-600">
+          글자 색{hasPartialRange ? " (선택 구간)" : ""}
+        </span>
         <div className="flex flex-wrap gap-1">
           {TEXT_COLOR_PRESETS.map((p) => (
             <button
               key={p.hex}
               type="button"
-              title={p.label}
-              onClick={() => setColor(p.hex)}
+              title={hasPartialRange ? `선택 구간 ${p.label}` : p.label}
+              onMouseDown={(e) => {
+                keepSel(e);
+                setColor(p.hex);
+              }}
               className={`h-7 w-7 shrink-0 rounded-md border-2 transition-all ${
-                safeColor.toUpperCase() === p.hex.toUpperCase()
+                !hasPartialRange && safeColor.toUpperCase() === p.hex.toUpperCase()
                   ? "border-[#F43182] ring-1 ring-[#F43182]/30"
                   : "border-gray-200 hover:border-gray-400"
               }`}
@@ -484,6 +524,7 @@ export function CanvasTextFormatControls({
             type="color"
             value={safeColor}
             className="h-8 w-10 cursor-pointer rounded border border-gray-200 p-0"
+            onMouseDown={(e) => e.stopPropagation()}
             onChange={(e) => setColor(e.target.value)}
           />
         </label>

@@ -398,6 +398,7 @@ export function DesignAssistantChat({
       const out = await correctDesignCanvas({
         designBase64: cap.base64,
         designMime: cap.mime,
+        templateId,
         guidelineId,
         mode: "inspection_followup",
         overallSummary: inspection.overallSummary,
@@ -446,6 +447,7 @@ export function DesignAssistantChat({
       const out = await correctDesignCanvas({
         designBase64: base64,
         designMime: mime,
+        templateId,
         guidelineId,
         mode: "holistic",
         creativeTopic: creativeTopic.trim() || undefined,
@@ -555,10 +557,10 @@ export function DesignAssistantChat({
   return (
     <div className="space-y-3">
       <p className="text-[10px] leading-snug text-gray-500">
-        <span className="font-medium text-gray-700">디자인 시안(이미지)·검수·교정</span>은{" "}
-        <span className="font-medium text-gray-700">{DESIGN_EDITOR_JASON_PDF_LABEL}</span>만 참조합니다.{" "}
-        <span className="font-medium text-gray-700">텍스트 제안</span>은 동일 PDF와 Simply U+ 가이드라인을 함께 반영합니다.
-        픽토그램·일러스트 생성에는 별도 PDF를 사용하지 않습니다. (V1.1 브랜드 가이드는 AI 추론에 사용하지 않습니다.)
+        <span className="font-medium text-gray-700">검수·교정</span>은 디자인검수와 동일하게{" "}
+        <span className="font-medium text-gray-700">제작물/공통 가이드 규칙 → 규칙 연계 VI → 보조 요약</span> 순으로
+        추론합니다. 규칙이 없으면 {DESIGN_EDITOR_JASON_PDF_LABEL}으로 폴백합니다.{" "}
+        <span className="font-medium text-gray-700">텍스트 제안</span>은 Simply U+를 함께 반영합니다.
       </p>
 
       <div className="space-y-1.5">
@@ -677,10 +679,8 @@ export function DesignAssistantChat({
       {tab === "inspect" && (
         <div className="space-y-2">
           <p className="text-[11px] text-gray-600">
-            캔버스 캡처를 서버에 등록된{" "}
-            <span className="font-medium text-gray-800">{DESIGN_EDITOR_JASON_PDF_LABEL}</span>만 기준으로
-            시각·레이아웃을 검수합니다. 결과는 팝업으로
-            표시됩니다. (PDF 미등록·텍스트 추출 불가 시 검수를 실행할 수 없습니다.)
+            캔버스 캡처를 <span className="font-medium text-gray-800">디자인검수와 동일 파이프라인</span>
+            (제작물 규칙 우선)으로 시각·레이아웃 검수합니다. 결과는 팝업으로 표시됩니다.
           </p>
           <Button
             type="button"
@@ -709,9 +709,9 @@ export function DesignAssistantChat({
       {tab === "correct" && (
         <div className="space-y-2">
           <p className="text-[11px] text-gray-600">
-            뱃지·타이틀·본문·유의·이미지 등을 {DESIGN_EDITOR_JASON_PDF_LABEL} 기준으로 시각 교정한 이미지를{" "}
-            <span className="font-medium text-gray-800">캔버스 오른쪽</span>에 같은 크기·비율로 띄웁니다. 참고하며 왼쪽
-            캔버스에서 따라 그리듯 수정할 수 있습니다.
+            제작물 가이드 규칙·VI(디자인검수와 동일) 기준으로 시각 교정한 이미지를{" "}
+            <span className="font-medium text-gray-800">캔버스 오른쪽</span>에 띄웁니다. 참고하며 왼쪽에서 따라
+            수정할 수 있습니다.
           </p>
           <Button
             type="button"

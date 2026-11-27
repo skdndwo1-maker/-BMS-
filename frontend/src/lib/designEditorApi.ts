@@ -116,6 +116,7 @@ export async function suggestDesignText(body: {
 export async function correctDesignCanvas(body: {
   designBase64: string;
   designMime: string;
+  templateId?: string;
   guidelineId?: string;
   mode: "inspection_followup" | "holistic";
   overallSummary?: string;

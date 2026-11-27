@@ -55,9 +55,17 @@ interface ExportDialogProps {
   templateName: string;
   /** 편집 중인 캔버스 규격 (RCS 등 가변 높이는 effective 크기 전달) */
   canvasSize: CanvasSize;
+  /** 캡처 직전: 선택 해제·그리드 숨김 등 (호출 후 1프레임 대기) */
+  onBeforeCapture?: () => void;
 }
 
-export function ExportDialog({ open, onOpenChange, templateName, canvasSize }: ExportDialogProps) {
+export function ExportDialog({
+  open,
+  onOpenChange,
+  templateName,
+  canvasSize,
+  onBeforeCapture,
+}: ExportDialogProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportType, setExportType] = useState<"png" | "jpeg" | "pdf" | null>(null);
   const [quality, setQuality] = useState(50);
@@ -68,6 +76,10 @@ export function ExportDialog({ open, onOpenChange, templateName, canvasSize }: E
   const outH = Math.max(1, Math.round(logical.height * resMul));
 
   const runCapture = async (backgroundColor: string | null) => {
+    onBeforeCapture?.();
+    // React 상태(그리드 off·선택 해제) 반영 대기
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+
     const el = document.getElementById("design-canvas");
     if (!el) throw new Error("Canvas not found");
     const r = el.getBoundingClientRect();
@@ -81,6 +93,7 @@ export function ExportDialog({ open, onOpenChange, templateName, canvasSize }: E
       scale,
       backgroundColor,
       excludeViGrid: true,
+      excludeCanvasChrome: true,
     });
   };
 

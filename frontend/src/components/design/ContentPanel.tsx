@@ -1860,6 +1860,103 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
           </div>
         ) : null}
 
+        {/* 로고 배치 바로 아래 · 이미지 업로드/생성 위 (RCS 제외) */}
+        {!isRcs ? (
+          <div ref={refPanelBg} className="border-t border-gray-100 pt-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                라운드 배경 박스
+                <span
+                  aria-hidden
+                  className="inline-block h-3.5 w-5 rounded-md border border-gray-300 bg-white"
+                />
+              </Label>
+              {content.panelBgOnCanvas ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-[12px] shrink-0"
+                  onClick={() => onContentChange({ ...content, panelBgOnCanvas: false, panelBgLocked: undefined })}
+                >
+                  제거
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-[12px] shrink-0"
+                  onClick={() =>
+                    onContentChange({
+                      ...content,
+                      panelBgOnCanvas: true,
+                      panelBgRect: content.panelBgRect ?? { x: 0.18, y: 0.08, width: 0.70, height: 0.84 },
+                      rightPanelBg: (content.rightPanelBg ?? "white"),
+                    })
+                  }
+                >
+                  +추가
+                </Button>
+              )}
+            </div>
+            {content.panelBgOnCanvas ? (
+              <>
+                <CanvasElementLockToggle
+                  locked={Boolean(content.panelBgLocked)}
+                  label="배경 박스 잠금"
+                  onToggle={() =>
+                    onContentChange({
+                      ...content,
+                      panelBgLocked: !content.panelBgLocked,
+                    })
+                  }
+                />
+                <p className="text-xs text-gray-400">
+                  추가 후 캔버스에서 선택해 드래그·리사이즈로 조절할 수 있습니다. (항상 맨 뒤)
+                </p>
+                <Label className="text-xs font-semibold text-gray-600">색상</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      { key: "white" as const, label: "백지", hex: "#FFFFFF", border: "#D4D4D4" },
+                      { key: "light-grey" as const, label: "라이트 그레이", hex: "#F2F2F2", border: "#D4D4D4" },
+                      { key: "ivory" as const, label: "아이보리", hex: "#FDFAF0", border: "#D9D5C0" },
+                      { key: "light-pink" as const, label: "연핑크", hex: "#FFF0F5", border: "#F4B8D0" },
+                    ] as const
+                  ).map((opt) => {
+                    const active = (content.rightPanelBg ?? "white") === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => onContentChange({ ...content, rightPanelBg: opt.key })}
+                        className={`flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 text-left transition-all ${
+                          active ? "border-[#FF7F66] shadow-sm" : "border-gray-200 hover:border-gray-300"
+                        }`}
+                      >
+                        <span
+                          className="shrink-0 rounded-md"
+                          style={{
+                            width: 22,
+                            height: 22,
+                            background: opt.hex,
+                            border: `1.5px solid ${opt.border}`,
+                            display: "inline-block",
+                          }}
+                        />
+                        <span className={`text-xs font-medium ${active ? "text-[#FF7F66]" : "text-gray-700"}`}>{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-gray-400">+추가를 눌러 캔버스에 라운드 박스를 생성하세요.</p>
+            )}
+          </div>
+        ) : null}
+
         {/* 이미지 (RCS: 업로드 옵션 제거) */}
         {!isRcs ? (
         <div ref={refImage} className="border-t border-gray-100 pt-4 space-y-2">
@@ -1957,103 +2054,6 @@ export function ContentPanel({ content, onContentChange, onShowQuickStart, templ
             캔버스에서 이미지 박스를 <span className="font-semibold">더블클릭</span>한 뒤 드래그하면 안쪽 이미지 위치를 조절할 수 있습니다. 빈 캔버스 클릭 또는 Esc로 종료합니다.
           </p>
         </div>
-        ) : null}
-
-        {/* 모든 템플릿: 이미지 옵션 아래 배경 라운드 박스 (RCS에서는 제거) */}
-        {!isRcs ? (
-          <div ref={refPanelBg} className="border-t border-gray-100 pt-4 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                라운드 배경 박스
-                <span
-                  aria-hidden
-                  className="inline-block h-3.5 w-5 rounded-md border border-gray-300 bg-white"
-                />
-              </Label>
-              {content.panelBgOnCanvas ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-[12px] shrink-0"
-                  onClick={() => onContentChange({ ...content, panelBgOnCanvas: false, panelBgLocked: undefined })}
-                >
-                  제거
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-[12px] shrink-0"
-                  onClick={() =>
-                    onContentChange({
-                      ...content,
-                      panelBgOnCanvas: true,
-                      panelBgRect: content.panelBgRect ?? { x: 0.18, y: 0.08, width: 0.70, height: 0.84 },
-                      rightPanelBg: (content.rightPanelBg ?? "white"),
-                    })
-                  }
-                >
-                  +추가
-                </Button>
-              )}
-            </div>
-            {content.panelBgOnCanvas ? (
-              <>
-                <CanvasElementLockToggle
-                  locked={Boolean(content.panelBgLocked)}
-                  label="배경 박스 잠금"
-                  onToggle={() =>
-                    onContentChange({
-                      ...content,
-                      panelBgLocked: !content.panelBgLocked,
-                    })
-                  }
-                />
-                <p className="text-xs text-gray-400">
-                  추가 후 캔버스에서 선택해 드래그·리사이즈로 조절할 수 있습니다. (항상 맨 뒤)
-                </p>
-                <Label className="text-xs font-semibold text-gray-600">색상</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(
-                    [
-                      { key: "white" as const, label: "백지", hex: "#FFFFFF", border: "#D4D4D4" },
-                      { key: "light-grey" as const, label: "라이트 그레이", hex: "#F2F2F2", border: "#D4D4D4" },
-                      { key: "ivory" as const, label: "아이보리", hex: "#FDFAF0", border: "#D9D5C0" },
-                      { key: "light-pink" as const, label: "연핑크", hex: "#FFF0F5", border: "#F4B8D0" },
-                    ] as const
-                  ).map((opt) => {
-                    const active = (content.rightPanelBg ?? "white") === opt.key;
-                    return (
-                      <button
-                        key={opt.key}
-                        type="button"
-                        onClick={() => onContentChange({ ...content, rightPanelBg: opt.key })}
-                        className={`flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 text-left transition-all ${
-                          active ? "border-[#FF7F66] shadow-sm" : "border-gray-200 hover:border-gray-300"
-                        }`}
-                      >
-                        <span
-                          className="shrink-0 rounded-md"
-                          style={{
-                            width: 22,
-                            height: 22,
-                            background: opt.hex,
-                            border: `1.5px solid ${opt.border}`,
-                            display: "inline-block",
-                          }}
-                        />
-                        <span className={`text-xs font-medium ${active ? "text-[#FF7F66]" : "text-gray-700"}`}>{opt.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            ) : (
-              <p className="text-xs text-gray-400">+추가를 눌러 캔버스에 라운드 박스를 생성하세요.</p>
-            )}
-          </div>
         ) : null}
 
         {assetSection}

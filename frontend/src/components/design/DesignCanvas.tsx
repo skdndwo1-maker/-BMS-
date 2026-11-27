@@ -14,6 +14,7 @@ import type { DesignContent, CanvasSize, AssetLayer, TemplateCategory, CanvasSha
 import { isTemplateLockedKey } from "@/design/templateLayout";
 import { DraggableAsset } from "./DraggableAsset";
 import { DraggableCanvasOverlay } from "./DraggableCanvasOverlay";
+import { CanvasInteractGestureContext } from "./canvasInteractGesture";
 
 import { defaultCI, defaultBI, defaultSLOGAN } from "@/design/defaultLogos";
 import {
@@ -236,6 +237,9 @@ interface DesignCanvasProps {
   onInlineEditChange?: (active: boolean) => void;
   /** 캔버스에서 텍스트 구간 선택이 바뀔 때(고스트 textarea) — 패널 B/I/U 활성 표시 갱신 */
   onCanvasTextSelectionChanged?: () => void;
+  /** 드래그 이동·리사이즈 제스처 시작/종료 (작업 기록 1단계로 묶기) */
+  onInteractGestureStart?: () => void;
+  onInteractGestureEnd?: () => void;
 }
 
 export type DesignCanvasHandle = {
@@ -248,6 +252,8 @@ export type DesignCanvasHandle = {
   handleApplyPartialFontFamily: (fontFamily: string) => void;
   handleApplyPartialFontScale: (scale: number) => void;
   getInlineEditActive: () => boolean;
+  /** 보내기·캡처 직전: 선택 박스·인라인 편집 등 편집 크롬 해제 */
+  clearExportChrome: () => void;
 };
 
 export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(function DesignCanvas(
@@ -266,6 +272,8 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     onTextFormatTargetsChange,
     onInlineEditChange,
     onCanvasTextSelectionChanged,
+    onInteractGestureStart,
+    onInteractGestureEnd,
   },
   ref
 ) {
@@ -776,17 +784,46 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   );
 
   const lastFormatTargetSigRef = useRef<string | null>(null);
+  /** 문자 옵션 클릭으로 textarea 포커스가 빠져도 부분 스타일용 선택 구간 유지 */
+  const savedInlineSelectionRef = useRef<{
+    sig: string;
+    start: number;
+    end: number;
+  } | null>(null);
+
+  const inlineEditSig = (t: CanvasTextEditTarget | null): string => {
+    if (!t) return "";
+    if (t.kind === "title" || t.kind === "footer") return t.kind;
+    return `${t.kind}:${t.id}`;
+  };
 
   const endTextEditIfBlurOutside = useCallback((e: FocusEvent<HTMLTextAreaElement>) => {
     const r = e.relatedTarget as HTMLElement | null;
     if (r?.closest("[data-canvas-text-format-panel]")) return;
     if (r?.closest("[data-design-content-panel]")) return;
+    savedInlineSelectionRef.current = null;
     setInlineEditTarget(null);
   }, []);
 
   const bumpTextSelection = useCallback(() => {
+    const t = inlineEditTarget;
+    if (t) {
+      let el: HTMLTextAreaElement | null = null;
+      if (t.kind === "title") el = titleEditRef.current;
+      else if (t.kind === "footer") el = footerEditRef.current;
+      else if (t.kind === "body") el = bodyEditRefs.current[t.id];
+      else if (t.kind === "subtitle") el = subtitleEditRefs.current[t.id];
+      else el = badgeEditRefs.current[t.id];
+      if (el && el.selectionStart !== el.selectionEnd) {
+        savedInlineSelectionRef.current = {
+          sig: inlineEditSig(t),
+          start: el.selectionStart,
+          end: el.selectionEnd,
+        };
+      }
+    }
     onCanvasTextSelectionChanged?.();
-  }, [onCanvasTextSelectionChanged]);
+  }, [inlineEditTarget, onCanvasTextSelectionChanged]);
 
   const removeTitleFromCanvas = useCallback(() => {
     if (!onContentChange) return;
@@ -1037,14 +1074,32 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
 
   const getInlineTextSelection = useCallback((): [number, number] | null => {
     if (!inlineEditTarget) return null;
+    const sig = inlineEditSig(inlineEditTarget);
     let el: HTMLTextAreaElement | null = null;
     if (inlineEditTarget.kind === "title") el = titleEditRef.current;
     else if (inlineEditTarget.kind === "footer") el = footerEditRef.current;
     else if (inlineEditTarget.kind === "body") el = bodyEditRefs.current[inlineEditTarget.id];
     else if (inlineEditTarget.kind === "subtitle") el = subtitleEditRefs.current[inlineEditTarget.id];
     else el = badgeEditRefs.current[inlineEditTarget.id];
-    if (el && el.selectionStart !== el.selectionEnd) return [el.selectionStart, el.selectionEnd];
+    if (el && el.selectionStart !== el.selectionEnd) {
+      const range: [number, number] = [el.selectionStart, el.selectionEnd];
+      savedInlineSelectionRef.current = { sig, start: range[0], end: range[1] };
+      return range;
+    }
+    const saved = savedInlineSelectionRef.current;
+    if (saved && saved.sig === sig && saved.start !== saved.end) {
+      return [saved.start, saved.end];
+    }
     return null;
+  }, [inlineEditTarget]);
+
+  useEffect(() => {
+    // 편집 대상이 바뀌면 이전 선택 구간 폐기
+    const sig = inlineEditSig(inlineEditTarget);
+    const saved = savedInlineSelectionRef.current;
+    if (!sig || (saved && saved.sig !== sig)) {
+      savedInlineSelectionRef.current = null;
+    }
   }, [inlineEditTarget]);
 
   const handleTogglePartialStyle = useCallback(
@@ -1290,6 +1345,13 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
     [inlineEditTarget, onContentDraftChange, getInlineTextSelection]
   );
 
+  const clearExportChrome = useCallback(() => {
+    setSelectedKeys([]);
+    setInlineEditTarget(null);
+    setImageInnerPosAdjust(false);
+    onFocusChange?.(null);
+  }, [onFocusChange]);
+
   useImperativeHandle(
     ref,
     () => ({
@@ -1300,6 +1362,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       handleApplyPartialFontFamily,
       handleApplyPartialFontScale,
       getInlineEditActive: () => inlineEditTarget !== null,
+      clearExportChrome,
     }),
     [
       getInlineTextSelection,
@@ -1309,6 +1372,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
       handleApplyPartialFontFamily,
       handleApplyPartialFontScale,
       inlineEditTarget,
+      clearExportChrome,
     ]
   );
 
@@ -2095,7 +2159,16 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
   const showBodyOnCanvas = content.posterBodyOnCanvas !== false;
   const showFooterOnCanvas = content.posterFooterOnCanvas !== false;
 
+  const interactGestureApi = useMemo(
+    () => ({
+      start: () => onInteractGestureStart?.(),
+      end: () => onInteractGestureEnd?.(),
+    }),
+    [onInteractGestureStart, onInteractGestureEnd]
+  );
+
   return (
+    <CanvasInteractGestureContext.Provider value={interactGestureApi}>
     <div
       ref={outerRef}
       style={{
@@ -3078,6 +3151,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             onClick={(e) => e.stopPropagation()}
             onSelect={bumpTextSelection}
             onMouseUp={bumpTextSelection}
+            onKeyUp={bumpTextSelection}
             style={{
               position: "absolute",
               left: titleRect.x * displayW,
@@ -3114,6 +3188,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
             onClick={(e) => e.stopPropagation()}
             onSelect={bumpTextSelection}
             onMouseUp={bumpTextSelection}
+            onKeyUp={bumpTextSelection}
             style={{
               position: "absolute",
               left: footerRect.x * displayW,
@@ -3167,6 +3242,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                 onClick={(e) => e.stopPropagation()}
                 onSelect={bumpTextSelection}
                 onMouseUp={bumpTextSelection}
+                onKeyUp={bumpTextSelection}
                 style={{
                   position: "absolute",
                   left: br.x * displayW,
@@ -3232,6 +3308,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                 onClick={(e) => e.stopPropagation()}
                 onSelect={bumpTextSelection}
                 onMouseUp={bumpTextSelection}
+                onKeyUp={bumpTextSelection}
                 style={{
                   position: "absolute",
                   left: sr.x * displayW,
@@ -3285,6 +3362,7 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
                 onClick={(e) => e.stopPropagation()}
                 onSelect={bumpTextSelection}
                 onMouseUp={bumpTextSelection}
+                onKeyUp={bumpTextSelection}
                 style={{
                   position: "absolute",
                   left: rect.x * displayW,
@@ -3311,5 +3389,6 @@ export const DesignCanvas = forwardRef<DesignCanvasHandle, DesignCanvasProps>(fu
           })()}
       </div>
     </div>
+    </CanvasInteractGestureContext.Provider>
   );
 });
