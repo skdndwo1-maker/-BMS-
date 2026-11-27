@@ -71,10 +71,52 @@ function buildCombinedFilter(opts: DesignCanvasCaptureOptions): ((node: Node) =>
     if (node instanceof Element) {
       if (excludeVi && node.getAttribute("data-vi-grid") === "true") return false;
       if (excludeChrome && node.getAttribute("data-canvas-export-exclude") === "true") return false;
+      // 조상 중 export-exclude / vi-grid가 있으면 제외(핸들·라벨 누락 대비)
+      if (
+        excludeChrome &&
+        typeof node.closest === "function" &&
+        node.closest("[data-canvas-export-exclude='true']")
+      ) {
+        return false;
+      }
+      if (
+        excludeVi &&
+        typeof node.closest === "function" &&
+        node.closest("[data-vi-grid='true']")
+      ) {
+        return false;
+      }
     }
     if (user && !user(node)) return false;
     return true;
   };
+}
+
+/** 캡처 전 Pretendard/Geist weight가 실제로 로드됐는지 확인 (Medium→Regular 폴백 완화) */
+export async function ensureDesignCanvasFontsReady(): Promise<void> {
+  if (typeof document === "undefined" || !document.fonts) return;
+  try {
+    await document.fonts.ready;
+    const samples = [
+      "400 16px Pretendard",
+      "500 16px Pretendard",
+      "600 16px Pretendard",
+      "700 16px Pretendard",
+      "400 16px Geist",
+      "500 16px Geist",
+      "600 16px Geist",
+      "700 16px Geist",
+    ];
+    await Promise.all(samples.map((f) => document.fonts.load(f).catch(() => undefined)));
+  } catch {
+    /* ignore */
+  }
+}
+
+function waitNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
 }
 
 export async function captureDesignCanvas(
@@ -91,6 +133,10 @@ export async function captureDesignCanvas(
   }
 
   try {
+    await ensureDesignCanvasFontsReady();
+    // data-export-capture CSS(outline/grid 숨김)가 적용된 뒤 한 프레임 대기
+    await waitNextPaint();
+
     try {
       return await domToCanvas(el, {
         scale,

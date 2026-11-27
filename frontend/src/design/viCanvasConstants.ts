@@ -13,8 +13,8 @@ export const VI_COLORS = {
   outerChrome: "#E8E8E8",
 } as const;
 
-/** 캔버스 루트 기본 서체 — 텍스트 옵션은 Pretendard / Geist만 선택 (canvasTextTypography) */
-export const VI_FONT_STACK = '"Pretendard Variable", Pretendard, system-ui, sans-serif';
+/** 캔버스 루트 기본 서체 — static Pretendard와 동일 family (보내기 임베드 일치) */
+export const VI_FONT_STACK = "Pretendard, system-ui, sans-serif";
 
 /** 메인 타이틀 기본 굵기 — Pretendard SemiBold */
 export const TITLE_DEFAULT_FONT_WEIGHT = 600;

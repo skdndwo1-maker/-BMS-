@@ -14,9 +14,13 @@ export type CanvasTextEditTarget =
   | { kind: "subtitle"; id: string }
   | { kind: "badge"; id: string };
 
-/** 텍스트 옵션에서 선택 가능한 서체 — 한글 Pretendard, 영문 Geist만 허용 */
-export const FONT_FAMILY_PRETENDARD = '"Pretendard Variable", Pretendard, system-ui, sans-serif';
-export const FONT_FAMILY_GEIST = 'Geist, system-ui, sans-serif';
+/**
+ * 텍스트 옵션에서 선택 가능한 서체 — 한글 Pretendard, 영문 Geist만 허용.
+ * fonts.css는 static Pretendard(@font-face family: Pretendard)를 로드하므로
+ * "Pretendard Variable"을 앞에 두면 캡처(modern-screenshot) 시 weight 임베드가 깨져 Regular로 폴백됩니다.
+ */
+export const FONT_FAMILY_PRETENDARD = "Pretendard, system-ui, sans-serif";
+export const FONT_FAMILY_GEIST = "Geist, system-ui, sans-serif";
 
 export const CANVAS_FONT_OPTIONS: { value: string; label: string }[] = [
   { value: FONT_FAMILY_PRETENDARD, label: "Pretendard (한글)" },

@@ -7,6 +7,7 @@ import { Lock, Unlock, X } from "lucide-react";
 import { computeCanvasRoundedBoxRadiusPx } from "@/design/canvasRoundedBox";
 import { snapPxToSymmetricGrid, snapSizeToSymmetricGrid } from "@/design/viGridGeometry";
 import { CANVAS_DRAG_THRESHOLD_PX, clampPxRectInCanvas } from "@/design/canvasRectClamp";
+import { useCanvasInteractGesture } from "./canvasInteractGesture";
 
 export type NormalizedRect = { x: number; y: number; width: number; height: number };
 
@@ -83,6 +84,7 @@ export function DraggableCanvasOverlay({
   onPanEnd,
   panDragInsteadOfMove = false,
 }: Props) {
+  const interactGesture = useCanvasInteractGesture();
   const [hover, setHover] = useState(false);
   const minW = minWidthPx ?? 24;
   const minH = minHeightPx ?? 24;
@@ -135,6 +137,12 @@ export function DraggableCanvasOverlay({
       dragStart.current = { mx: e.clientX, my: e.clientY, ox: px.x, oy: px.y };
       let didInnerPan = false;
       let dragging = false;
+      let gestureStarted = false;
+      const ensureGesture = () => {
+        if (gestureStarted) return;
+        gestureStarted = true;
+        interactGesture.start();
+      };
       const onMove = (ev: MouseEvent) => {
         if (!dragStart.current) return;
         const dx = ev.clientX - dragStart.current.mx;
@@ -143,6 +151,7 @@ export function DraggableCanvasOverlay({
           if (!dragging) {
             if (Math.abs(dx) < CANVAS_DRAG_THRESHOLD_PX && Math.abs(dy) < CANVAS_DRAG_THRESHOLD_PX) return;
             dragging = true;
+            ensureGesture();
           }
           didInnerPan = true;
           onPan({ dx, dy }, ev);
@@ -151,6 +160,7 @@ export function DraggableCanvasOverlay({
         if (!dragging) {
           if (Math.abs(dx) < CANVAS_DRAG_THRESHOLD_PX && Math.abs(dy) < CANVAS_DRAG_THRESHOLD_PX) return;
           dragging = true;
+          ensureGesture();
         }
         const fine = snapStepPx ?? 1;
         const snap = ev.shiftKey ? 10 : fine;
@@ -168,6 +178,7 @@ export function DraggableCanvasOverlay({
       };
       const onUp = () => {
         if (didInnerPan) onPanEnd?.();
+        if (gestureStarted) interactGesture.end();
         dragStart.current = null;
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
@@ -175,7 +186,7 @@ export function DraggableCanvasOverlay({
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     },
-    [px, onSelect, snapStepPx, onPan, onPanEnd, panDragInsteadOfMove, locked, emitClampedRect, canvasW, canvasH]
+    [px, onSelect, snapStepPx, onPan, onPanEnd, panDragInsteadOfMove, locked, emitClampedRect, canvasW, canvasH, interactGesture]
   );
 
   const resizeStart = useRef<{
@@ -203,6 +214,7 @@ export function DraggableCanvasOverlay({
         oh: px.height,
         handle,
       };
+      interactGesture.start();
       const onMove = (ev: MouseEvent) => {
         if (!resizeStart.current) return;
         const { mx, my, ox, oy, ow, oh, handle } = resizeStart.current;
@@ -256,6 +268,7 @@ export function DraggableCanvasOverlay({
         });
       };
       const onUp = () => {
+        interactGesture.end();
         resizeStart.current = null;
         window.removeEventListener("mousemove", onMove);
         window.removeEventListener("mouseup", onUp);
@@ -263,7 +276,7 @@ export function DraggableCanvasOverlay({
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     },
-    [px, canvasW, canvasH, onRectChange, onSelect, snapStepPx, minW, minH, locked, canvasInsetPx]
+    [px, canvasW, canvasH, onRectChange, onSelect, snapStepPx, minW, minH, locked, canvasInsetPx, interactGesture]
   );
 
   const handles: { key: ResizeHandle; style: React.CSSProperties }[] = [

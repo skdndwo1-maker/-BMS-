@@ -79,12 +79,8 @@ import {
   updateDeliverable,
   updateGuideDraft,
 } from "./deliverables/deliverableAdmin.js";
-import {
-  listActiveDeliverablesPublic,
-  loadInspectionGuidePack,
-  retrieveRuleSeededRag,
-  wrapSecondaryViSummary,
-} from "./deliverables/inspectionContext.js";
+import { listActiveDeliverablesPublic } from "./deliverables/inspectionContext.js";
+import { buildInspectionGuidelineContext } from "./deliverables/buildInspectionGuidelineContext.js";
 import { requireAdmin } from "./adminAuth.js";
 import { requireAuth } from "./middleware/requireAuth.js";
 import { handleLibraryUpload } from "./libraryUpload.js";
@@ -302,6 +298,78 @@ async function buildMandatoryViPdfContextForDesignEditor(
   }
 
   return { ok: true, block };
+}
+
+/** VI 보조 요약(규칙 우선일 때) — 디자인검수와 동일 */
+async function loadViSecondaryForInspection(
+  guidelineId: string
+): Promise<{ displayName: string; text: string }> {
+  let g = getGuideline(guidelineId);
+  if (g && !g.aiSummary?.trim() && process.env.GEMINI_API_KEY?.trim()) {
+    try {
+      const ensured = await ensureGuidelineAiSummary(g);
+      g = ensured.record;
+    } catch {
+      /* excerpt fallback */
+    }
+  }
+  let text = "";
+  if (g?.aiSummary?.trim()) text = g.aiSummary;
+  else if (g) {
+    try {
+      text = await excerptGuidelineForInspection(g);
+    } catch {
+      text = "";
+    }
+  }
+  return { displayName: g?.displayName ?? guidelineId, text };
+}
+
+/**
+ * 디자인검수·에디터 검수/교정이 공유하는 rule-first 가이드 컨텍스트.
+ * preferPdfExtractFallback: 에디터(규칙 없을 때 Jason PDF 필수)
+ */
+async function buildSharedInspectionGuidelineContext(opts: {
+  guidelineId: string;
+  templateIds?: string[];
+  templateId?: string | null;
+  deliverableId?: string | null;
+  deliverableKey?: string | null;
+  businessCategory?: string;
+  designGroup?: string;
+  designType?: string;
+  queryExtras?: string[];
+  preferPdfExtractFallback?: boolean;
+  logTag?: string;
+}) {
+  return buildInspectionGuidelineContext({
+    guidelineId: opts.guidelineId,
+    templateIds: opts.templateIds,
+    templateId: opts.templateId,
+    deliverableId: opts.deliverableId,
+    deliverableKey: opts.deliverableKey,
+    businessCategory: opts.businessCategory,
+    designGroup: opts.designGroup,
+    designType: opts.designType,
+    queryExtras: opts.queryExtras,
+    logTag: opts.logTag,
+    loadViSecondary: loadViSecondaryForInspection,
+    buildFallback: async ({ guidelineId, ragQuerySeed, guidePack }) => {
+      if (opts.preferPdfExtractFallback) {
+        const viPdf = await buildMandatoryViPdfContextForDesignEditor(
+          guidelineId,
+          ragQuerySeed || undefined
+        );
+        if (!viPdf.ok) {
+          return { ok: false as const, error: viPdf.error, status: viPdf.status };
+        }
+        return { ok: true as const, block: viPdf.block, ragPicked: 0 };
+      }
+      void guidePack;
+      const primary = await buildPrimaryGuidelineBlock(guidelineId, ragQuerySeed);
+      return { ok: true as const, block: primary.block, ragPicked: primary.ragPicked };
+    },
+  });
 }
 
 /** 디자인 에디터 텍스트 제안·초안 문구 — Simply U+ 추출문만 */
@@ -1012,86 +1080,28 @@ app.post(
     }
 
     /**
-     * 검수 컨텍스트 우선순위:
-     * 1) 제작물/공통 가이드 규칙 체크리스트
-     * 2) 규칙 문장·source로 좁힌 VI RAG
-     * 3) VI 요약은 보조
-     * 규칙이 없으면 기존 광역 요약+RAG로 폴백
+     * 검수 컨텍스트 = 공유 rule-first 파이프라인
+     * (제작물 규칙 → 규칙 연계 RAG → 보조 VI → 없으면 광역 요약+RAG)
      */
-    let guidePack: Awaited<ReturnType<typeof loadInspectionGuidePack>> | null = null;
-    try {
-      guidePack = await loadInspectionGuidePack({
-        deliverableId: deliverableId || null,
-        deliverableKey: deliverableKey || null,
-        templateIds,
-      });
-    } catch (e) {
-      console.error(
-        "[inspection] deliverable guide pack failed:",
-        e instanceof Error ? e.message : String(e)
-      );
+    const ctx = await buildSharedInspectionGuidelineContext({
+      guidelineId,
+      deliverableId: deliverableId || null,
+      deliverableKey: deliverableKey || null,
+      templateIds,
+      businessCategory,
+      designGroup,
+      designType,
+      queryExtras: extra ? [`추가 검수 요청: ${extra}`] : undefined,
+      logTag: "inspection",
+    });
+    if (!ctx.ok) {
+      res.status(ctx.status).json({ error: ctx.error });
+      return;
     }
-
-    let guidelineSummary = "";
-    let ragPicked = 0;
-    const tRag = Date.now();
-
-    if (guidePack && guidePack.ruleCount > 0) {
-      guidelineSummary = guidePack.rulesBlock;
-      const seeded = await retrieveRuleSeededRag({
-        guidelineId,
-        queryText: guidePack.ragQueryFromRules,
-      });
-      ragPicked = seeded.picked;
-      guidelineSummary += seeded.block;
-
-      let viSecondary = "";
-      if (g?.aiSummary?.trim()) viSecondary = g.aiSummary;
-      else if (g) {
-        try {
-          viSecondary = await excerptGuidelineForInspection(g);
-        } catch {
-          viSecondary = "";
-        }
-      }
-      guidelineSummary += wrapSecondaryViSummary(
-        g?.displayName ?? guidelineId,
-        viSecondary
-      );
-      console.log(
-        `[inspection][rule-first] deliverable=${guidePack.deliverable?.key ?? "-"} rules=${guidePack.ruleCount} rag=${ragPicked} ms=${Date.now() - tRag}`
-      );
-    } else {
-      const ragQuerySeed = [
-        guidePack?.ragQueryFromRules || "",
-        templateIds.length ? `템플릿: ${templateIds.join(", ")}` : "",
-        guidePack?.deliverable ? `제작물: ${guidePack.deliverable.name}` : "",
-        businessCategory ? `사업 영역: ${businessCategory}` : "",
-        designGroup ? `디자인 그룹: ${designGroup}` : "",
-        designType ? `디자인 유형: ${designType}` : "",
-        extra ? `추가 검수 요청: ${extra}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
-      const primary = await buildPrimaryGuidelineBlock(guidelineId, ragQuerySeed);
-      guidelineSummary = (guidePack?.rulesBlock ? `${guidePack.rulesBlock}\n\n` : "") + primary.block;
-      ragPicked = primary.ragPicked;
-      console.log(`[inspection][RAG 검색 fallback] ${Date.now() - tRag}ms picked=${ragPicked}`);
-    }
-
-    /** 0) 카테고리 선택 맥락(추가 검수 원칙 확장 가능) */
-    const categoryLines: string[] = [];
-    if (businessCategory) categoryLines.push(`- 사업 영역: ${businessCategory}`);
-    if (designGroup) categoryLines.push(`- 디자인 그룹: ${designGroup === "online" ? "온라인" : "오프라인"}`);
-    if (designType) categoryLines.push(`- 디자인 유형: ${designType}`);
-    if (guidePack?.deliverable) {
-      categoryLines.push(
-        `- 제작물 가이드: ${guidePack.deliverable.name} (${guidePack.deliverable.key})`
-      );
-    }
-    if (categoryLines.length > 0) {
-      guidelineSummary = `${guidelineSummary}\n\n[검수 카테고리]\n${categoryLines.join("\n")}`;
-    }
+    const guidePack = ctx.guidePack;
+    let guidelineSummary = ctx.guidelineSummary;
+    const ragPicked = ctx.ragPicked;
+    void g;
 
     /** 2) 검수 참조 파일 업로드(선택) — 고정 옵션 자료에 덧붙이는 보조 맥락 */
     if (supplementary?.buffer?.length) {
@@ -1968,6 +1978,7 @@ app.post("/api/design-editor/correct-canvas", async (req, res) => {
     const designMime = String(req.body?.designMime ?? "image/png");
     const mode = req.body?.mode === "holistic" ? "holistic" : "inspection_followup";
     const overallSummary = typeof req.body?.overallSummary === "string" ? req.body.overallSummary : "";
+    const templateId = String(req.body?.templateId ?? "");
     const rawViol = req.body?.violations;
     const violations = Array.isArray(rawViol)
       ? rawViol.map((v: { category?: string; issue?: string; severity?: string }) => ({
@@ -1990,22 +2001,28 @@ app.post("/api/design-editor/correct-canvas", async (req, res) => {
     const creativeTopic =
       typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
     await ensureFixedGuidelineSlotAsync(guidelineId);
-    const viPdf = await buildMandatoryViPdfContextForDesignEditor(
+
+    const ctx = await buildSharedInspectionGuidelineContext({
       guidelineId,
-      [overallSummary, creativeTopic].filter(Boolean).join("\n\n")
-    );
-    if (!viPdf.ok) {
-      res.status(viPdf.status).json({ error: viPdf.error });
+      templateId: templateId || null,
+      queryExtras: [overallSummary, creativeTopic].filter(Boolean),
+      preferPdfExtractFallback: true,
+      logTag: "design-editor/correct-canvas",
+    });
+    if (!ctx.ok) {
+      res.status(ctx.status).json({ error: ctx.error });
       return;
     }
+
     const out = await runDesignEditorCanvasVisualCorrection({
       designBase64,
       designMime,
-      guidelineContext: viPdf.block,
+      guidelineContext: ctx.guidelineSummary,
       overallSummary: overallSummary || undefined,
       violations: violations.length > 0 ? violations : undefined,
       mode,
-      creativeTopic: creativeTopic || undefined
+      creativeTopic: creativeTopic || undefined,
+      contextMode: ctx.mode,
     });
 
     if (!out) {
@@ -2021,16 +2038,25 @@ app.post("/api/design-editor/correct-canvas", async (req, res) => {
       type: "design_editor_visual_correction",
       status: "pending_review",
       guidelineId,
+      templateId: templateId || null,
+      deliverableId: ctx.guidePack?.deliverable?.id ?? null,
+      commonGuideId: ctx.guidePack?.commonGuide?.id ?? null,
+      deliverableGuideId: ctx.guidePack?.deliverableGuide?.id ?? null,
       inputJson: {
         guidelineId,
         designMime,
         mode,
+        contextMode: ctx.mode,
+        ruleCount: ctx.guidePack?.ruleCount ?? 0,
+        ragPicked: ctx.ragPicked,
+        templateId: templateId || null,
+        deliverableKey: ctx.guidePack?.deliverable?.key ?? null,
         creativeTopic: creativeTopic || null,
         violationsCount: violations.length,
         overallSummary: overallSummary || null,
       },
       outputJson: { ok: true, mimeType: out.mimeType, caption: out.caption },
-      inputText: viPdf.block,
+      inputText: ctx.guidelineSummary,
       outputText: out.caption ?? null,
       model: process.env.GEMINI_IMAGE_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || null,
     });
@@ -2067,35 +2093,18 @@ app.post("/api/design-editor/inspect", async (req, res) => {
       typeof req.body?.creativeTopic === "string" ? req.body.creativeTopic.trim() : "";
     await ensureFixedGuidelineSlotAsync(guidelineId);
 
-    let guidePack: Awaited<ReturnType<typeof loadInspectionGuidePack>> | null = null;
-    try {
-      guidePack = await loadInspectionGuidePack({ templateId: templateId || null });
-    } catch (e) {
-      console.error(
-        "[design-editor/inspect] guide pack failed:",
-        e instanceof Error ? e.message : String(e)
-      );
-    }
-
-    const ragSeed =
-      guidePack && guidePack.ruleCount > 0
-        ? guidePack.ragQueryFromRules
-        : [templateId, creativeTopic].filter(Boolean).join("\n\n");
-
-    const viPdf = await buildMandatoryViPdfContextForDesignEditor(guidelineId, ragSeed);
-    if (!viPdf.ok) {
-      res.status(viPdf.status).json({ error: viPdf.error });
+    const ctx = await buildSharedInspectionGuidelineContext({
+      guidelineId,
+      templateId: templateId || null,
+      queryExtras: creativeTopic ? [creativeTopic] : undefined,
+      preferPdfExtractFallback: true,
+      logTag: "design-editor/inspect",
+    });
+    if (!ctx.ok) {
+      res.status(ctx.status).json({ error: ctx.error });
       return;
     }
-
-    let visualGuideline = viPdf.block;
-    if (guidePack && guidePack.ruleCount > 0) {
-      // Rules first; Jason PDF excerpt becomes supporting evidence.
-      visualGuideline = `${guidePack.rulesBlock}\n\n---\n${viPdf.block}`;
-      console.log(
-        `[design-editor/inspect][rule-first] deliverable=${guidePack.deliverable?.key ?? "-"} rules=${guidePack.ruleCount}`
-      );
-    }
+    const guidePack = ctx.guidePack;
 
     const simply = await loadGuidelineExtract("simply-uplus-guideline");
     const textGuideline = simply.text.trim().slice(0, 24_000);
@@ -2105,11 +2114,12 @@ app.post("/api/design-editor/inspect", async (req, res) => {
     const result = await runDesignEditorCanvasInspection({
       designBase64: imageBase64,
       designMime: imageMime,
-      visualGuideline,
+      visualGuideline: ctx.guidelineSummary,
       textGuideline,
       designContentJson: JSON.stringify(designContent ?? {}),
       templateLabel: templateId || "template",
-      creativeTopic: creativeTopic || undefined
+      creativeTopic: creativeTopic || undefined,
+      contextMode: ctx.mode,
     });
 
     await persistRun({
@@ -2126,12 +2136,14 @@ app.post("/api/design-editor/inspect", async (req, res) => {
         textGuidelineId: "simply-uplus-guideline",
         deliverableKey: guidePack?.deliverable?.key ?? null,
         ruleCount: guidePack?.ruleCount ?? 0,
+        ragPicked: ctx.ragPicked,
+        contextMode: ctx.mode,
         templateId: templateId || null,
         imageMime,
         creativeTopic: creativeTopic || null,
       },
       outputJson: { score: result.score, overallSummary: result.overallSummary, violations: result.violations },
-      inputText: viPdf.block,
+      inputText: ctx.guidelineSummary,
       outputText: result.overallSummary,
       score: result.score,
       model: process.env.GEMINI_MODEL?.trim() || null,

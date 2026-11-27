@@ -180,6 +180,8 @@ export async function runDesignEditorCanvasInspection(opts: {
   templateLabel: string;
   /** 제작물 주제·목적 (창작자 입력) */
   creativeTopic?: string;
+  /** rule-first 공유 파이프라인 모드 (디자인검수와 동일) */
+  contextMode?: "rule-first" | "fallback";
 }): Promise<{
   score: number;
   overallSummary: string;
@@ -216,21 +218,28 @@ export async function runDesignEditorCanvasInspection(opts: {
   const textBlock = opts.textGuideline.slice(0, 24_000);
   const contentBlock = opts.designContentJson.slice(0, 24_000);
 
-  const basePrompt = `역할: LG U+ 시니어 디자인 QA입니다.
+  const ruleFirstHint =
+    opts.contextMode === "rule-first"
+      ? `3) **조형·레이아웃 검수 우선순위(디자인검수와 동일)**: [참조 가이드라인] 안 **제작물/공통 가이드 규칙 체크리스트가 1순위**입니다. 각 규칙을 pass/fail/na로 판정하세요. 규칙 연계 VI RAG·보조 VI 요약은 보강 근거입니다.
+4) 체크리스트에 없는 조형 이슈만 보조 VI·일반 브랜드 원칙으로 보완 언급하세요.`
+      : `3) **조형**(로고·컬러·타이포·여백·톤·레이아웃)은 [참조 가이드라인](VI PDF·요약·RAG)을 기준으로 평가하세요.
+4) 가이드에 명시되지 않은 항목은 단정하지 말고 일반적인 브랜드 원칙으로만 보완하세요.`;
+
+  const basePrompt = `역할: LG U+ 시니어 디자인 QA입니다. (브랜드 디자인검수와 동일한 규칙 우선 파이프라인)
 
 작업:
 1) 첨부 이미지는 브랜드 제작 에디터의 캔버스 화면 캡처입니다.
 2) 아래 [캔버스 텍스트/설정 JSON]과 이미지가 일치한다고 가정하세요.
-3) **조형**(로고·컬러·타이포·여백·톤·레이아웃)은 [조형 가이드 — Jason B2C]만 기준으로 평가하세요.
-4) **이미지 안 문안**(어법·톤·표현)은 [문안 가이드 — Simply U+]만 기준으로 평가하세요.
-5) 텍스트 수정이 필요하면 간결·고객 친화 톤으로 proposed* 필드에 한국어 문안을 제안하세요. 변경이 필요 없으면 해당 필드는 빈 문자열("")입니다.
-6) 이미지/일러스트가 부적절하면 fixKind=image, imageReplacementBrief에 교체 방향을 구체적으로 적으세요.
-7) 배치·그리드·여백 문제는 fixKind=layout, layoutReset을 poster_defaults(포스터형 템플릿) 또는 clear_text_overrides(사용자 임의 폰트크기 초기화) 등으로 제안하세요.
-8) violations는 실제 개선점만 나열하고, fixKind를 반드시 채우세요.
+${ruleFirstHint}
+5) **이미지 안 문안**(어법·톤·표현)은 [문안 가이드 — Simply U+]만 기준으로 평가하세요.
+6) 텍스트 수정이 필요하면 간결·고객 친화 톤으로 proposed* 필드에 한국어 문안을 제안하세요. 변경이 필요 없으면 해당 필드는 빈 문자열("")입니다.
+7) 이미지/일러스트가 부적절하면 fixKind=image, imageReplacementBrief에 교체 방향을 구체적으로 적으세요.
+8) 배치·그리드·여백 문제는 fixKind=layout, layoutReset을 poster_defaults(포스터형 템플릿) 또는 clear_text_overrides(사용자 임의 폰트크기 초기화) 등으로 제안하세요.
+9) violations는 실제 개선점만 나열하고, fixKind를 반드시 채우세요. 규칙 위반이면 category/issue에 규칙 id·요지를 반영하세요.
 
 템플릿: ${opts.templateLabel}
 ${opts.creativeTopic?.trim() ? `\n[제작 주제·의도]\n${opts.creativeTopic.trim()}\n` : ""}
-[조형 가이드 — Jason B2C Brand Guidelines PDF]
+[참조 가이드라인 — 조형·VI (디자인검수와 동일 파이프라인)]
 ${visualBlock}
 
 [문안 가이드 — Simply U+]
@@ -527,6 +536,8 @@ export async function runDesignEditorCanvasVisualCorrection(opts: {
   violations?: Array<{ category: string; issue: string; severity: string }>;
   mode: "inspection_followup" | "holistic";
   creativeTopic?: string;
+  /** rule-first 공유 파이프라인 모드 (디자인검수와 동일) */
+  contextMode?: "rule-first" | "fallback";
 }): Promise<{ mimeType: string; base64: string; caption: string } | null> {
   const viols =
     opts.violations && opts.violations.length > 0
@@ -535,7 +546,7 @@ export async function runDesignEditorCanvasVisualCorrection(opts: {
           {
             category: "전체 교정",
             issue:
-              "VI 가이드에 맞게 뱃지·메인 타이틀·본문·하단 유의사항·첨부 이미지·픽토그램·일러스트의 배치·크기·여백·대비·타이포를 일관되게 정리합니다.",
+              "제작물 가이드 규칙·VI에 맞게 뱃지·메인 타이틀·본문·하단 유의사항·첨부 이미지·픽토그램·일러스트의 배치·크기·여백·대비·타이포를 일관되게 정리합니다.",
             severity: "high"
           }
         ];
@@ -544,27 +555,34 @@ export async function runDesignEditorCanvasVisualCorrection(opts: {
     ? `[제작 주제]\n${opts.creativeTopic.trim()}\n\n`
     : "";
 
-  const viPdfFirst = `[B2C Brand Guidelines PDF (Jason) — 절대 우선]
-프롬프트의 [참조 가이드라인 및 검수 맥락] 블록은 Jason For Parsing PDF에서 추출한 필수 근거입니다. 색상·로고·타이포·여백·톤·금지 사항 등은 PDF와 아래 규칙이 충돌할 경우 **항상 PDF를 따르세요**.`;
+  const priorityBlock =
+    opts.contextMode === "rule-first"
+      ? `[검수·교정 근거 우선순위 — 디자인검수와 동일]
+1) 제작물/공통 가이드 규칙 체크리스트
+2) 규칙 연계 VI RAG
+3) 보조 VI 요약
+[참조 가이드라인 및 검수 맥락]은 위 순서로 조립된 블록입니다. 체크리스트와 충돌하면 **항상 체크리스트를 따르세요**.`
+      : `[검수·교정 근거]
+[참조 가이드라인 및 검수 맥락]의 VI PDF·요약·RAG를 최우선으로 따르세요.`;
 
-  const typographyRules = `[디자인 에디터 텍스트 교정 규칙 — PDF 다음 우선순위]
-첨부 캔버스 이미지의 한국어 카피를 손볼 때(문구·줄 수·상대 크기), Jason B2C PDF 요구를 만족하는 범위에서 반드시:
+  const typographyRules = `[디자인 에디터 텍스트 교정 규칙 — 위 가이드라인 다음 우선순위]
+첨부 캔버스 이미지의 한국어 카피를 손볼 때(문구·줄 수·상대 크기), 위 가이드라인과 충돌하지 않는 범위에서 반드시:
 1) **메인 타이틀**: 상대 글자 크기를 **150% 스케일(기준 대비 1.5배 느낌)**로 잡고, **줄 수는 2줄을 절대 넘기지 않음**. 장황한 표현은 줄이고 간결한 문구로 교정.
 2) **부제1(첫 번째 부제)**: **현재와 비슷한 글자 크기 관계**를 유지하되, **1줄을 넘기지 않음**(자동 줄바꿈 없이 한 줄). 길면 의미를 유지하며 축약.
 3) **본문(주 본문 블록)**: **기본형(100%) 대비 약 60% 크기**로 작고 단정하게 보이게 하고, **줄 수는 2줄을 넘기지 않음**. 핵심만 남기도록 다듬음.
 
-레이아웃·비율·이미지 구도는 원본 의도를 해치지 않되, 위 텍스트 규칙과 Jason B2C PDF를 동시에 만족하는 **단일 교정 이미지**를 출력하세요.`;
+레이아웃·비율·이미지 구도는 원본 의도를 해치지 않되, 위 텍스트 규칙과 참조 가이드라인을 동시에 만족하는 **단일 교정 이미지**를 출력하세요.`;
 
   const modeNotes =
     opts.mode === "holistic"
-      ? `[디자인 교정 모드 — 전체]\n캔버스 전체를 Jason B2C Brand Guidelines에 맞게 시각적으로 다듬은 단일 이미지를 생성하세요.`
+      ? `[디자인 교정 모드 — 전체]\n캔버스 전체를 참조 가이드라인(규칙 우선)에 맞게 시각적으로 다듬은 단일 이미지를 생성하세요.`
       : `[디자인 교정 모드 — 검수 반영]\n아래 검수 지적을 우선 반영하여 수정 이미지를 생성하세요.`;
 
   const notes = `${VI_VISUAL_ROLE_INTRO}
 
 ${VI_VISUAL_COT_BLOCK}
 
-${viPdfFirst}
+${priorityBlock}
 
 ${typographyRules}
 

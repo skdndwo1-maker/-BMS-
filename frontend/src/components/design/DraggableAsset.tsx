@@ -9,6 +9,7 @@
 import { useRef, useCallback } from "react";
 import type { AssetLayer } from "@/design/types";
 import { Lock, Unlock, Trash2 } from "lucide-react";
+import { useCanvasInteractGesture } from "./canvasInteractGesture";
 
 interface Props {
   asset: AssetLayer;
@@ -33,6 +34,7 @@ const HANDLE_SIZE = 10;
 export function DraggableAsset({
   asset: assetProp, canvasW, canvasH, snapStepPx, isSelected, onSelect, onUpdate, onDelete, templateLocked,
 }: Props) {
+  const interactGesture = useCanvasInteractGesture();
   const asset = templateLocked ? { ...assetProp, locked: true } : assetProp;
   const elRef = useRef<HTMLDivElement>(null);
 
@@ -52,11 +54,16 @@ export function DraggableAsset({
     e.stopPropagation();
     onSelect(asset.id, { additive: e.shiftKey });
     dragStart.current = { mx: e.clientX, my: e.clientY, ox: px.x, oy: px.y };
+    let gestureStarted = false;
 
     const onMove = (ev: MouseEvent) => {
       if (!dragStart.current) return;
       const dx = ev.clientX - dragStart.current.mx;
       const dy = ev.clientY - dragStart.current.my;
+      if (!gestureStarted && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
+        gestureStarted = true;
+        interactGesture.start();
+      }
       const fine = snapStepPx ?? 1;
       const snap = ev.shiftKey ? 10 : fine;
       const sx = Math.round((dragStart.current.ox + dx) / snap) * snap;
@@ -66,13 +73,14 @@ export function DraggableAsset({
       onUpdate(asset.id, { x: newX / canvasW, y: newY / canvasH });
     };
     const onUp = () => {
+      if (gestureStarted) interactGesture.end();
       dragStart.current = null;
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-  }, [asset, px, canvasW, canvasH, onSelect, onUpdate, snapStepPx]);
+  }, [asset, px, canvasW, canvasH, onSelect, onUpdate, snapStepPx, interactGesture]);
 
   // ── 리사이즈 ─────────────────────────────────────────────────────
   const resizeStart = useRef<{
@@ -91,6 +99,7 @@ export function DraggableAsset({
       ox: px.x, oy: px.y, ow: px.width, oh: px.height,
       handle,
     };
+    interactGesture.start();
 
     const onMove = (ev: MouseEvent) => {
       if (!resizeStart.current) return;
@@ -129,13 +138,14 @@ export function DraggableAsset({
       });
     };
     const onUp = () => {
+      interactGesture.end();
       resizeStart.current = null;
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-  }, [asset, px, canvasW, canvasH, onUpdate, snapStepPx]);
+  }, [asset, px, canvasW, canvasH, onUpdate, snapStepPx, interactGesture, onSelect]);
 
   // ── 리사이즈 핸들 위치 ──────────────────────────────────────────
   const handles: { key: ResizeHandle; style: React.CSSProperties }[] = [
@@ -154,6 +164,7 @@ export function DraggableAsset({
   return (
     <div
       ref={elRef}
+      data-canvas-overlay-root
       style={{
         position:  'absolute',
         left:      `${px.x}px`,
@@ -189,6 +200,7 @@ export function DraggableAsset({
           {handles.map((h) => (
             <div
               key={h.key}
+              data-canvas-export-exclude="true"
               style={{
                 position:  'absolute',
                 width:     `${HANDLE_SIZE}px`,
@@ -205,6 +217,7 @@ export function DraggableAsset({
 
           {/* 상단 툴바 */}
           <div
+            data-canvas-export-exclude="true"
             style={{
               position: 'absolute',
               top: '-32px',
@@ -254,6 +267,7 @@ export function DraggableAsset({
       {/* 잠금 표시 */}
       {isSelected && asset.locked && (
         <div
+          data-canvas-export-exclude="true"
           style={{
             position: 'absolute', top: '-28px', left: '50%', transform: 'translateX(-50%)',
             background: '#1A1A1A', borderRadius: '6px', padding: '3px 8px',
